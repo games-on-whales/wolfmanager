@@ -8,7 +8,7 @@ interface LogEntry {
 }
 
 class Logger {
-  private static LOG_LEVEL = process.env.NODE_ENV === 'production' ? 'info' : 'debug';
+  private static LOG_LEVEL = (typeof window !== 'undefined' && window.localStorage.getItem('LOG_LEVEL')) || 'info';
   private static LOG_LEVELS: Record<LogLevel, number> = {
     debug: 0,
     info: 1,
@@ -46,17 +46,20 @@ class Logger {
   private static writeLog(entry: LogEntry) {
     const logString = JSON.stringify(entry);
     
-    // Write to stdout/stderr based on level
-    if (entry.level === 'error') {
-      process.stderr.write(logString + '\n');
-    } else {
-      process.stdout.write(logString + '\n');
-    }
-
-    // Also log to console in development
-    if (process.env.NODE_ENV !== 'production') {
+    // Browser environment
+    if (typeof window !== 'undefined') {
       const consoleMethod = console[entry.level] || console.log;
-      consoleMethod(logString);
+      if (entry.data) {
+        consoleMethod(entry.message, entry.data);
+      } else {
+        consoleMethod(entry.message);
+      }
+      
+      // Emit custom event for potential log collectors
+      const logEvent = new CustomEvent('wolf-manager-log', { 
+        detail: entry 
+      });
+      window.dispatchEvent(logEvent);
     }
   }
 
@@ -89,6 +92,14 @@ class Logger {
         };
       }
       this.writeLog(this.formatLogEntry('error', message, errorData));
+    }
+  }
+
+  // Allow changing log level at runtime
+  static setLogLevel(level: LogLevel) {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('LOG_LEVEL', level);
+      this.LOG_LEVEL = level;
     }
   }
 }
