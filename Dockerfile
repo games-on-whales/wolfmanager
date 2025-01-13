@@ -19,7 +19,45 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Debug: List contents and check TypeScript
+# Create tsconfig.json if it doesn't exist
+RUN if [ ! -f tsconfig.json ]; then \
+    echo '{ \
+      "compilerOptions": { \
+        "target": "ESNext", \
+        "useDefineForClassFields": true, \
+        "lib": ["DOM", "DOM.Iterable", "ESNext"], \
+        "allowJs": false, \
+        "skipLibCheck": true, \
+        "esModuleInterop": false, \
+        "allowSyntheticDefaultImports": true, \
+        "strict": true, \
+        "forceConsistentCasingInFileNames": true, \
+        "module": "ESNext", \
+        "moduleResolution": "Node", \
+        "resolveJsonModule": true, \
+        "isolatedModules": true, \
+        "noEmit": true, \
+        "jsx": "react-jsx" \
+      }, \
+      "include": ["src"], \
+      "references": [{ "path": "./tsconfig.node.json" }] \
+    }' > tsconfig.json; \
+    fi
+
+# Create tsconfig.node.json if it doesn't exist
+RUN if [ ! -f tsconfig.node.json ]; then \
+    echo '{ \
+      "compilerOptions": { \
+        "composite": true, \
+        "module": "ESNext", \
+        "moduleResolution": "Node", \
+        "allowSyntheticDefaultImports": true \
+      }, \
+      "include": ["vite.config.ts"] \
+    }' > tsconfig.node.json; \
+    fi
+
+# Debug: List contents and check versions
 RUN ls -la && \
     npm list typescript && \
     echo "Node version: $(node -v)" && \
