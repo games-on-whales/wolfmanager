@@ -6,5 +6,6 @@ services:
       - "9971:9971"
     volumes:
       - /var/run/wolf:/var/run/wolf
+      - /games:/games
     environment:
       - NODE_ENV=production 

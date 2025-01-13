@@ -20,6 +20,7 @@ import {
   SportsEsports as GamesIcon,
   Group as SessionsIcon,
 } from '@mui/icons-material';
+import { Configuration } from './Configuration';
 
 const drawerWidth = 240;
 
@@ -29,6 +30,7 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
   const theme = useTheme();
 
   const handleDrawerToggle = () => {
@@ -83,7 +85,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <MenuIcon />
           </IconButton>
           <Box sx={{ flexGrow: 1 }} />
-          <IconButton color="inherit">
+          <IconButton color="inherit" onClick={() => setShowConfig(true)}>
             <SettingsIcon />
           </IconButton>
         </Toolbar>
@@ -126,7 +128,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           mt: '64px',
         }}
       >
-        {children}
+        {showConfig ? <Configuration /> : children}
       </Box>
     </Box>
   );
