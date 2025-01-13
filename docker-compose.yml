@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  wolf-manager:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/wolf:/var/run/wolf 
