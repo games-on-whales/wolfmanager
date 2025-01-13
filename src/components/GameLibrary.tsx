@@ -78,19 +78,51 @@ export const GameLibrary: React.FC = () => {
   useEffect(() => {
     const loadArtwork = async () => {
       const config = ConfigService.getConfig();
-      if (!config.steamGridDbApiKey || games.length === 0) return;
+      if (!config.steamGridDbApiKey) {
+        Logger.warn('Skipping artwork loading - SteamGridDB API key not configured');
+        return;
+      }
+      if (games.length === 0) {
+        Logger.warn('No games available to load artwork for');
+        return;
+      }
 
+      Logger.info('Starting artwork loading process', { gameCount: games.length });
       await CacheService.ensureCacheDir();
 
+      let successCount = 0;
+      let failureCount = 0;
+      let skippedCount = 0;
+
       for (const game of games) {
+        if (gameArtwork[game.appid]) {
+          Logger.debug('Artwork already loaded', { game: game.name, appId: game.appid });
+          skippedCount++;
+          continue;
+        }
+
+        Logger.debug('Loading artwork', { game: game.name, appId: game.appid });
         const artwork = await SteamService.getGameArtwork(game.appid);
+        
         if (artwork) {
           setGameArtwork(prev => ({
             ...prev,
             [game.appid]: artwork
           }));
+          successCount++;
+          Logger.debug('Artwork loaded successfully', { game: game.name, appId: game.appid });
+        } else {
+          failureCount++;
+          Logger.warn('Failed to load artwork', { game: game.name, appId: game.appid });
         }
       }
+
+      Logger.info('Artwork loading completed', {
+        total: games.length,
+        success: successCount,
+        failed: failureCount,
+        skipped: skippedCount
+      });
     };
 
     loadArtwork();

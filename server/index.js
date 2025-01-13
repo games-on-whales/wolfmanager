@@ -55,6 +55,7 @@ app.post('/api/cache/artwork', async (req, res) => {
     const { appId, imageUrl } = req.body;
     const filePath = path.join(CACHE_DIR, `${appId}.jpg`);
 
+    console.log(`Caching artwork for app ${appId} from ${imageUrl}`);
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
       throw new Error('Failed to download image');
@@ -62,6 +63,7 @@ app.post('/api/cache/artwork', async (req, res) => {
 
     const buffer = await imageResponse.buffer();
     await fs.writeFile(filePath, buffer);
+    console.log(`Successfully cached artwork for app ${appId}`);
 
     res.sendStatus(200);
   } catch (error) {
@@ -96,6 +98,7 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
     const { appId } = req.params;
     const gridDbKey = req.headers['x-steamgriddb-key'];
 
+    console.log(`Fetching artwork for app ${appId}`);
     const response = await fetch(
       `https://www.steamgriddb.com/api/v2/games/steam/${appId}`,
       {
@@ -106,10 +109,15 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
     );
 
     if (!response.ok) {
+      console.error(`SteamGridDB API error for ${appId}:`, {
+        status: response.status,
+        statusText: response.statusText
+      });
       throw new Error(`SteamGridDB API responded with ${response.status}`);
     }
 
     const data = await response.json();
+    console.log(`Retrieved ${data.data?.length || 0} artwork options for app ${appId}`);
     res.json(data);
   } catch (error) {
     console.error('SteamGridDB API error:', error);
