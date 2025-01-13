@@ -1,8 +1,6 @@
 services:
   wolf-manager:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: wolf-manager:latest
     ports:
       - "3000:3000"
     volumes:
