@@ -22,6 +22,10 @@ interface LibraryStats {
   recentlyPlayed: number;
 }
 
+interface GameLibraryProps {
+  searchQuery: string;
+}
+
 // Add a new component for optimized image display
 const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
   <Box
@@ -48,10 +52,9 @@ const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
   </Box>
 );
 
-export const GameLibrary: React.FC = () => {
+export const GameLibrary: React.FC<GameLibraryProps> = ({ searchQuery }) => {
   const [games, setGames] = useState<SteamGame[]>([]);
   const [filteredGames, setFilteredGames] = useState<SteamGame[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<LibraryStats>({
@@ -61,15 +64,14 @@ export const GameLibrary: React.FC = () => {
   });
   const [gameArtwork, setGameArtwork] = useState<Record<number, string>>({});
 
-  // Add search handler
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
+  // Update games when search query changes
+  useEffect(() => {
+    if (!searchQuery.trim()) {
       setFilteredGames(games);
       return;
     }
 
-    const searchTerm = query.toLowerCase();
+    const searchTerm = searchQuery.toLowerCase();
     const filtered = games.filter(game => 
       game.name.toLowerCase().includes(searchTerm)
     );
@@ -80,7 +82,7 @@ export const GameLibrary: React.FC = () => {
       totalGames: games.length, 
       filteredCount: filtered.length 
     });
-  };
+  }, [searchQuery, games]);
 
   useEffect(() => {
     const loadGames = async () => {

@@ -12,7 +12,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Search as SearchIcon,
   InputBase,
   alpha,
 } from '@mui/material';
@@ -21,6 +20,7 @@ import {
   Settings as SettingsIcon,
   SportsEsports as GamesIcon,
   Group as SessionsIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { Configuration } from './Configuration';
 import { styled } from '@mui/material/styles';
