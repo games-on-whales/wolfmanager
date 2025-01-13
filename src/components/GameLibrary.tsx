@@ -50,6 +50,8 @@ const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
 
 export const GameLibrary: React.FC = () => {
   const [games, setGames] = useState<SteamGame[]>([]);
+  const [filteredGames, setFilteredGames] = useState<SteamGame[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<LibraryStats>({
@@ -58,6 +60,27 @@ export const GameLibrary: React.FC = () => {
     recentlyPlayed: 0
   });
   const [gameArtwork, setGameArtwork] = useState<Record<number, string>>({});
+
+  // Add search handler
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setFilteredGames(games);
+      return;
+    }
+
+    const searchTerm = query.toLowerCase();
+    const filtered = games.filter(game => 
+      game.name.toLowerCase().includes(searchTerm)
+    );
+    setFilteredGames(filtered);
+    
+    Logger.debug('Filtered games', { 
+      searchTerm, 
+      totalGames: games.length, 
+      filteredCount: filtered.length 
+    });
+  };
 
   useEffect(() => {
     const loadGames = async () => {
@@ -87,6 +110,7 @@ export const GameLibrary: React.FC = () => {
         };
 
         setGames(ownedGames);
+        setFilteredGames(ownedGames);
         setStats(libraryStats);
         setError(null);
       } catch (err) {
@@ -234,7 +258,7 @@ export const GameLibrary: React.FC = () => {
 
       {/* Games Grid */}
       <Grid container spacing={2} justifyContent="center">
-        {games.map((game) => (
+        {filteredGames.map((game) => (
           <Grid item key={game.appid}>
             <Card 
               sx={{ 

@@ -12,6 +12,9 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Search as SearchIcon,
+  InputBase,
+  alpha,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -20,14 +23,55 @@ import {
   Group as SessionsIcon,
 } from '@mui/icons-material';
 import { Configuration } from './Configuration';
+import { styled } from '@mui/material/styles';
 
 const drawerWidth = 240;
 
+const Search = styled('div')(({ theme }) => ({
+  position: 'relative',
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: alpha(theme.palette.common.white, 0.15),
+  '&:hover': {
+    backgroundColor: alpha(theme.palette.common.white, 0.25),
+  },
+  marginRight: theme.spacing(2),
+  marginLeft: 0,
+  width: '100%',
+  [theme.breakpoints.up('sm')]: {
+    marginLeft: theme.spacing(3),
+    width: 'auto',
+  },
+}));
+
+const SearchIconWrapper = styled('div')(({ theme }) => ({
+  padding: theme.spacing(0, 2),
+  height: '100%',
+  position: 'absolute',
+  pointerEvents: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+}));
+
+const StyledInputBase = styled(InputBase)(({ theme }) => ({
+  color: 'inherit',
+  '& .MuiInputBase-input': {
+    padding: theme.spacing(1, 1, 1, 0),
+    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
+    transition: theme.transitions.create('width'),
+    width: '100%',
+    [theme.breakpoints.up('md')]: {
+      width: '20ch',
+    },
+  },
+}));
+
 interface LayoutProps {
   children: React.ReactNode;
+  onSearch?: (query: string) => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, onSearch }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
 
@@ -89,6 +133,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
+          <Search>
+            <SearchIconWrapper>
+              <SearchIcon />
+            </SearchIconWrapper>
+            <StyledInputBase
+              placeholder="Search games…"
+              inputProps={{ 'aria-label': 'search' }}
+              onChange={(e) => onSearch?.(e.target.value)}
+            />
+          </Search>
           <Box sx={{ flexGrow: 1 }} />
           <IconButton color="inherit" onClick={() => setShowConfig(true)}>
             <SettingsIcon />
