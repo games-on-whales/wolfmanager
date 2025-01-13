@@ -1,6 +1,6 @@
 services:
   wolf-manager:
-    image: wolf-manager:latest
+    image: ghcr.io/salty2011/wolf-manager:latest
     ports:
       - "3000:3000"
     volumes:
