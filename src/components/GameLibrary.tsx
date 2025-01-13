@@ -27,9 +27,10 @@ const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
   <Box
     sx={{
       position: 'relative',
-      width: '100%',
-      paddingTop: '150%', // Maintains 2:3 aspect ratio
-      overflow: 'hidden'
+      width: '300px', // Half of 600px
+      height: '450px', // Half of 900px
+      margin: '0 auto',
+      backgroundColor: 'black'
     }}
   >
     <Box
@@ -38,15 +39,10 @@ const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
       alt={alt}
       loading="lazy"
       sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
         width: '100%',
         height: '100%',
-        objectFit: 'contain', // Changed from 'cover' to 'contain'
-        transform: 'scale(0.5)', // Scale down the image to 50%
-        transformOrigin: 'center center',
-        backgroundColor: 'black' // Add black background to make artwork pop
+        objectFit: 'contain',
+        display: 'block'
       }}
     />
   </Box>
@@ -237,16 +233,17 @@ export const GameLibrary: React.FC = () => {
       </Grid>
 
       {/* Games Grid */}
-      <Grid container spacing={2}>
+      <Grid container spacing={2} justifyContent="center">
         {games.map((game) => (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={game.appid}>
+          <Grid item key={game.appid}>
             <Card 
               sx={{ 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column',
-                overflow: 'hidden',
-                bgcolor: 'black' // Match background with artwork
+                width: '300px',
+                height: '450px',
+                bgcolor: 'black',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
             >
               {gameArtwork[game.appid] ? (
@@ -255,7 +252,7 @@ export const GameLibrary: React.FC = () => {
                   alt={game.name} 
                 />
               ) : (
-                <CardContent sx={{ flexGrow: 1 }}>
+                <CardContent>
                   <Typography variant="h6" noWrap>
                     {game.name}
                   </Typography>
