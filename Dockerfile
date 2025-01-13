@@ -1,82 +1,33 @@
-# Build stage
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++
+# Install build essentials
+RUN apk add --no-cache python3 make g++
 
-# Copy package files
+# Copy package files first
 COPY package*.json ./
 
-# Install dependencies
+# Install all dependencies (including devDependencies)
 RUN npm install
 
-# Copy source code
+# Copy the rest of the application
 COPY . .
 
-# Create tsconfig.json if it doesn't exist
-RUN if [ ! -f tsconfig.json ]; then \
-    echo '{ \
-      "compilerOptions": { \
-        "target": "ESNext", \
-        "useDefineForClassFields": true, \
-        "lib": ["DOM", "DOM.Iterable", "ESNext"], \
-        "allowJs": false, \
-        "skipLibCheck": true, \
-        "esModuleInterop": false, \
-        "allowSyntheticDefaultImports": true, \
-        "strict": true, \
-        "forceConsistentCasingInFileNames": true, \
-        "module": "ESNext", \
-        "moduleResolution": "Node", \
-        "resolveJsonModule": true, \
-        "isolatedModules": true, \
-        "noEmit": true, \
-        "jsx": "react-jsx" \
-      }, \
-      "include": ["src"], \
-      "references": [{ "path": "./tsconfig.node.json" }] \
-    }' > tsconfig.json; \
+# Create vite.config.ts if it doesn't exist
+RUN if [ ! -f vite.config.ts ]; then \
+    echo 'import { defineConfig } from "vite"; \
+    import react from "@vitejs/plugin-react"; \
+    export default defineConfig({ \
+      plugins: [react()], \
+      server: { port: 3000, host: true }, \
+      preview: { port: 3000, host: true } \
+    });' > vite.config.ts; \
     fi
-
-# Create tsconfig.node.json if it doesn't exist
-RUN if [ ! -f tsconfig.node.json ]; then \
-    echo '{ \
-      "compilerOptions": { \
-        "composite": true, \
-        "module": "ESNext", \
-        "moduleResolution": "Node", \
-        "allowSyntheticDefaultImports": true \
-      }, \
-      "include": ["vite.config.ts"] \
-    }' > tsconfig.node.json; \
-    fi
-
-# Debug: List contents and check versions
-RUN ls -la && \
-    npm list typescript && \
-    echo "Node version: $(node -v)" && \
-    echo "NPM version: $(npm -v)"
 
 # Build the application
 RUN npm run build
-
-# Production stage
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Copy built assets from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
-
-# Install production dependencies only
-RUN npm install --production
 
 # Expose port 3000
 EXPOSE 3000
