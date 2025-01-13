@@ -15,17 +15,6 @@ RUN npm install
 # Copy the rest of the application
 COPY . .
 
-# Create vite.config.ts if it doesn't exist
-RUN if [ ! -f vite.config.ts ]; then \
-    echo 'import { defineConfig } from "vite"; \
-    import react from "@vitejs/plugin-react"; \
-    export default defineConfig({ \
-      plugins: [react()], \
-      server: { port: 3000, host: true }, \
-      preview: { port: 3000, host: true } \
-    });' > vite.config.ts; \
-    fi
-
 # Build the application
 RUN npm run build
 
