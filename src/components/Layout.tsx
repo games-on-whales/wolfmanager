@@ -37,6 +37,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     setMobileOpen(!mobileOpen);
   };
 
+  const handleNavigation = (section: string) => {
+    if (section === 'Library') {
+      setShowConfig(false);
+    }
+    setMobileOpen(false);
+  };
+
   const drawer = (
     <Box sx={{ overflow: 'auto' }}>
       <Toolbar>
@@ -47,7 +54,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <Divider />
       <List>
         <ListItem disablePadding>
-          <ListItemButton>
+          <ListItemButton onClick={() => handleNavigation('Sessions')}>
             <ListItemIcon>
               <SessionsIcon />
             </ListItemIcon>
@@ -55,7 +62,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </ListItemButton>
         </ListItem>
         <ListItem disablePadding>
-          <ListItemButton>
+          <ListItemButton onClick={() => handleNavigation('Library')}>
             <ListItemIcon>
               <GamesIcon />
             </ListItemIcon>

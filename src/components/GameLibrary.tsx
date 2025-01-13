@@ -1,85 +1,90 @@
-import React, { useState, useEffect } from 'react';
-import { SteamGame } from '../types/steam';
-import { WolfService } from '../services/WolfService';
-
-const wolfService = new WolfService();
+import React, { useEffect, useState } from 'react';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Grid,
+  CircularProgress,
+  Alert
+} from '@mui/material';
+import { SteamGame } from '../types/config';
+import { SteamService } from '../services/SteamService';
+import { ConfigService } from '../services/ConfigService';
+import Logger from '../services/LogService';
 
 export const GameLibrary: React.FC = () => {
-    const [games, setGames] = useState<SteamGame[]>([]);
-    const [loading, setLoading] = useState(true);
+  const [games, setGames] = useState<SteamGame[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchGames();
-    }, []);
-
-    const fetchGames = async () => {
-        setLoading(true);
-        try {
-            // This would need to be replaced with actual Steam API integration
-            const dummyGames: SteamGame[] = [
-                { appid: 570, name: 'Dota 2', installed: false },
-                { appid: 730, name: 'CS:GO', installed: false },
-            ];
-
-            const installedGames = await wolfService.getInstalledGames();
-            const updatedGames = dummyGames.map(game => ({
-                ...game,
-                installed: installedGames.includes(game.appid)
-            }));
-
-            setGames(updatedGames);
-        } catch (error) {
-            console.error('Error fetching games:', error);
+  useEffect(() => {
+    const loadGames = async () => {
+      Logger.info('Loading game library');
+      try {
+        const config = ConfigService.getConfig();
+        if (!config.steamId || !config.steamApiKey) {
+          const errorMsg = 'Steam ID and API Key are required. Please check your configuration.';
+          Logger.warn(errorMsg);
+          setError(errorMsg);
+          setLoading(false);
+          return;
         }
+
+        Logger.debug('Fetching owned games');
+        const ownedGames = await SteamService.getOwnedGames(config.steamId);
+        Logger.info(`Loaded ${ownedGames.length} games`);
+        setGames(ownedGames);
+        setError(null);
+      } catch (err) {
+        const errorMsg = 'Failed to load games. Please check your configuration and try again.';
+        Logger.error(errorMsg, err);
+        setError(errorMsg);
+      } finally {
         setLoading(false);
+      }
     };
 
-    const handleInstall = async (game: SteamGame) => {
-        const updatedGames = games.map(g => {
-            if (g.appid === game.appid) {
-                return { ...g, installing: true };
-            }
-            return g;
-        });
-        setGames(updatedGames);
+    loadGames();
+  }, []);
 
-        const success = await wolfService.installGame(game.appid);
-        
-        if (success) {
-            setGames(games.map(g => {
-                if (g.appid === game.appid) {
-                    return { ...g, installed: true, installing: false };
-                }
-                return g;
-            }));
-        }
-    };
-
-    if (loading) {
-        return <div>Loading...</div>;
-    }
-
+  if (loading) {
     return (
-        <div className="game-library">
-            <h1>Steam Games</h1>
-            <div className="games-grid">
-                {games.map(game => (
-                    <div key={game.appid} className="game-card">
-                        <h3>{game.name}</h3>
-                        <p>App ID: {game.appid}</p>
-                        {!game.installed ? (
-                            <button 
-                                onClick={() => handleInstall(game)}
-                                disabled={game.installing}
-                            >
-                                {game.installing ? 'Installing...' : 'Install'}
-                            </button>
-                        ) : (
-                            <span className="installed-badge">Installed</span>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+        <CircularProgress />
+      </Box>
     );
+  }
+
+  if (error) {
+    return (
+      <Alert severity="error" sx={{ mt: 2 }}>
+        {error}
+      </Alert>
+    );
+  }
+
+  return (
+    <Box sx={{ flexGrow: 1 }}>
+      <Typography variant="h4" gutterBottom>
+        Game Library
+      </Typography>
+      <Grid container spacing={2}>
+        {games.map((game) => (
+          <Grid item xs={12} sm={6} md={4} lg={3} key={game.appid}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" noWrap>
+                  {game.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Playtime: {Math.round(game.playtime_forever / 60)} hours
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
+  );
 }; 

@@ -1,5 +1,6 @@
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { Layout } from './components/Layout';
+import { GameLibrary } from './components/GameLibrary';
 
 const darkTheme = createTheme({
   palette: {
@@ -12,9 +13,7 @@ function App() {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <Layout>
-        <div>
-          {/* Content will go here */}
-        </div>
+        <GameLibrary />
       </Layout>
     </ThemeProvider>
   );
