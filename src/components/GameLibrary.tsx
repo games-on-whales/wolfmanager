@@ -7,9 +7,14 @@ import {
   Grid,
   CircularProgress,
   Alert,
-  Paper
+  Paper,
+  IconButton,
+  Fade
 } from '@mui/material';
-import { SportsEsports as GamesIcon } from '@mui/icons-material';
+import {
+  SportsEsports as GamesIcon,
+  GetApp as InstallIcon
+} from '@mui/icons-material';
 import { SteamGame } from '../types/config';
 import { SteamService } from '../services/SteamService';
 import { ConfigService } from '../services/ConfigService';
@@ -26,31 +31,91 @@ interface GameLibraryProps {
   searchQuery: string;
 }
 
-// Add a new component for optimized image display
-const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
-  <Box
-    sx={{
-      position: 'relative',
-      width: '150px',  // Quarter of 600px
-      height: '225px', // Quarter of 900px
-      margin: '0 auto',
-      backgroundColor: 'black'
-    }}
-  >
+// Update GameArtwork component to include hover effects and install button
+const GameArtwork: React.FC<{ 
+  src: string; 
+  alt: string;
+  onInstall: () => void;
+}> = ({ src, alt, onInstall }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
     <Box
-      component="img"
-      src={src}
-      alt={alt}
-      loading="lazy"
       sx={{
-        width: '100%',
-        height: '100%',
-        objectFit: 'contain',
-        display: 'block'
+        position: 'relative',
+        width: '150px',
+        height: '225px',
+        margin: '0 auto',
+        backgroundColor: 'black',
+        '&:hover': {
+          '& .hover-overlay': {
+            opacity: 1
+          }
+        }
       }}
-    />
-  </Box>
-);
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Box
+        component="img"
+        src={src}
+        alt={alt}
+        loading="lazy"
+        sx={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          display: 'block',
+          transition: 'transform 0.3s ease-in-out',
+          transform: isHovered ? 'scale(1.05)' : 'scale(1)'
+        }}
+      />
+      <Fade in={isHovered}>
+        <Box
+          className="hover-overlay"
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            bgcolor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: 0,
+            transition: 'opacity 0.3s ease-in-out'
+          }}
+        >
+          <Typography
+            variant="subtitle1"
+            sx={{
+              color: 'white',
+              textAlign: 'center',
+              px: 1,
+              mb: 1
+            }}
+          >
+            {alt}
+          </Typography>
+          <IconButton
+            color="primary"
+            onClick={onInstall}
+            sx={{
+              bgcolor: 'primary.main',
+              '&:hover': {
+                bgcolor: 'primary.dark'
+              }
+            }}
+          >
+            <InstallIcon />
+          </IconButton>
+        </Box>
+      </Fade>
+    </Box>
+  );
+};
 
 export const GameLibrary: React.FC<GameLibraryProps> = ({ searchQuery }) => {
   const [games, setGames] = useState<SteamGame[]>([]);
@@ -180,6 +245,14 @@ export const GameLibrary: React.FC<GameLibraryProps> = ({ searchQuery }) => {
     loadArtwork();
   }, [games]);
 
+  const handleInstall = (game: SteamGame) => {
+    Logger.info('Install requested for game', { 
+      appId: game.appid, 
+      name: game.name 
+    });
+    // TODO: Implement actual installation
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -264,18 +337,23 @@ export const GameLibrary: React.FC<GameLibraryProps> = ({ searchQuery }) => {
           <Grid item key={game.appid}>
             <Card 
               sx={{ 
-                width: '150px',  // Quarter of 600px
-                height: '225px', // Quarter of 900px
+                width: '150px',
+                height: '225px',
                 bgcolor: 'black',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                transition: 'transform 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'scale(1.02)'
+                }
               }}
             >
               {gameArtwork[game.appid] ? (
                 <GameArtwork 
                   src={gameArtwork[game.appid]} 
-                  alt={game.name} 
+                  alt={game.name}
+                  onInstall={() => handleInstall(game)}
                 />
               ) : (
                 <CardContent>
