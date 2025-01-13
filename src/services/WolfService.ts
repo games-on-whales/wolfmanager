@@ -1,7 +1,7 @@
 export class WolfService {
     private socketPath: string;
 
-    constructor(socketPath: string = '/var/run/wolf/wolf.sock') {
+    constructor(socketPath = '/var/run/wolf/wolf.sock') {
         this.socketPath = socketPath;
     }
 

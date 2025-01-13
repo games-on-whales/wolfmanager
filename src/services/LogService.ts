@@ -49,11 +49,7 @@ class Logger {
     // Browser environment
     if (typeof window !== 'undefined') {
       const consoleMethod = console[entry.level] || console.log;
-      if (entry.data) {
-        consoleMethod(entry.message, entry.data);
-      } else {
-        consoleMethod(entry.message);
-      }
+      consoleMethod(logString);
       
       // Emit custom event for potential log collectors
       const logEvent = new CustomEvent('wolf-manager-log', { 
