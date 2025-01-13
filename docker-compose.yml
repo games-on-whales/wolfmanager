@@ -1,8 +1,9 @@
 services:
   wolf-manager:
-    image: ghcr.io/salty2011/wolf-manager:latest
+    image: ghcr.io/salty2011/wolfmanager:main
+    network_mode: host
     ports:
-      - "3000:3000"
+      - "9971:9971"
     volumes:
       - /var/run/wolf:/var/run/wolf
     environment:
