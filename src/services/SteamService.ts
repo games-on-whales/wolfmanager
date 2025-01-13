@@ -1,5 +1,6 @@
 import { SteamGame } from '../types/config';
 import { ConfigService } from './ConfigService';
+import { CacheService } from './CacheService';
 import Logger from './LogService';
 
 export const SteamService = {
@@ -30,10 +31,22 @@ export const SteamService = {
     }
   },
 
-  getGameArtwork: async (appId: number) => {
+  getGameArtwork: async (appId: number): Promise<string | null> => {
     Logger.debug('Fetching artwork for game', { appId });
     const config = ConfigService.getConfig();
     
+    if (!config.steamGridDbApiKey) {
+      Logger.warn('SteamGridDB API key not configured');
+      return null;
+    }
+
+    // Check cache first
+    const cachedArtwork = await CacheService.getCachedArtwork(appId);
+    if (cachedArtwork) {
+      Logger.debug('Using cached artwork', { appId });
+      return cachedArtwork;
+    }
+
     try {
       const response = await fetch(
         `/api/steamgrid/artwork/${appId}`,
@@ -45,20 +58,28 @@ export const SteamService = {
       );
 
       if (!response.ok) {
-        Logger.error('SteamGridDB API request failed', {
-          status: response.status,
-          statusText: response.statusText
-        });
         throw new Error(`SteamGridDB API request failed: ${response.statusText}`);
       }
 
       const data = await response.json();
-      Logger.info('Successfully retrieved artwork data');
-      Logger.debug('Artwork data', data);
-      return data;
+      
+      // Find the first 600x900 grid in the alternate style
+      const grid = data.data?.find((item: any) => 
+        item.style === 'alternate' && 
+        item.width === 600 && 
+        item.height === 900
+      );
+
+      if (grid?.url) {
+        Logger.info('Found suitable artwork', { appId });
+        return CacheService.cacheArtwork(appId, grid.url);
+      }
+
+      Logger.warn('No suitable artwork found', { appId });
+      return null;
     } catch (error) {
       Logger.error('Failed to fetch game artwork', error);
-      throw error;
+      return null;
     }
   }
 }; 

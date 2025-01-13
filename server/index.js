@@ -3,6 +3,8 @@ import cors from 'cors';
 import fetch from 'node-fetch';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs/promises';
+import path from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,6 +17,58 @@ app.use(express.json());
 
 // Serve static files from the React app
 app.use(express.static(join(__dirname, '../dist')));
+
+const CACHE_DIR = '/config/cache/artwork';
+
+// Ensure cache directory exists
+app.post('/api/cache/ensure', async (req, res) => {
+  try {
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Failed to create cache directory:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get cached artwork
+app.get('/api/cache/artwork/:appId', async (req, res) => {
+  try {
+    const { appId } = req.params;
+    const filePath = path.join(CACHE_DIR, `${appId}.jpg`);
+    
+    try {
+      await fs.access(filePath);
+      res.sendFile(filePath);
+    } catch {
+      res.status(404).send('Artwork not found in cache');
+    }
+  } catch (error) {
+    console.error('Failed to retrieve cached artwork:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cache new artwork
+app.post('/api/cache/artwork', async (req, res) => {
+  try {
+    const { appId, imageUrl } = req.body;
+    const filePath = path.join(CACHE_DIR, `${appId}.jpg`);
+
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error('Failed to download image');
+    }
+
+    const buffer = await imageResponse.buffer();
+    await fs.writeFile(filePath, buffer);
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Failed to cache artwork:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Steam API proxy endpoint
 app.get('/api/steam/games', async (req, res) => {

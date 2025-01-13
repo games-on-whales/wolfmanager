@@ -14,6 +14,7 @@ import { SteamGame } from '../types/config';
 import { SteamService } from '../services/SteamService';
 import { ConfigService } from '../services/ConfigService';
 import Logger from '../services/LogService';
+import { CacheService } from '../services/CacheService';
 
 interface LibraryStats {
   totalGames: number;
@@ -30,6 +31,7 @@ export const GameLibrary: React.FC = () => {
     totalPlaytime: 0,
     recentlyPlayed: 0
   });
+  const [gameArtwork, setGameArtwork] = useState<Record<number, string>>({});
 
   useEffect(() => {
     const loadGames = async () => {
@@ -72,6 +74,27 @@ export const GameLibrary: React.FC = () => {
 
     loadGames();
   }, []);
+
+  useEffect(() => {
+    const loadArtwork = async () => {
+      const config = ConfigService.getConfig();
+      if (!config.steamGridDbApiKey || games.length === 0) return;
+
+      await CacheService.ensureCacheDir();
+
+      for (const game of games) {
+        const artwork = await SteamService.getGameArtwork(game.appid);
+        if (artwork) {
+          setGameArtwork(prev => ({
+            ...prev,
+            [game.appid]: artwork
+          }));
+        }
+      }
+    };
+
+    loadArtwork();
+  }, [games]);
 
   if (loading) {
     return (
@@ -156,6 +179,19 @@ export const GameLibrary: React.FC = () => {
         {games.map((game) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={game.appid}>
             <Card>
+              {gameArtwork[game.appid] && (
+                <Box
+                  component="img"
+                  src={gameArtwork[game.appid]}
+                  alt={game.name}
+                  sx={{
+                    width: '100%',
+                    height: 'auto',
+                    aspectRatio: '2/3',
+                    objectFit: 'cover'
+                  }}
+                />
+              )}
               <CardContent>
                 <Typography variant="h6" noWrap>
                   {game.name}
