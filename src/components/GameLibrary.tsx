@@ -22,6 +22,28 @@ interface LibraryStats {
   recentlyPlayed: number;
 }
 
+// Add a new component for optimized image display
+const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
+  <Box
+    component="img"
+    src={src}
+    alt={alt}
+    loading="lazy"
+    sx={{
+      width: '300px', // Half of 600px
+      height: '450px', // Half of 900px
+      objectFit: 'cover',
+      display: 'block',
+      margin: '0 auto',
+      '@media (max-width: 600px)': {
+        width: '100%',
+        height: 'auto',
+        aspectRatio: '2/3'
+      }
+    }}
+  />
+);
+
 export const GameLibrary: React.FC = () => {
   const [games, setGames] = useState<SteamGame[]>([]);
   const [loading, setLoading] = useState(true);
@@ -210,21 +232,14 @@ export const GameLibrary: React.FC = () => {
       <Grid container spacing={2}>
         {games.map((game) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={game.appid}>
-            <Card>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               {gameArtwork[game.appid] && (
-                <Box
-                  component="img"
-                  src={gameArtwork[game.appid]}
-                  alt={game.name}
-                  sx={{
-                    width: '100%',
-                    height: 'auto',
-                    aspectRatio: '2/3',
-                    objectFit: 'cover'
-                  }}
+                <GameArtwork 
+                  src={gameArtwork[game.appid]} 
+                  alt={game.name} 
                 />
               )}
-              <CardContent>
+              <CardContent sx={{ flexGrow: 1 }}>
                 <Typography variant="h6" noWrap>
                   {game.name}
                 </Typography>
