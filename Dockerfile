@@ -18,8 +18,8 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Expose port 3000
-EXPOSE 3000
+# Expose port 9971
+EXPOSE 9971
 
 # Start the application
-CMD ["npm", "run", "start"] 
+CMD ["npm", "start"] 

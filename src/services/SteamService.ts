@@ -9,7 +9,7 @@ export const SteamService = {
     
     try {
       const response = await fetch(
-        `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${config.steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`
+        `/api/steam/games?steamApiKey=${config.steamApiKey}&steamId=${steamId}`
       );
       
       if (!response.ok) {
@@ -36,10 +36,10 @@ export const SteamService = {
     
     try {
       const response = await fetch(
-        `https://www.steamgriddb.com/api/v2/games/steam/${appId}`,
+        `/api/steamgrid/artwork/${appId}`,
         {
           headers: {
-            Authorization: `Bearer ${config.steamGridDbApiKey}`
+            'X-SteamGridDB-Key': config.steamGridDbApiKey
           }
         }
       );
