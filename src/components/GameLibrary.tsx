@@ -43,9 +43,10 @@ const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
         left: 0,
         width: '100%',
         height: '100%',
-        objectFit: 'cover',
+        objectFit: 'contain', // Changed from 'cover' to 'contain'
         transform: 'scale(0.5)', // Scale down the image to 50%
-        transformOrigin: 'center center'
+        transformOrigin: 'center center',
+        backgroundColor: 'black' // Add black background to make artwork pop
       }}
     />
   </Box>
@@ -244,23 +245,25 @@ export const GameLibrary: React.FC = () => {
                 height: '100%', 
                 display: 'flex', 
                 flexDirection: 'column',
-                overflow: 'hidden' // Ensure scaled content doesn't overflow
+                overflow: 'hidden',
+                bgcolor: 'black' // Match background with artwork
               }}
             >
-              {gameArtwork[game.appid] && (
+              {gameArtwork[game.appid] ? (
                 <GameArtwork 
                   src={gameArtwork[game.appid]} 
                   alt={game.name} 
                 />
+              ) : (
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" noWrap>
+                    {game.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Playtime: {Math.round(game.playtime_forever / 60)} hours
+                  </Typography>
+                </CardContent>
               )}
-              <CardContent sx={{ flexGrow: 1 }}>
-                <Typography variant="h6" noWrap>
-                  {game.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Playtime: {Math.round(game.playtime_forever / 60)} hours
-                </Typography>
-              </CardContent>
             </Card>
           </Grid>
         ))}
