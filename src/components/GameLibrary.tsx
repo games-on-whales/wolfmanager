@@ -27,8 +27,8 @@ const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
   <Box
     sx={{
       position: 'relative',
-      width: '300px', // Half of 600px
-      height: '450px', // Half of 900px
+      width: '150px',  // Quarter of 600px
+      height: '225px', // Quarter of 900px
       margin: '0 auto',
       backgroundColor: 'black'
     }}
@@ -238,8 +238,8 @@ export const GameLibrary: React.FC = () => {
           <Grid item key={game.appid}>
             <Card 
               sx={{ 
-                width: '300px',
-                height: '450px',
+                width: '150px',  // Quarter of 600px
+                height: '225px', // Quarter of 900px
                 bgcolor: 'black',
                 display: 'flex',
                 alignItems: 'center',
