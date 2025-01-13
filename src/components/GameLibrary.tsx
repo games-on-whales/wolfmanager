@@ -25,23 +25,30 @@ interface LibraryStats {
 // Add a new component for optimized image display
 const GameArtwork: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
   <Box
-    component="img"
-    src={src}
-    alt={alt}
-    loading="lazy"
     sx={{
-      width: '300px', // Half of 600px
-      height: '450px', // Half of 900px
-      objectFit: 'cover',
-      display: 'block',
-      margin: '0 auto',
-      '@media (max-width: 600px)': {
-        width: '100%',
-        height: 'auto',
-        aspectRatio: '2/3'
-      }
+      position: 'relative',
+      width: '100%',
+      paddingTop: '150%', // Maintains 2:3 aspect ratio
+      overflow: 'hidden'
     }}
-  />
+  >
+    <Box
+      component="img"
+      src={src}
+      alt={alt}
+      loading="lazy"
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        transform: 'scale(0.5)', // Scale down the image to 50%
+        transformOrigin: 'center center'
+      }}
+    />
+  </Box>
 );
 
 export const GameLibrary: React.FC = () => {
@@ -232,7 +239,14 @@ export const GameLibrary: React.FC = () => {
       <Grid container spacing={2}>
         {games.map((game) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={game.appid}>
-            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Card 
+              sx={{ 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column',
+                overflow: 'hidden' // Ensure scaled content doesn't overflow
+              }}
+            >
               {gameArtwork[game.appid] && (
                 <GameArtwork 
                   src={gameArtwork[game.appid]} 
