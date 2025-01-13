@@ -100,7 +100,7 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
 
     console.log(`Fetching artwork for app ${appId}`);
     const response = await fetch(
-      `https://www.steamgriddb.com/api/v2/games/steam/${appId}`,
+      `https://www.steamgriddb.com/api/v2/grids/steam/${appId}`,
       {
         headers: {
           Authorization: `Bearer ${gridDbKey}`
@@ -118,7 +118,17 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
 
     const data = await response.json();
     console.log(`Retrieved ${data.data?.length || 0} artwork options for app ${appId}`);
-    res.json(data);
+    
+    // Transform response to match our expected structure
+    const transformedData = {
+      success: data.success,
+      data: {
+        id: parseInt(appId),
+        grids: data.data || []
+      }
+    };
+    
+    res.json(transformedData);
   } catch (error) {
     console.error('SteamGridDB API error:', error);
     res.status(500).json({ error: error.message });

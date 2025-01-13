@@ -3,6 +3,28 @@ import { ConfigService } from './ConfigService';
 import { CacheService } from './CacheService';
 import Logger from './LogService';
 
+interface SteamGridImage {
+  id: string;
+  score: number;
+  style: string;
+  width: number;
+  height: number;
+  nsfw: boolean;
+  humor: boolean;
+  url: string;
+}
+
+interface SteamGridResponse {
+  success: boolean;
+  data: {
+    id: number;
+    name: string;
+    types: string[];
+    verified: boolean;
+    grids: SteamGridImage[];
+  };
+}
+
 export const SteamService = {
   getOwnedGames: async (steamId: string): Promise<SteamGame[]> => {
     Logger.debug('Fetching owned games for Steam ID', { steamId });
@@ -69,14 +91,15 @@ export const SteamService = {
         throw new Error(`SteamGridDB API request failed: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as SteamGridResponse;
       Logger.debug('Received SteamGridDB response', { 
         appId, 
-        gridCount: data.data?.length || 0 
+        success: data.success,
+        gridCount: data.data?.grids?.length || 0 
       });
       
       // Find the first 600x900 grid in the alternate style
-      const grid = data.data?.find((item: any) => 
+      const grid = data.data?.grids?.find(item => 
         item.style === 'alternate' && 
         item.width === 600 && 
         item.height === 900
@@ -95,16 +118,24 @@ export const SteamService = {
           return cachedUrl;
         }
       } else {
+        const availableGrids = data.data?.grids || [];
         Logger.warn('No suitable artwork found', { 
           appId,
-          availableStyles: [...new Set(data.data?.map((item: any) => item.style))],
-          availableDimensions: [...new Set(data.data?.map((item: any) => `${item.width}x${item.height}`))]
+          availableStyles: [...new Set(availableGrids.map(item => item.style))],
+          availableDimensions: [...new Set(availableGrids.map(item => `${item.width}x${item.height}`))]
         });
       }
 
       return null;
     } catch (error) {
-      Logger.error('Failed to fetch game artwork', { appId, error });
+      Logger.error('Failed to fetch game artwork', { 
+        appId, 
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error 
+      });
       return null;
     }
   }
