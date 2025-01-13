@@ -1,22 +1,23 @@
-FROM node:20-slim
+# Use Node.js LTS version
+FROM node:20-alpine
 
+# Set working directory
 WORKDIR /app
 
-# Install dependencies
+# Copy package files
 COPY package*.json ./
-RUN npm install
 
-# Copy source code
+# Install dependencies
+RUN npm ci
+
+# Copy the rest of the application
 COPY . .
 
-# Build the app
+# Build the application
 RUN npm run build
-
-# Install serve to run the built app
-RUN npm install -g serve
 
 # Expose port 3000
 EXPOSE 3000
 
-# Start the app
-CMD ["serve", "-s", "dist", "-l", "3000"] 
+# Start the application
+CMD ["npm", "start"] 
