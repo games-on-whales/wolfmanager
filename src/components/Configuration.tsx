@@ -8,11 +8,13 @@ import {
   Snackbar,
   Alert,
   InputAdornment,
-  IconButton
+  IconButton,
+  CircularProgress
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { ConfigService } from '../services/ConfigService';
 import { Config } from '../types/config';
+import { Logger } from '../utils/Logger';
 
 export const Configuration: React.FC = () => {
   const [config, setConfig] = useState<Config>({
@@ -22,25 +24,54 @@ export const Configuration: React.FC = () => {
     steamGridDbApiKey: ''
   });
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState<string | null>(null);
   const [showSteamKey, setShowSteamKey] = useState(false);
   const [showGridDbKey, setShowGridDbKey] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadConfig = async () => {
-      await ConfigService.loadConfig();
-      setConfig(ConfigService.getConfig());
+      try {
+        setIsLoading(true);
+        await ConfigService.loadConfig();
+        const loadedConfig = ConfigService.getConfig();
+        Logger.debug('Config loaded successfully', loadedConfig);
+        setConfig(loadedConfig);
+      } catch (error) {
+        setShowError('Failed to load configuration');
+        Logger.error('Failed to load config', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
     loadConfig();
   }, []);
 
   const handleSave = async () => {
     try {
+      setIsSaving(true);
+      setShowError(null);
       await ConfigService.saveConfig(config);
+      await ConfigService.loadConfig();
+      setConfig(ConfigService.getConfig());
       setShowSuccess(true);
+      Logger.info('Configuration saved successfully');
     } catch (error) {
-      // ... error handling
+      setShowError('Failed to save configuration');
+      Logger.error('Failed to save config', error);
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Paper sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
@@ -106,9 +137,10 @@ export const Configuration: React.FC = () => {
         <Button 
           variant="contained" 
           onClick={handleSave}
+          disabled={isSaving}
           sx={{ mt: 2 }}
         >
-          Save Configuration
+          {isSaving ? 'Saving...' : 'Save Configuration'}
         </Button>
       </Box>
 
@@ -118,6 +150,14 @@ export const Configuration: React.FC = () => {
         onClose={() => setShowSuccess(false)}
       >
         <Alert severity="success">Configuration saved successfully!</Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={!!showError}
+        autoHideDuration={6000}
+        onClose={() => setShowError(null)}
+      >
+        <Alert severity="error">{showError}</Alert>
       </Snackbar>
     </Paper>
   );

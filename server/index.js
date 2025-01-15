@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs/promises';
 import path from 'path';
+import { ConfigManager } from './config/ConfigManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,6 +20,52 @@ app.use(express.json());
 app.use(express.static(join(__dirname, '../dist')));
 
 const CACHE_DIR = '/config/cache/artwork';
+
+// Config endpoints
+app.get('/api/config', async (req, res) => {
+  try {
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+    console.log('Sending config to client (sensitive data redacted)', {
+      ...config,
+      steamApiKey: config.steamApiKey ? '[REDACTED]' : '',
+      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    });
+    res.json(config);
+  } catch (error) {
+    console.error('Error getting config:', error);
+    res.status(500).json({ error: 'Failed to get configuration' });
+  }
+});
+
+app.post('/api/config', async (req, res) => {
+  try {
+    console.log('Received config update request');
+    const configManager = await ConfigManager.getInstance();
+    const newConfig = req.body;
+    
+    // Validate config
+    if (!newConfig || typeof newConfig !== 'object') {
+      console.error('Invalid config received:', newConfig);
+      res.status(400).json({ error: 'Invalid configuration format' });
+      return;
+    }
+
+    console.log('Saving new config (sensitive data redacted)', {
+      ...newConfig,
+      steamApiKey: newConfig.steamApiKey ? '[REDACTED]' : '',
+      steamGridDbApiKey: newConfig.steamGridDbApiKey ? '[REDACTED]' : ''
+    });
+
+    await configManager.saveConfig(newConfig);
+    console.log('Config saved successfully');
+    
+    res.json(configManager.getConfig());
+  } catch (error) {
+    console.error('Error saving config:', error);
+    res.status(500).json({ error: 'Failed to save configuration' });
+  }
+});
 
 // Ensure cache directory exists
 app.post('/api/cache/ensure', async (req, res) => {

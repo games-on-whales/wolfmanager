@@ -7,8 +7,13 @@ import { ConfigManager } from './config/ConfigManager';
 app.get('/api/config', async (req, res) => {
   try {
     const configManager = await ConfigManager.getInstance();
-    // Only send non-sensitive config data to client
-    res.json(configManager.getConfig());
+    const config = configManager.getConfig();
+    console.log('Sending config to client (sensitive data redacted)', {
+      ...config,
+      steamApiKey: config.steamApiKey ? '[REDACTED]' : '',
+      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    });
+    res.json(config);
   } catch (error) {
     console.error('Error getting config:', error);
     res.status(500).json({ error: 'Failed to get configuration' });
@@ -17,9 +22,27 @@ app.get('/api/config', async (req, res) => {
 
 app.post('/api/config', async (req, res) => {
   try {
+    console.log('Received config update request');
     const configManager = await ConfigManager.getInstance();
-    await configManager.saveConfig(req.body);
-    // Return non-sensitive data
+    const newConfig = req.body;
+    
+    // Validate config
+    if (!newConfig || typeof newConfig !== 'object') {
+      console.error('Invalid config received:', newConfig);
+      res.status(400).json({ error: 'Invalid configuration format' });
+      return;
+    }
+
+    console.log('Saving new config (sensitive data redacted)', {
+      ...newConfig,
+      steamApiKey: newConfig.steamApiKey ? '[REDACTED]' : '',
+      steamGridDbApiKey: newConfig.steamGridDbApiKey ? '[REDACTED]' : ''
+    });
+
+    await configManager.saveConfig(newConfig);
+    console.log('Config saved successfully');
+    
+    // Return the new config (without sensitive data)
     res.json(configManager.getConfig());
   } catch (error) {
     console.error('Error saving config:', error);
