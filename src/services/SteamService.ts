@@ -27,7 +27,7 @@ interface SteamGridResponse {
 
 export const SteamService = {
   getOwnedGames: async (username?: string): Promise<SteamGame[]> => {
-    Logger.debug('Fetching owned games', { username });
+    Logger.debug('Fetching owned games', 'SteamService', { username });
     await ConfigService.loadConfig();
     const config = ConfigService.getConfig();
     const user = username ? 
@@ -35,7 +35,7 @@ export const SteamService = {
       ConfigService.getCurrentUser();
     
     if (!user) {
-      Logger.error('No user selected');
+      Logger.error('No user selected', undefined, 'SteamService');
       throw new Error('No user selected');
     }
 
@@ -45,44 +45,44 @@ export const SteamService = {
       );
       
       if (!response.ok) {
-        Logger.error('Steam API request failed', {
-          status: response.status,
-          statusText: response.statusText
-        });
+        Logger.error('Steam API request failed', { 
+          status: response.status, 
+          statusText: response.statusText 
+        }, 'SteamService');
         throw new Error(`Steam API request failed: ${response.statusText}`);
       }
 
       const data = await response.json();
-      Logger.info(`Successfully retrieved ${data.response?.games?.length || 0} games`);
-      Logger.debug('Games data', data.response);
+      Logger.info(`Successfully retrieved ${data.response?.games?.length || 0} games`, 'SteamService');
+      Logger.debug('Games data', 'SteamService', data.response);
       return data.response.games || [];
     } catch (error) {
-      Logger.error('Failed to fetch owned games', error);
+      Logger.error('Failed to fetch owned games', error, 'SteamService');
       throw error;
     }
   },
 
   getGameArtwork: async (appId: number): Promise<string | null> => {
-    Logger.debug('Starting artwork fetch process', { appId });
+    Logger.debug('Starting artwork fetch process', 'SteamService', { appId });
     await ConfigService.loadConfig();
     const config = ConfigService.getConfig();
     
     if (!config.steamGridDbApiKey) {
-      Logger.warn('SteamGridDB API key not configured, skipping artwork fetch');
+      Logger.warn('SteamGridDB API key not configured, skipping artwork fetch', 'SteamService');
       return null;
     }
 
     // Check cache first
-    Logger.debug('Checking artwork cache', { appId });
+    Logger.debug('Checking artwork cache', 'SteamService', { appId });
     const cachedArtwork = await CacheService.getCachedArtwork(appId);
     if (cachedArtwork) {
-      Logger.info('Using cached artwork', { appId });
+      Logger.info('Using cached artwork', 'SteamService', { appId });
       return cachedArtwork;
     }
-    Logger.debug('No cached artwork found, fetching from API', { appId });
+    Logger.debug('No cached artwork found, fetching from API', 'SteamService', { appId });
 
     try {
-      Logger.debug('Making SteamGridDB API request', { appId });
+      Logger.debug('Making SteamGridDB API request', 'SteamService', { appId });
       const response = await fetch(
         `/api/steamgrid/artwork/${appId}`,
         {
@@ -94,15 +94,14 @@ export const SteamService = {
 
       if (!response.ok) {
         Logger.error('SteamGridDB API request failed', {
-          appId,
           status: response.status,
           statusText: response.statusText
-        });
+        }, 'SteamService');
         throw new Error(`SteamGridDB API request failed: ${response.statusText}`);
       }
 
       const data = await response.json() as SteamGridResponse;
-      Logger.debug('Received SteamGridDB response', { 
+      Logger.debug('Received SteamGridDB response', 'SteamService', { 
         appId, 
         success: data.success,
         gridCount: data.data?.grids?.length || 0 
@@ -116,7 +115,7 @@ export const SteamService = {
       );
 
       if (grid?.url) {
-        Logger.info('Found suitable artwork', { 
+        Logger.info('Found suitable artwork', 'SteamService', { 
           appId,
           style: grid.style,
           dimensions: `${grid.width}x${grid.height}`,
@@ -124,12 +123,12 @@ export const SteamService = {
         });
         const cachedUrl = await CacheService.cacheArtwork(appId, grid.url);
         if (cachedUrl) {
-          Logger.info('Successfully cached artwork', { appId });
+          Logger.info('Successfully cached artwork', 'SteamService', { appId });
           return cachedUrl;
         }
       } else {
         const availableGrids = data.data?.grids || [];
-        Logger.warn('No suitable artwork found', { 
+        Logger.warn('No suitable artwork found', 'SteamService', { 
           appId,
           availableStyles: [...new Set(availableGrids.map(item => item.style))],
           availableDimensions: [...new Set(availableGrids.map(item => `${item.width}x${item.height}`))]
@@ -138,14 +137,7 @@ export const SteamService = {
 
       return null;
     } catch (error) {
-      Logger.error('Failed to fetch game artwork', { 
-        appId, 
-        error: error instanceof Error ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        } : error 
-      });
+      Logger.error('Failed to fetch game artwork', error, 'SteamService');
       return null;
     }
   },

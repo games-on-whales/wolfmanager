@@ -7,7 +7,7 @@ export const ConfigService = {
 
   async loadConfig(): Promise<void> {
     try {
-      Logger.debug('Loading config...');
+      Logger.debug('Loading config...', 'ConfigService');
       const response = await fetch('/api/config');
       if (!response.ok) {
         const error = await response.json();
@@ -15,9 +15,9 @@ export const ConfigService = {
       }
       this.config = await response.json();
       this.isInitialized = true;
-      Logger.debug('Config loaded successfully', this.config);
+      Logger.debug('Config loaded successfully', 'ConfigService', this.config);
     } catch (error) {
-      Logger.error('Failed to load config', error);
+      Logger.error('Failed to load config', error, 'ConfigService');
       this.config = {
         libraryPath: '',
         usersPath: '/config/users',
@@ -32,7 +32,7 @@ export const ConfigService = {
 
   getConfig(): Config {
     if (!this.isInitialized) {
-      Logger.error('Attempting to get config before initialization');
+      Logger.error('Attempting to get config before initialization', undefined, 'ConfigService');
       throw new Error('Config not loaded');
     }
     return this.config as Config;
@@ -50,7 +50,7 @@ export const ConfigService = {
 
   async saveConfig(config: Config): Promise<void> {
     try {
-      Logger.debug('Saving config...');
+      Logger.debug('Saving config...', 'ConfigService');
       const response = await fetch('/api/config', {
         method: 'POST',
         headers: {
@@ -66,9 +66,9 @@ export const ConfigService = {
 
       const savedConfig = await response.json();
       this.config = savedConfig;
-      Logger.info('Config saved successfully');
+      Logger.info('Config saved successfully', 'ConfigService');
     } catch (error) {
-      Logger.error('Failed to save config', error);
+      Logger.error('Failed to save config', error, 'ConfigService');
       throw error;
     }
   }
