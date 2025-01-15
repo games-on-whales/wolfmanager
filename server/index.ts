@@ -467,8 +467,12 @@ app.post('/api/users', async (req, res) => {
       steamApiKey
     };
 
+    // Automatically select the new user
+    config.currentUser = username;
+    serverLog('debug', 'Automatically selecting new user', 'Server', { username });
+
     await configManager.saveConfig(config);
-    serverLog('info', 'User added successfully', 'Server', { username });
+    serverLog('info', 'User added and selected successfully', 'Server', { username });
 
     // Return sanitized config
     const sanitizedConfig = {
