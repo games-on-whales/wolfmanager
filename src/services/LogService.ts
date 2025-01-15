@@ -13,20 +13,9 @@ export interface LogEntry {
 type LogSubscriber = (logs: LogEntry[]) => void;
 
 class Logger {
-  private static LOG_LEVEL = (typeof window !== 'undefined' && window.localStorage.getItem('LOG_LEVEL')) || 'info';
-  private static LOG_LEVELS: Record<LogLevel, number> = {
-    debug: 0,
-    info: 1,
-    warn: 2,
-    error: 3
-  };
   private static logs: LogEntry[] = [];
   private static subscribers: LogSubscriber[] = [];
   private static MAX_LOGS = 1000;
-
-  private static shouldLog(level: LogLevel): boolean {
-    return this.LOG_LEVELS[level] >= this.LOG_LEVELS[this.LOG_LEVEL as LogLevel];
-  }
 
   private static formatLogEntry(level: LogLevel, message: string, component?: string, data?: any): LogEntry {
     return {
@@ -101,7 +90,7 @@ class Logger {
   }
 
   static debug(message: string, component?: string, data?: unknown): void {
-    // Only write debug logs if debug mode is enabled
+    // Only write debug logs if debug mode is enabled in config
     if (!ConfigService.isInitialized || !ConfigService.getConfig().debugEnabled) {
       return;
     }
@@ -126,14 +115,6 @@ class Logger {
       };
     }
     this.writeLog(this.formatLogEntry('error', message, component, errorData));
-  }
-
-  // Allow changing log level at runtime
-  static setLogLevel(level: LogLevel) {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('LOG_LEVEL', level);
-      this.LOG_LEVEL = level;
-    }
   }
 
   // Get all logs
