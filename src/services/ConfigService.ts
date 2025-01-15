@@ -1,4 +1,4 @@
-import { Config } from '../types/config';
+import { Config, UserConfig } from '../types/config';
 import Logger from './LogService';
 
 export const ConfigService = {
@@ -19,10 +19,11 @@ export const ConfigService = {
     } catch (error) {
       Logger.error('Failed to load config', error);
       this.config = {
-        steamId: '',
         libraryPath: '',
-        steamApiKey: '',
-        steamGridDbApiKey: ''
+        usersPath: '/config/users',
+        steamGridDbApiKey: '',
+        users: {},
+        currentUser: undefined
       };
       this.isInitialized = true;
       throw error;
@@ -35,6 +36,16 @@ export const ConfigService = {
       throw new Error('Config not loaded');
     }
     return this.config as Config;
+  },
+
+  getCurrentUser(): (UserConfig & { username: string }) | null {
+    if (!this.isInitialized || !this.config?.currentUser || !this.config.users[this.config.currentUser]) {
+      return null;
+    }
+    return {
+      username: this.config.currentUser,
+      ...this.config.users[this.config.currentUser]
+    };
   },
 
   async saveConfig(config: Config): Promise<void> {

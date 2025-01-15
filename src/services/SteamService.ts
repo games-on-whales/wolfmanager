@@ -26,14 +26,20 @@ interface SteamGridResponse {
 }
 
 export const SteamService = {
-  getOwnedGames: async (steamId: string): Promise<SteamGame[]> => {
-    Logger.debug('Fetching owned games for Steam ID', { steamId });
+  getOwnedGames: async (): Promise<SteamGame[]> => {
+    Logger.debug('Fetching owned games');
     await ConfigService.loadConfig();
     const config = ConfigService.getConfig();
+    const currentUser = ConfigService.getCurrentUser();
     
+    if (!currentUser) {
+      Logger.error('No user selected');
+      throw new Error('No user selected');
+    }
+
     try {
       const response = await fetch(
-        `/api/steam/games?steamApiKey=${config.steamApiKey}&steamId=${steamId}`
+        `/api/steam/games?steamApiKey=${currentUser.steamApiKey}&steamId=${currentUser.steamId}`
       );
       
       if (!response.ok) {
