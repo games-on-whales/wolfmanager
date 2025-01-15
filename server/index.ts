@@ -133,6 +133,13 @@ app.get('/api/steam/games', async (req, res) => {
     const configManager = await ConfigManager.getInstance();
     const currentUser = configManager.getCurrentUser();
     
+    serverLog('debug', 'Attempting to fetch games', 'Server', { 
+      hasCurrentUser: !!currentUser,
+      currentUsername: currentUser?.username,
+      hasSteamId: currentUser?.steamId ? 'yes' : 'no',
+      hasSteamApiKey: currentUser?.steamApiKey ? 'yes' : 'no'
+    });
+    
     if (!currentUser) {
       serverLog('error', 'No user selected', 'Server');
       return res.status(400).json({ error: 'No user selected' });
@@ -141,14 +148,19 @@ app.get('/api/steam/games', async (req, res) => {
     if (!currentUser.steamApiKey || !currentUser.steamId) {
       serverLog('error', 'Missing Steam credentials', 'Server', { 
         hasSteamId: !!currentUser.steamId,
-        hasSteamApiKey: !!currentUser.steamApiKey 
+        hasSteamApiKey: !!currentUser.steamApiKey,
+        username: currentUser.username
       });
       return res.status(400).json({ error: 'Missing Steam credentials' });
     }
 
     const { steamId, steamApiKey } = currentUser;
     const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
-    serverLog('debug', 'Fetching owned games', 'Server', { steamId, url: url.replace(steamApiKey, '[REDACTED]') });
+    serverLog('debug', 'Fetching owned games', 'Server', { 
+      steamId, 
+      url: url.replace(steamApiKey, '[REDACTED]'),
+      username: currentUser.username
+    });
     
     try {
       const response = await fetch(url);
@@ -159,7 +171,8 @@ app.get('/api/steam/games', async (req, res) => {
           status: response.status, 
           statusText: response.statusText,
           error: errorText,
-          url: url.replace(steamApiKey, '[REDACTED]')
+          url: url.replace(steamApiKey, '[REDACTED]'),
+          username: currentUser.username
         });
         return res.status(response.status).json({ 
           error: `Steam API request failed: ${response.statusText}`,
@@ -175,13 +188,16 @@ app.get('/api/steam/games', async (req, res) => {
         return res.status(500).json({ error: errorMsg, details: data });
       }
       
-      serverLog('info', `Successfully retrieved ${data.response.games.length} games`, 'Server');
+      serverLog('info', `Successfully retrieved ${data.response.games.length} games`, 'Server', {
+        username: currentUser.username
+      });
       res.json(data);
       
     } catch (fetchError) {
       serverLog('error', 'Failed to fetch from Steam API', 'Server', { 
         error: fetchError instanceof Error ? fetchError.message : String(fetchError),
-        url: url.replace(steamApiKey, '[REDACTED]')
+        url: url.replace(steamApiKey, '[REDACTED]'),
+        username: currentUser.username
       });
       return res.status(500).json({ 
         error: 'Failed to fetch from Steam API', 
