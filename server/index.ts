@@ -75,6 +75,24 @@ app.get('/api/config', async (req, res) => {
   }
 });
 
+interface SteamGame {
+  appid: number;
+  name: string;
+  playtime_forever: number;
+  img_icon_url: string;
+  has_community_visible_stats: boolean;
+  playtime_windows_forever: number;
+  playtime_mac_forever: number;
+  playtime_linux_forever: number;
+}
+
+interface SteamApiResponse {
+  response: {
+    game_count: number;
+    games: SteamGame[];
+  };
+}
+
 // Steam API proxy endpoint
 app.get('/api/steam/games', async (req, res) => {
   try {
@@ -96,7 +114,7 @@ app.get('/api/steam/games', async (req, res) => {
       throw new Error(`Steam API responded with ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as SteamApiResponse;
     serverLog('info', `Successfully retrieved ${data.response?.games?.length || 0} games`, 'Server');
     res.json(data);
   } catch (error) {
