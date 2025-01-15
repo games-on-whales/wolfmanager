@@ -652,6 +652,46 @@ app.put('/api/users/:username', async (req, res) => {
   }
 });
 
+// Select user endpoint
+app.post('/api/users/:username/select', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+
+    if (!config.users[username]) {
+      serverLog('error', 'User not found for selection', 'Server', { username });
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update current user
+    config.currentUser = username;
+    await configManager.saveConfig(config);
+    
+    serverLog('info', 'User selected successfully', 'Server', { username });
+
+    // Return sanitized config
+    const sanitizedConfig = {
+      ...config,
+      users: Object.fromEntries(
+        Object.entries(config.users).map(([name, userData]) => [
+          name,
+          {
+            ...userData,
+            steamApiKey: '[REDACTED]'
+          }
+        ])
+      ),
+      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    };
+
+    res.json(sanitizedConfig);
+  } catch (error) {
+    serverLog('error', 'Failed to select user', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to select user' });
+  }
+});
+
 // All remaining requests return the React app, so it can handle routing
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '../../dist/index.html'));
