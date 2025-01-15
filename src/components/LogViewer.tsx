@@ -41,7 +41,7 @@ export const LogViewer: React.FC = () => {
   });
   const [components, setComponents] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const fetchLogs = async () => {
     try {
@@ -145,7 +145,7 @@ export const LogViewer: React.FC = () => {
     }
   };
 
-  const filteredLogs = logs.filter(log => {
+  const filteredLogs = logs.filter((log: LogEntry) => {
     if (filter.level !== 'all' && log.level !== filter.level) {
       return false;
     }
@@ -230,10 +230,10 @@ export const LogViewer: React.FC = () => {
           <Select
             value={filter.component}
             label="Component"
-            onChange={(e) => setFilter({ ...filter, component: e.target.value })}
+            onChange={(e: SelectChangeEvent) => setFilter({ ...filter, component: e.target.value })}
           >
             <MenuItem value="all">All</MenuItem>
-            {components.map(component => (
+            {components.map((component: string) => (
               <MenuItem key={component} value={component}>{component}</MenuItem>
             ))}
           </Select>
@@ -244,7 +244,7 @@ export const LogViewer: React.FC = () => {
           <Select
             value={filter.timeRange}
             label="Time Range"
-            onChange={(e) => setFilter({ ...filter, timeRange: e.target.value as LogFilter['timeRange'] })}
+            onChange={(e: SelectChangeEvent) => setFilter({ ...filter, timeRange: e.target.value as LogFilter['timeRange'] })}
           >
             <MenuItem value="all">All Time</MenuItem>
             <MenuItem value="30min">Last 30 Minutes</MenuItem>
@@ -257,13 +257,14 @@ export const LogViewer: React.FC = () => {
           size="small"
           label="Search"
           value={filter.search}
-          onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilter({ ...filter, search: e.target.value })}
           sx={{ flexGrow: 1 }}
         />
       </Box>
 
       <List 
         ref={listRef}
+        component="ul"
         sx={{ 
           maxHeight: 600, 
           overflow: 'auto',
@@ -273,7 +274,7 @@ export const LogViewer: React.FC = () => {
           borderColor: 'divider'
         }}
       >
-        {filteredLogs.map((log, index) => (
+        {filteredLogs.map((log: LogEntry, index: number) => (
           <ListItem 
             key={index} 
             divider 
