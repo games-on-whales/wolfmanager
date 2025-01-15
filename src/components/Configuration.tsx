@@ -38,6 +38,7 @@ export const Configuration: React.FC = () => {
   const [config, setConfig] = useState<Config>({
     libraryPath: '',
     usersPath: '',
+    cachePath: '/config/cache/artwork',
     steamGridDbApiKey: '',
     users: {}
   });

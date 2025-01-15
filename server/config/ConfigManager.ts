@@ -29,6 +29,7 @@ export class ConfigManager {
     this.config = {
       libraryPath: '',
       usersPath: '/config/users',
+      cachePath: '/config/cache/artwork',
       steamGridDbApiKey: '',
       users: {},
       currentUser: undefined
