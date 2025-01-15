@@ -14,7 +14,7 @@ import {
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { ConfigService } from '../services/ConfigService';
 import { Config } from '../types/config';
-import { Logger } from '../utils/Logger';
+import Logger from '../services/LogService';
 
 export const Configuration: React.FC = () => {
   const [config, setConfig] = useState<Config>({
