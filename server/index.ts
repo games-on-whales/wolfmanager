@@ -239,7 +239,7 @@ fs.mkdirSync(logsDir, { recursive: true });
 const logFile = path.join(logsDir, 'wolf-manager.log');
 
 // Get logs endpoint
-app.get('/api/logs', (req, res) => {
+app.get('/api/logs', async (req, res) => {
   try {
     // Read the last 1000 lines from the log file
     const logs: LogEntry[] = [];
@@ -249,13 +249,20 @@ app.get('/api/logs', (req, res) => {
       return res.json([]);
     }
 
+    const configManager = await ConfigManager.getInstance();
+    const debugEnabled = configManager.getConfig().debugEnabled;
+
     const fileContent = fs.readFileSync(logFile, 'utf-8');
     const lines = fileContent.split('\n').filter(line => line.trim());
     const lastLines = lines.slice(-1000);
 
     for (const line of lastLines) {
       try {
-        const log = JSON.parse(line);
+        const log = JSON.parse(line) as LogEntry;
+        // Only include debug logs if debug mode is enabled
+        if (log.level === 'debug' && !debugEnabled) {
+          continue;
+        }
         logs.push(log);
       } catch (error) {
         serverLog('error', 'Failed to parse log line', 'Server', { line, error: error instanceof Error ? error.message : String(error) });

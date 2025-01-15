@@ -7,7 +7,7 @@ const LOG_PATH = '/config/logs/wolf-manager.log';
 
 function writeLog(level: string, message: string, component = 'ConfigManager', data?: any) {
   // Skip debug logs if debug mode is disabled
-  if (level === 'debug' && !ConfigManager.instance?.config.debugEnabled) {
+  if (level === 'debug' && !ConfigManager.isDebugEnabled()) {
     return;
   }
 
@@ -49,6 +49,10 @@ export class ConfigManager {
       await ConfigManager.instance.loadConfig();
     }
     return ConfigManager.instance;
+  }
+
+  static isDebugEnabled(): boolean {
+    return this.instance?.config?.debugEnabled ?? false;
   }
 
   private async loadConfig(): Promise<void> {
