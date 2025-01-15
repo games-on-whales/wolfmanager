@@ -26,9 +26,12 @@ const CACHE_DIR = '/config/cache/artwork';
 // Function to write log to file and console
 const writeLogToFile = (logEntry: LogEntry) => {
   try {
-    fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
+    // Ensure the log entry is valid JSON
+    const jsonString = JSON.stringify(logEntry);
+    fs.appendFileSync(logFile, jsonString + '\n');
+    
     // Also log to console with timestamp
-    console.log(`[${new Date().toISOString()}] ${logEntry.level.toUpperCase()}: ${logEntry.message}${logEntry.data ? ' ' + JSON.stringify(logEntry.data) : ''}`);
+    console.log(`[${logEntry.timestamp}] ${logEntry.level.toUpperCase()}: ${logEntry.message}${logEntry.data ? ' ' + JSON.stringify(logEntry.data) : ''}`);
   } catch (error) {
     console.error('Failed to write log to file:', error instanceof Error ? error.message : String(error));
   }
@@ -205,6 +208,37 @@ const logsDir = path.join('/config/logs');
 fs.mkdirSync(logsDir, { recursive: true });
 const logFile = path.join(logsDir, 'wolf-manager.log');
 
+// Get logs endpoint
+app.get('/api/logs', (req, res) => {
+  try {
+    // Read the last 1000 lines from the log file
+    const logs: LogEntry[] = [];
+    
+    // If log file doesn't exist, return empty array
+    if (!fs.existsSync(logFile)) {
+      return res.json([]);
+    }
+
+    const fileContent = fs.readFileSync(logFile, 'utf-8');
+    const lines = fileContent.split('\n').filter(line => line.trim());
+    const lastLines = lines.slice(-1000);
+
+    for (const line of lastLines) {
+      try {
+        const log = JSON.parse(line);
+        logs.push(log);
+      } catch (error) {
+        serverLog('error', 'Failed to parse log line', 'Server', { line, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
+    res.json(logs);
+  } catch (error) {
+    serverLog('error', 'Error getting logs', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to get logs' });
+  }
+});
+
 // Log endpoint for client-side logs
 app.post('/api/logs', (req, res) => {
   try {
@@ -212,7 +246,7 @@ app.post('/api/logs', (req, res) => {
     writeLogToFile(logEntry);
     res.json({ success: true });
   } catch (error) {
-    console.error('Error writing log:', error instanceof Error ? error.message : String(error));
+    serverLog('error', 'Error writing log', 'Server', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: 'Failed to write log' });
   }
 });
