@@ -81,19 +81,25 @@ app.get('/api/config', async (req, res) => {
 app.post('/api/config', async (req, res) => {
   try {
     const configManager = await ConfigManager.getInstance();
+    const oldConfig = configManager.getConfig();
     const newConfig = req.body;
 
-    // Validate Steam credentials if they are being updated
+    // Only validate Steam credentials if they've changed
     if (newConfig.currentUser && newConfig.users?.[newConfig.currentUser]) {
       const user = newConfig.users[newConfig.currentUser];
-      if (user.steamApiKey || user.steamId) {
-        serverLog('debug', 'Validating Steam credentials', 'Server', {
+      const oldUser = oldConfig.users?.[newConfig.currentUser];
+      
+      // Check if Steam credentials have changed
+      if ((!oldUser && (user.steamApiKey || user.steamId)) || 
+          (oldUser && (user.steamApiKey !== oldUser.steamApiKey || user.steamId !== oldUser.steamId))) {
+        
+        serverLog('debug', 'Steam credentials changed, validating', 'Server', {
           username: newConfig.currentUser,
           hasSteamId: !!user.steamId,
           hasSteamApiKey: !!user.steamApiKey
         });
 
-        // Test Steam API credentials with a simple request
+        // Test Steam API credentials
         if (user.steamApiKey && user.steamId) {
           try {
             const testUrl = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${user.steamApiKey}&steamid=${user.steamId}&include_appinfo=true&format=json`;
@@ -120,6 +126,8 @@ app.post('/api/config', async (req, res) => {
             });
           }
         }
+      } else {
+        serverLog('debug', 'Steam credentials unchanged, skipping validation', 'Server');
       }
     }
 
