@@ -133,26 +133,63 @@ app.get('/api/steam/games', async (req, res) => {
     const currentUser = configManager.getCurrentUser();
     
     if (!currentUser) {
-      throw new Error('No user selected');
+      serverLog('error', 'No user selected', 'Server');
+      return res.status(400).json({ error: 'No user selected' });
+    }
+
+    if (!currentUser.steamApiKey || !currentUser.steamId) {
+      serverLog('error', 'Missing Steam credentials', 'Server', { 
+        hasSteamId: !!currentUser.steamId,
+        hasSteamApiKey: !!currentUser.steamApiKey 
+      });
+      return res.status(400).json({ error: 'Missing Steam credentials' });
     }
 
     const { steamId, steamApiKey } = currentUser;
-    serverLog('debug', 'Fetching owned games', 'Server', { steamId });
+    const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
+    serverLog('debug', 'Fetching owned games', 'Server', { steamId, url: url.replace(steamApiKey, '[REDACTED]') });
     
-    const response = await fetch(
-      `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Steam API responded with ${response.status}`);
-    }
+    try {
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        serverLog('error', 'Steam API error response', 'Server', { 
+          status: response.status, 
+          statusText: response.statusText,
+          error: errorText,
+          url: url.replace(steamApiKey, '[REDACTED]')
+        });
+        return res.status(response.status).json({ 
+          error: `Steam API request failed: ${response.statusText}`,
+          details: errorText
+        });
+      }
 
-    const data = await response.json() as SteamApiResponse;
-    serverLog('info', `Successfully retrieved ${data.response?.games?.length || 0} games`, 'Server');
-    res.json(data);
+      const data = await response.json() as SteamApiResponse;
+      
+      if (!data.response || !Array.isArray(data.response.games)) {
+        const errorMsg = 'Invalid response format from Steam API';
+        serverLog('error', errorMsg, 'Server', { data });
+        return res.status(500).json({ error: errorMsg, details: data });
+      }
+      
+      serverLog('info', `Successfully retrieved ${data.response.games.length} games`, 'Server');
+      res.json(data);
+      
+    } catch (fetchError) {
+      serverLog('error', 'Failed to fetch from Steam API', 'Server', { 
+        error: fetchError instanceof Error ? fetchError.message : String(fetchError),
+        url: url.replace(steamApiKey, '[REDACTED]')
+      });
+      return res.status(500).json({ 
+        error: 'Failed to fetch from Steam API', 
+        details: fetchError instanceof Error ? fetchError.message : 'Unknown error'
+      });
+    }
   } catch (error) {
-    serverLog('error', 'Steam API error', 'Server', error instanceof Error ? error.message : String(error));
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    serverLog('error', 'Unexpected error in Steam games endpoint', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Unexpected error occurred', details: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
