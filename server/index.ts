@@ -81,55 +81,7 @@ app.get('/api/config', async (req, res) => {
 app.post('/api/config', async (req, res) => {
   try {
     const configManager = await ConfigManager.getInstance();
-    const oldConfig = configManager.getConfig();
     const newConfig = req.body;
-
-    // Only validate Steam credentials if they've changed
-    if (newConfig.currentUser && newConfig.users?.[newConfig.currentUser]) {
-      const user = newConfig.users[newConfig.currentUser];
-      const oldUser = oldConfig.users?.[newConfig.currentUser];
-      
-      // Check if Steam credentials have changed
-      if ((!oldUser && (user.steamApiKey || user.steamId)) || 
-          (oldUser && (user.steamApiKey !== oldUser.steamApiKey || user.steamId !== oldUser.steamId))) {
-        
-        serverLog('debug', 'Steam credentials changed, validating', 'Server', {
-          username: newConfig.currentUser,
-          hasSteamId: !!user.steamId,
-          hasSteamApiKey: !!user.steamApiKey
-        });
-
-        // Test Steam API credentials
-        if (user.steamApiKey && user.steamId) {
-          try {
-            const testUrl = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${user.steamApiKey}&steamid=${user.steamId}&include_appinfo=true&format=json`;
-            const response = await fetch(testUrl);
-            
-            if (!response.ok) {
-              const errorText = await response.text();
-              serverLog('error', 'Invalid Steam credentials', 'Server', {
-                status: response.status,
-                error: errorText
-              });
-              return res.status(400).json({ 
-                error: 'Invalid Steam credentials',
-                details: `Steam API test failed: ${response.statusText}`
-              });
-            }
-            
-            serverLog('info', 'Steam credentials validated successfully', 'Server');
-          } catch (error) {
-            serverLog('error', 'Failed to validate Steam credentials', 'Server', error instanceof Error ? error.message : String(error));
-            return res.status(400).json({ 
-              error: 'Failed to validate Steam credentials',
-              details: error instanceof Error ? error.message : 'Unknown error'
-            });
-          }
-        }
-      } else {
-        serverLog('debug', 'Steam credentials unchanged, skipping validation', 'Server');
-      }
-    }
 
     await configManager.saveConfig(newConfig);
     
