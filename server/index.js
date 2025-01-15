@@ -188,9 +188,17 @@ app.post('/api/cache/artwork', async (req, res) => {
 // Steam API proxy endpoint
 app.get('/api/steam/games', async (req, res) => {
   try {
-    const config = req.query;
+    const configManager = await ConfigManager.getInstance();
+    const currentUser = configManager.getCurrentUser();
+    
+    if (!currentUser) {
+      throw new Error('No user selected');
+    }
+
+    const { steamId, steamApiKey } = currentUser;
+    
     const response = await fetch(
-      `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${config.steamApiKey}&steamid=${config.steamId}&include_appinfo=true&format=json`
+      `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`
     );
     
     if (!response.ok) {
