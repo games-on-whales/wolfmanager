@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import fs from 'fs/promises';
 import path from 'path';
 import { ConfigManager } from './config/ConfigManager.js';
+import archiver from 'archiver';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -253,6 +254,66 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
   } catch (error) {
     console.error('SteamGridDB API error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Log endpoints
+app.get('/api/logs', (req, res) => {
+  try {
+    // Read the last 1000 lines from the log file
+    const logs = [];
+    const logFile = path.join('/config/logs', 'wolf-manager.log');
+    
+    // If log file doesn't exist, return empty array
+    if (!fs.existsSync(logFile)) {
+      return res.json([]);
+    }
+
+    const fileContent = fs.readFileSync(logFile, 'utf-8');
+    const lines = fileContent.split('\n').filter(Boolean);
+    const lastLines = lines.slice(-1000);
+
+    for (const line of lastLines) {
+      try {
+        const log = JSON.parse(line);
+        logs.push(log);
+      } catch (e) {
+        console.error('Failed to parse log line:', e);
+      }
+    }
+
+    res.json(logs);
+  } catch (error) {
+    console.error('Error getting logs:', error);
+    res.status(500).json({ error: 'Failed to get logs' });
+  }
+});
+
+app.get('/api/logs/download', (req, res) => {
+  try {
+    const archive = archiver('zip', {
+      zlib: { level: 9 }
+    });
+
+    res.attachment('wolf-manager-logs.zip');
+    archive.pipe(res);
+
+    // Add wolf-manager logs
+    const logFile = path.join('/config/logs', 'wolf-manager.log');
+    if (fs.existsSync(logFile)) {
+      archive.file(logFile, { name: 'wolf-manager.log' });
+    }
+
+    // Add wolf logs if they exist
+    const wolfLogDir = '/var/log/wolf';
+    if (fs.existsSync(wolfLogDir)) {
+      archive.directory(wolfLogDir, 'wolf-logs');
+    }
+
+    archive.finalize();
+  } catch (error) {
+    console.error('Error creating log archive:', error);
+    res.status(500).json({ error: 'Failed to create log archive' });
   }
 });
 

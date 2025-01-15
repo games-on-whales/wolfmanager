@@ -1,11 +1,14 @@
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-interface LogEntry {
+export interface LogEntry {
   timestamp: string;
   level: LogLevel;
   message: string;
+  component?: string;
   data?: any;
 }
+
+type LogSubscriber = (logs: LogEntry[]) => void;
 
 class Logger {
   private static LOG_LEVEL = (typeof window !== 'undefined' && window.localStorage.getItem('LOG_LEVEL')) || 'info';
@@ -15,16 +18,20 @@ class Logger {
     warn: 2,
     error: 3
   };
+  private static logs: LogEntry[] = [];
+  private static subscribers: LogSubscriber[] = [];
+  private static MAX_LOGS = 1000;
 
   private static shouldLog(level: LogLevel): boolean {
     return this.LOG_LEVELS[level] >= this.LOG_LEVELS[this.LOG_LEVEL as LogLevel];
   }
 
-  private static formatLogEntry(level: LogLevel, message: string, data?: any): LogEntry {
+  private static formatLogEntry(level: LogLevel, message: string, component?: string, data?: any): LogEntry {
     return {
       timestamp: new Date().toISOString(),
       level,
       message,
+      component,
       data: data ? this.sanitizeData(data) : undefined
     };
   }
@@ -44,12 +51,20 @@ class Logger {
   }
 
   private static writeLog(entry: LogEntry) {
-    const logString = JSON.stringify(entry);
+    // Add to in-memory logs
+    this.logs.push(entry);
+    // Keep only the last MAX_LOGS entries
+    if (this.logs.length > this.MAX_LOGS) {
+      this.logs = this.logs.slice(-this.MAX_LOGS);
+    }
+    
+    // Notify subscribers
+    this.subscribers.forEach(callback => callback([...this.logs]));
     
     // Browser environment
     if (typeof window !== 'undefined') {
       const consoleMethod = console[entry.level] || console.log;
-      consoleMethod(logString);
+      consoleMethod(JSON.stringify(entry));
       
       // Emit custom event for potential log collectors
       const logEvent = new CustomEvent('wolf-manager-log', { 
@@ -59,25 +74,36 @@ class Logger {
     }
   }
 
-  static debug(message: string, data?: any) {
+  static subscribe(callback: LogSubscriber) {
+    this.subscribers.push(callback);
+    callback([...this.logs]);
+
+    return {
+      unsubscribe: () => {
+        this.subscribers = this.subscribers.filter(cb => cb !== callback);
+      }
+    };
+  }
+
+  static debug(message: string, component?: string, data?: any) {
     if (this.shouldLog('debug')) {
-      this.writeLog(this.formatLogEntry('debug', message, data));
+      this.writeLog(this.formatLogEntry('debug', message, component, data));
     }
   }
 
-  static info(message: string, data?: any) {
+  static info(message: string, component?: string, data?: any) {
     if (this.shouldLog('info')) {
-      this.writeLog(this.formatLogEntry('info', message, data));
+      this.writeLog(this.formatLogEntry('info', message, component, data));
     }
   }
 
-  static warn(message: string, data?: any) {
+  static warn(message: string, component?: string, data?: any) {
     if (this.shouldLog('warn')) {
-      this.writeLog(this.formatLogEntry('warn', message, data));
+      this.writeLog(this.formatLogEntry('warn', message, component, data));
     }
   }
 
-  static error(message: string, error?: any) {
+  static error(message: string, error?: any, component?: string) {
     if (this.shouldLog('error')) {
       let errorData = error;
       if (error instanceof Error) {
@@ -87,7 +113,7 @@ class Logger {
           stack: error.stack,
         };
       }
-      this.writeLog(this.formatLogEntry('error', message, errorData));
+      this.writeLog(this.formatLogEntry('error', message, component, errorData));
     }
   }
 
@@ -97,6 +123,17 @@ class Logger {
       window.localStorage.setItem('LOG_LEVEL', level);
       this.LOG_LEVEL = level;
     }
+  }
+
+  // Get all logs
+  static getLogs(): LogEntry[] {
+    return [...this.logs];
+  }
+
+  // Clear logs
+  static clearLogs() {
+    this.logs = [];
+    this.subscribers.forEach(callback => callback([]));
   }
 }
 

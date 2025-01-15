@@ -1,10 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, Tabs, Tab } from '@mui/material';
 import { ConfigService } from '../services/ConfigService';
 import { Config, AdminConfig, UserConfig } from '../types/config';
 import Logger from '../services/LogService';
 import { AdminSettings } from './AdminSettings';
 import { UserSettings } from './UserSettings';
+import { TaskManager } from './TaskManager';
+import { LogViewer } from './LogViewer';
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`config-tabpanel-${index}`}
+      aria-labelledby={`config-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
 
 export const Configuration: React.FC = () => {
   const [config, setConfig] = useState<Config>({
@@ -14,6 +42,7 @@ export const Configuration: React.FC = () => {
     users: {}
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [currentTab, setCurrentTab] = useState(0);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -21,10 +50,10 @@ export const Configuration: React.FC = () => {
         setIsLoading(true);
         await ConfigService.loadConfig();
         const loadedConfig = ConfigService.getConfig();
-        Logger.debug('Config loaded successfully', loadedConfig);
+        Logger.debug('Config loaded successfully', 'Configuration', loadedConfig);
         setConfig(loadedConfig);
       } catch (error) {
-        Logger.error('Failed to load config', error);
+        Logger.error('Failed to load config', error, 'Configuration');
       } finally {
         setIsLoading(false);
       }
@@ -118,18 +147,40 @@ export const Configuration: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <AdminSettings
-        config={config}
-        onSave={handleSaveAdmin}
-      />
-      <UserSettings
-        users={config.users}
-        currentUser={config.currentUser}
-        onAddUser={handleAddUser}
-        onDeleteUser={handleDeleteUser}
-        onSelectUser={handleSelectUser}
-      />
+    <Box sx={{ width: '100%' }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={currentTab} onChange={(_event, newValue: number) => setCurrentTab(newValue)}>
+          <Tab label="Admin" />
+          <Tab label="Users" />
+          <Tab label="Tasks" />
+          <Tab label="Logs" />
+        </Tabs>
+      </Box>
+
+      <TabPanel value={currentTab} index={0}>
+        <AdminSettings
+          config={config}
+          onSave={handleSaveAdmin}
+        />
+      </TabPanel>
+
+      <TabPanel value={currentTab} index={1}>
+        <UserSettings
+          users={config.users}
+          currentUser={config.currentUser}
+          onAddUser={handleAddUser}
+          onDeleteUser={handleDeleteUser}
+          onSelectUser={handleSelectUser}
+        />
+      </TabPanel>
+
+      <TabPanel value={currentTab} index={2}>
+        <TaskManager />
+      </TabPanel>
+
+      <TabPanel value={currentTab} index={3}>
+        <LogViewer />
+      </TabPanel>
     </Box>
   );
 }; 

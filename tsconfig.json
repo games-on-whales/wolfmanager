@@ -15,7 +15,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client", "node"],
+    "types": ["node", "react", "react-dom", "@mui/material", "@mui/icons-material", "vite/client"],
     "paths": {
       "@/*": ["./src/*"]
     }
