@@ -1,8 +1,17 @@
-export interface Config {
+export interface UserConfig {
   steamId: string;
-  libraryPath: string;
   steamApiKey: string;
+}
+
+export interface AdminConfig {
+  libraryPath: string;
+  usersPath: string;
   steamGridDbApiKey: string;
+  users: Record<string, UserConfig>;
+}
+
+export interface Config extends AdminConfig {
+  currentUser?: string;
 }
 
 export interface SteamGame {

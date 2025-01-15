@@ -26,12 +26,24 @@ app.get('/api/config', async (req, res) => {
   try {
     const configManager = await ConfigManager.getInstance();
     const config = configManager.getConfig();
-    console.log('Sending config to client (sensitive data redacted)', {
+    
+    // Redact sensitive information
+    const sanitizedConfig = {
       ...config,
-      steamApiKey: config.steamApiKey ? '[REDACTED]' : '',
+      users: Object.fromEntries(
+        Object.entries(config.users).map(([username, userData]) => [
+          username,
+          {
+            ...userData,
+            steamApiKey: userData.steamApiKey ? '[REDACTED]' : ''
+          }
+        ])
+      ),
       steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
-    });
-    res.json(config);
+    };
+
+    console.log('Sending config to client (sensitive data redacted)', sanitizedConfig);
+    res.json(sanitizedConfig);
   } catch (error) {
     console.error('Error getting config:', error);
     res.status(500).json({ error: 'Failed to get configuration' });
@@ -51,9 +63,12 @@ app.post('/api/config', async (req, res) => {
       return;
     }
 
-    console.log('Saving new config (sensitive data redacted)', {
+    // Preserve existing user data
+    const currentConfig = configManager.getConfig();
+    newConfig.users = currentConfig.users;
+
+    console.log('Saving admin config (sensitive data redacted)', {
       ...newConfig,
-      steamApiKey: newConfig.steamApiKey ? '[REDACTED]' : '',
       steamGridDbApiKey: newConfig.steamGridDbApiKey ? '[REDACTED]' : ''
     });
 
@@ -64,6 +79,52 @@ app.post('/api/config', async (req, res) => {
   } catch (error) {
     console.error('Error saving config:', error);
     res.status(500).json({ error: 'Failed to save configuration' });
+  }
+});
+
+// User management endpoints
+app.post('/api/users', async (req, res) => {
+  try {
+    const { username, steamId, steamApiKey } = req.body;
+    
+    if (!username || !steamId || !steamApiKey) {
+      res.status(400).json({ error: 'Username, Steam ID, and Steam API Key are required' });
+      return;
+    }
+
+    const configManager = await ConfigManager.getInstance();
+    await configManager.addUser(username, { steamId, steamApiKey });
+    
+    res.json({ message: 'User added successfully' });
+  } catch (error) {
+    console.error('Error adding user:', error);
+    res.status(500).json({ error: 'Failed to add user' });
+  }
+});
+
+app.delete('/api/users/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const configManager = await ConfigManager.getInstance();
+    await configManager.deleteUser(username);
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+app.post('/api/users/:username/select', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const configManager = await ConfigManager.getInstance();
+    await configManager.setCurrentUser(username);
+    
+    res.json({ message: 'Current user updated successfully' });
+  } catch (error) {
+    console.error('Error setting current user:', error);
+    res.status(500).json({ error: 'Failed to set current user' });
   }
 });
 

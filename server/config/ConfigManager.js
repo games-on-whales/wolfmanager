@@ -9,10 +9,11 @@ export class ConfigManager {
 
   constructor() {
     this.config = {
-      steamId: '',
       libraryPath: '',
-      steamApiKey: '',
-      steamGridDbApiKey: ''
+      usersPath: '/config/users',
+      steamGridDbApiKey: '',
+      users: {},
+      currentUser: undefined
     };
   }
 
@@ -47,12 +48,68 @@ export class ConfigManager {
     }
   }
 
+  async addUser(username, userConfig) {
+    try {
+      // Create user directory
+      const userPath = path.join(this.config.usersPath, username);
+      await fs.mkdir(userPath, { recursive: true });
+
+      // Add user config
+      this.config.users[username] = userConfig;
+      await this.saveConfig(this.config);
+
+      return true;
+    } catch (error) {
+      console.error('Error adding user:', error);
+      throw new Error('Failed to add user');
+    }
+  }
+
+  async deleteUser(username) {
+    try {
+      // Remove user directory
+      const userPath = path.join(this.config.usersPath, username);
+      await fs.rm(userPath, { recursive: true, force: true });
+
+      // Remove user config
+      delete this.config.users[username];
+      if (this.config.currentUser === username) {
+        this.config.currentUser = undefined;
+      }
+      await this.saveConfig(this.config);
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw new Error('Failed to delete user');
+    }
+  }
+
+  async setCurrentUser(username) {
+    if (!this.config.users[username]) {
+      throw new Error('User does not exist');
+    }
+    this.config.currentUser = username;
+    await this.saveConfig(this.config);
+  }
+
   getConfig() {
     return this.config;
   }
 
+  getCurrentUser() {
+    if (!this.config.currentUser || !this.config.users[this.config.currentUser]) {
+      return null;
+    }
+    return {
+      username: this.config.currentUser,
+      ...this.config.users[this.config.currentUser]
+    };
+  }
+
   getSteamApiKey() {
-    return this.config.steamApiKey;
+    const currentUser = this.getCurrentUser();
+    return currentUser?.steamApiKey || '';
   }
 
   getSteamGridDbApiKey() {

@@ -1,33 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  TextField,
-  Button,
-  Paper,
-  Typography,
-  Snackbar,
-  Alert,
-  InputAdornment,
-  IconButton,
-  CircularProgress
-} from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Box, CircularProgress } from '@mui/material';
 import { ConfigService } from '../services/ConfigService';
-import { Config } from '../types/config';
+import { Config, AdminConfig, UserConfig } from '../types/config';
 import Logger from '../services/LogService';
+import { AdminSettings } from './AdminSettings';
+import { UserSettings } from './UserSettings';
 
 export const Configuration: React.FC = () => {
   const [config, setConfig] = useState<Config>({
-    steamId: '',
     libraryPath: '',
-    steamApiKey: '',
-    steamGridDbApiKey: ''
+    usersPath: '',
+    steamGridDbApiKey: '',
+    users: {}
   });
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showError, setShowError] = useState<string | null>(null);
-  const [showSteamKey, setShowSteamKey] = useState(false);
-  const [showGridDbKey, setShowGridDbKey] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -39,7 +24,6 @@ export const Configuration: React.FC = () => {
         Logger.debug('Config loaded successfully', loadedConfig);
         setConfig(loadedConfig);
       } catch (error) {
-        setShowError('Failed to load configuration');
         Logger.error('Failed to load config', error);
       } finally {
         setIsLoading(false);
@@ -48,20 +32,80 @@ export const Configuration: React.FC = () => {
     loadConfig();
   }, []);
 
-  const handleSave = async () => {
+  const handleSaveAdmin = async (adminConfig: AdminConfig) => {
     try {
-      setIsSaving(true);
-      setShowError(null);
-      await ConfigService.saveConfig(config);
+      const newConfig = {
+        ...config,
+        ...adminConfig
+      };
+      await ConfigService.saveConfig(newConfig);
       await ConfigService.loadConfig();
       setConfig(ConfigService.getConfig());
-      setShowSuccess(true);
-      Logger.info('Configuration saved successfully');
+      Logger.info('Admin configuration saved successfully');
     } catch (error) {
-      setShowError('Failed to save configuration');
-      Logger.error('Failed to save config', error);
-    } finally {
-      setIsSaving(false);
+      Logger.error('Failed to save admin config', error);
+      throw error;
+    }
+  };
+
+  const handleAddUser = async (username: string, userConfig: UserConfig) => {
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          ...userConfig
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add user');
+      }
+
+      await ConfigService.loadConfig();
+      setConfig(ConfigService.getConfig());
+    } catch (error) {
+      Logger.error('Failed to add user', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteUser = async (username: string) => {
+    try {
+      const response = await fetch(`/api/users/${username}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete user');
+      }
+
+      await ConfigService.loadConfig();
+      setConfig(ConfigService.getConfig());
+    } catch (error) {
+      Logger.error('Failed to delete user', error);
+      throw error;
+    }
+  };
+
+  const handleSelectUser = async (username: string) => {
+    try {
+      const response = await fetch(`/api/users/${username}/select`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to select user');
+      }
+
+      await ConfigService.loadConfig();
+      setConfig(ConfigService.getConfig());
+    } catch (error) {
+      Logger.error('Failed to select user', error);
+      throw error;
     }
   };
 
@@ -74,91 +118,18 @@ export const Configuration: React.FC = () => {
   }
 
   return (
-    <Paper sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
-      <Typography variant="h5" gutterBottom>
-        Configuration
-      </Typography>
-      
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-        <TextField
-          label="Steam ID"
-          value={config.steamId}
-          onChange={(e) => setConfig({ ...config, steamId: e.target.value })}
-          helperText="Your Steam ID is required to fetch your game library"
-        />
-        
-        <TextField
-          label="Steam API Key"
-          type={showSteamKey ? 'text' : 'password'}
-          value={config.steamApiKey}
-          onChange={(e) => setConfig({ ...config, steamApiKey: e.target.value })}
-          helperText="API key from Steam Developer Portal"
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton
-                  onClick={() => setShowSteamKey(!showSteamKey)}
-                  edge="end"
-                >
-                  {showSteamKey ? <VisibilityOff /> : <Visibility />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-
-        <TextField
-          label="SteamGridDB API Key"
-          type={showGridDbKey ? 'text' : 'password'}
-          value={config.steamGridDbApiKey}
-          onChange={(e) => setConfig({ ...config, steamGridDbApiKey: e.target.value })}
-          helperText="API key from SteamGridDB"
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton
-                  onClick={() => setShowGridDbKey(!showGridDbKey)}
-                  edge="end"
-                >
-                  {showGridDbKey ? <VisibilityOff /> : <Visibility />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-        
-        <TextField
-          label="Library Path"
-          value={config.libraryPath}
-          onChange={(e) => setConfig({ ...config, libraryPath: e.target.value })}
-          helperText="Path to your games directory"
-        />
-        
-        <Button 
-          variant="contained" 
-          onClick={handleSave}
-          disabled={isSaving}
-          sx={{ mt: 2 }}
-        >
-          {isSaving ? 'Saving...' : 'Save Configuration'}
-        </Button>
-      </Box>
-
-      <Snackbar
-        open={showSuccess}
-        autoHideDuration={6000}
-        onClose={() => setShowSuccess(false)}
-      >
-        <Alert severity="success">Configuration saved successfully!</Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={!!showError}
-        autoHideDuration={6000}
-        onClose={() => setShowError(null)}
-      >
-        <Alert severity="error">{showError}</Alert>
-      </Snackbar>
-    </Paper>
+    <Box sx={{ p: 3 }}>
+      <AdminSettings
+        config={config}
+        onSave={handleSaveAdmin}
+      />
+      <UserSettings
+        users={config.users}
+        currentUser={config.currentUser}
+        onAddUser={handleAddUser}
+        onDeleteUser={handleDeleteUser}
+        onSelectUser={handleSelectUser}
+      />
+    </Box>
   );
 }; 
