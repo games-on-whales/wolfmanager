@@ -10,11 +10,10 @@ import {
   Select,
   MenuItem,
   TextField,
-  Button,
-  Chip,
-  SelectChangeEvent,
   IconButton,
-  Tooltip
+  Tooltip,
+  SelectChangeEvent,
+  Chip
 } from '@mui/material';
 import { Download as DownloadIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { LogEntry, LogLevel } from '../services/LogService';
@@ -34,9 +33,11 @@ export const LogViewer: React.FC = () => {
     search: ''
   });
   const [components, setComponents] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const fetchLogs = async () => {
     try {
+      setIsLoading(true);
       const response = await fetch('/api/logs');
       if (!response.ok) {
         throw new Error('Failed to fetch logs');
@@ -53,15 +54,36 @@ export const LogViewer: React.FC = () => {
       });
       setComponents(Array.from(uniqueComponents));
     } catch (error) {
-      Logger.error('Failed to fetch logs', error);
+      Logger.error('Failed to fetch logs', error, 'LogViewer');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    // Initial fetch
     fetchLogs();
+
+    // Subscribe to new logs
+    const subscription = Logger.subscribe((newLogs) => {
+      setLogs(newLogs);
+      // Update components list
+      const uniqueComponents = new Set<string>();
+      newLogs.forEach(log => {
+        if (log.component) {
+          uniqueComponents.add(log.component);
+        }
+      });
+      setComponents(Array.from(uniqueComponents));
+    });
+
     // Set up polling for new logs every 5 seconds
     const interval = setInterval(fetchLogs, 5000);
-    return () => clearInterval(interval);
+
+    return () => {
+      subscription.unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   const handleDownload = async () => {
@@ -80,7 +102,7 @@ export const LogViewer: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      Logger.error('Failed to download logs', error);
+      Logger.error('Failed to download logs', error, 'LogViewer');
     }
   };
 
@@ -120,12 +142,12 @@ export const LogViewer: React.FC = () => {
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Tooltip title="Refresh logs">
-            <IconButton onClick={fetchLogs}>
+            <IconButton onClick={fetchLogs} disabled={isLoading}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>
           <Tooltip title="Download log bundle">
-            <IconButton onClick={handleDownload}>
+            <IconButton onClick={handleDownload} disabled={isLoading}>
               <DownloadIcon />
             </IconButton>
           </Tooltip>
@@ -184,7 +206,7 @@ export const LogViewer: React.FC = () => {
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
               <Chip
                 label={log.level.toUpperCase()}
-                color={getLevelColor(log.level)}
+                color={getLevelColor(log.level as LogLevel)}
                 size="small"
               />
               {log.component && (

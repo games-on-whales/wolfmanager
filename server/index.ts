@@ -23,6 +23,29 @@ app.use(express.static(join(__dirname, '../../dist')));
 
 const CACHE_DIR = '/config/cache/artwork';
 
+// Function to write log to file and console
+const writeLogToFile = (logEntry: LogEntry) => {
+  try {
+    fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
+    // Also log to console with timestamp
+    console.log(`[${new Date().toISOString()}] ${logEntry.level.toUpperCase()}: ${logEntry.message}${logEntry.data ? ' ' + JSON.stringify(logEntry.data) : ''}`);
+  } catch (error) {
+    console.error('Failed to write log to file:', error instanceof Error ? error.message : String(error));
+  }
+};
+
+// Helper function for server-side logging
+const serverLog = (level: string, message: string, component = 'Server', data?: unknown) => {
+  const logEntry: LogEntry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    component,
+    data
+  };
+  writeLogToFile(logEntry);
+};
+
 // Config endpoints
 app.get('/api/config', async (req, res) => {
   try {
@@ -44,10 +67,10 @@ app.get('/api/config', async (req, res) => {
       steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
     };
 
-    console.log('Sending config to client (sensitive data redacted)', sanitizedConfig);
+    serverLog('info', 'Sending config to client (sensitive data redacted)', 'Server', sanitizedConfig);
     res.json(sanitizedConfig);
   } catch (error) {
-    console.error('Error getting config:', error);
+    serverLog('error', 'Error getting config', 'Server', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: 'Failed to get configuration' });
   }
 });
@@ -63,6 +86,7 @@ app.get('/api/steam/games', async (req, res) => {
     }
 
     const { steamId, steamApiKey } = currentUser;
+    serverLog('debug', 'Fetching owned games', 'Server', { steamId });
     
     const response = await fetch(
       `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`
@@ -73,9 +97,10 @@ app.get('/api/steam/games', async (req, res) => {
     }
 
     const data = await response.json();
+    serverLog('info', `Successfully retrieved ${data.response?.games?.length || 0} games`, 'Server');
     res.json(data);
   } catch (error) {
-    console.error('Steam API error:', error instanceof Error ? error.message : String(error));
+    serverLog('error', 'Steam API error', 'Server', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
@@ -97,9 +122,14 @@ interface SteamGridResponse {
 app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
   try {
     const { appId } = req.params;
-    const gridDbKey = req.headers['x-steamgriddb-key'];
+    const gridDbKey = req.headers['x-steamgriddb-key'] as string;
 
-    console.log(`Fetching artwork for app ${appId}`);
+    if (!gridDbKey) {
+      serverLog('error', 'Missing SteamGridDB API key', 'Server', { appId });
+      throw new Error('SteamGridDB API key is required');
+    }
+
+    serverLog('debug', 'Fetching artwork', 'Server', { appId });
     const response = await fetch(
       `https://www.steamgriddb.com/api/v2/grids/steam/${appId}`,
       {
@@ -110,15 +140,23 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
     );
 
     if (!response.ok) {
-      console.error(`SteamGridDB API error for ${appId}:`, {
+      serverLog('error', 'SteamGridDB API error', 'Server', {
+        appId,
         status: response.status,
         statusText: response.statusText
       });
       throw new Error(`SteamGridDB API responded with ${response.status}`);
     }
 
-    const data = await response.json() as SteamGridResponse;
-    console.log(`Retrieved ${data.data?.grids?.length || 0} artwork options for app ${appId}`);
+    const rawData = await response.json();
+    serverLog('debug', 'Raw SteamGridDB response', 'Server', rawData);
+
+    const data = rawData as SteamGridResponse;
+    serverLog('info', 'Retrieved artwork options', 'Server', {
+      appId,
+      count: data.data?.grids?.length || 0,
+      styles: data.data?.grids ? [...new Set(data.data.grids.map(g => g.style))] : []
+    });
     
     // Transform response to match our expected structure
     const transformedData = {
@@ -131,7 +169,7 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
     
     res.json(transformedData);
   } catch (error) {
-    console.error('SteamGridDB API error:', error instanceof Error ? error.message : String(error));
+    serverLog('error', 'SteamGridDB API error', 'Server', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
@@ -148,15 +186,6 @@ interface LogEntry {
 const logsDir = path.join('/config/logs');
 fs.mkdirSync(logsDir, { recursive: true });
 const logFile = path.join(logsDir, 'wolf-manager.log');
-
-// Function to write log to file
-const writeLogToFile = (logEntry: LogEntry) => {
-  try {
-    fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
-  } catch (error) {
-    console.error('Failed to write log to file:', error instanceof Error ? error.message : String(error));
-  }
-};
 
 // Log endpoint for client-side logs
 app.post('/api/logs', (req, res) => {
