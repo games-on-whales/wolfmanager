@@ -82,6 +82,47 @@ app.post('/api/config', async (req, res) => {
   try {
     const configManager = await ConfigManager.getInstance();
     const newConfig = req.body;
+
+    // Validate Steam credentials if they are being updated
+    if (newConfig.currentUser && newConfig.users?.[newConfig.currentUser]) {
+      const user = newConfig.users[newConfig.currentUser];
+      if (user.steamApiKey || user.steamId) {
+        serverLog('debug', 'Validating Steam credentials', 'Server', {
+          username: newConfig.currentUser,
+          hasSteamId: !!user.steamId,
+          hasSteamApiKey: !!user.steamApiKey
+        });
+
+        // Test Steam API credentials with a simple request
+        if (user.steamApiKey && user.steamId) {
+          try {
+            const testUrl = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${user.steamApiKey}&steamid=${user.steamId}&include_appinfo=true&format=json`;
+            const response = await fetch(testUrl);
+            
+            if (!response.ok) {
+              const errorText = await response.text();
+              serverLog('error', 'Invalid Steam credentials', 'Server', {
+                status: response.status,
+                error: errorText
+              });
+              return res.status(400).json({ 
+                error: 'Invalid Steam credentials',
+                details: `Steam API test failed: ${response.statusText}`
+              });
+            }
+            
+            serverLog('info', 'Steam credentials validated successfully', 'Server');
+          } catch (error) {
+            serverLog('error', 'Failed to validate Steam credentials', 'Server', error instanceof Error ? error.message : String(error));
+            return res.status(400).json({ 
+              error: 'Failed to validate Steam credentials',
+              details: error instanceof Error ? error.message : 'Unknown error'
+            });
+          }
+        }
+      }
+    }
+
     await configManager.saveConfig(newConfig);
     
     // Get the updated config and sanitize it
@@ -411,6 +452,203 @@ app.post('/api/cache/artwork', async (req, res) => {
   } catch (error) {
     serverLog('error', 'Failed to cache artwork', 'Server', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: 'Failed to cache artwork' });
+  }
+});
+
+// User management endpoints
+app.post('/api/users', async (req, res) => {
+  try {
+    const { username, steamId, steamApiKey } = req.body;
+    
+    if (!username || !steamId || !steamApiKey) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+
+    if (config.users[username]) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Test Steam credentials before adding user
+    try {
+      const testUrl = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
+      const response = await fetch(testUrl);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        serverLog('error', 'Invalid Steam credentials for new user', 'Server', {
+          status: response.status,
+          error: errorText,
+          url: testUrl.replace(steamApiKey, '[REDACTED]')
+        });
+        return res.status(400).json({ 
+          error: 'Invalid Steam credentials',
+          details: `Steam API test failed: ${response.statusText}`
+        });
+      }
+
+      const data = await response.json();
+      if (!data.response) {
+        serverLog('error', 'Invalid response from Steam API', 'Server', { data });
+        return res.status(400).json({ error: 'Invalid response from Steam API' });
+      }
+      
+      serverLog('info', 'Steam credentials validated successfully', 'Server');
+    } catch (error) {
+      serverLog('error', 'Failed to validate Steam credentials for new user', 'Server', error instanceof Error ? error.message : String(error));
+      return res.status(400).json({ error: 'Failed to validate Steam credentials' });
+    }
+
+    // Add the new user
+    config.users[username] = {
+      steamId,
+      steamApiKey
+    };
+
+    await configManager.saveConfig(config);
+    serverLog('info', 'User added successfully', 'Server', { username });
+
+    // Return sanitized config
+    const sanitizedConfig = {
+      ...config,
+      users: Object.fromEntries(
+        Object.entries(config.users).map(([name, userData]) => [
+          name,
+          {
+            ...userData,
+            steamApiKey: '[REDACTED]'
+          }
+        ])
+      ),
+      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    };
+
+    res.json(sanitizedConfig);
+  } catch (error) {
+    serverLog('error', 'Failed to add user', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to add user' });
+  }
+});
+
+app.delete('/api/users/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+
+    if (!config.users[username]) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // If we're deleting the current user, unset it
+    if (config.currentUser === username) {
+      config.currentUser = undefined;
+    }
+
+    // Delete the user
+    delete config.users[username];
+    await configManager.saveConfig(config);
+    
+    serverLog('info', 'User deleted successfully', 'Server', { username });
+
+    // Return sanitized config
+    const sanitizedConfig = {
+      ...config,
+      users: Object.fromEntries(
+        Object.entries(config.users).map(([name, userData]) => [
+          name,
+          {
+            ...userData,
+            steamApiKey: '[REDACTED]'
+          }
+        ])
+      ),
+      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    };
+
+    res.json(sanitizedConfig);
+  } catch (error) {
+    serverLog('error', 'Failed to delete user', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+app.put('/api/users/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const { steamId, steamApiKey } = req.body;
+    
+    if (!steamId || !steamApiKey) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+
+    if (!config.users[username]) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Test Steam credentials before updating
+    try {
+      const testUrl = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
+      const response = await fetch(testUrl);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        serverLog('error', 'Invalid Steam credentials for user update', 'Server', {
+          status: response.status,
+          error: errorText,
+          url: testUrl.replace(steamApiKey, '[REDACTED]')
+        });
+        return res.status(400).json({ 
+          error: 'Invalid Steam credentials',
+          details: `Steam API test failed: ${response.statusText}`
+        });
+      }
+
+      const data = await response.json();
+      if (!data.response) {
+        serverLog('error', 'Invalid response from Steam API', 'Server', { data });
+        return res.status(400).json({ error: 'Invalid response from Steam API' });
+      }
+      
+      serverLog('info', 'Steam credentials validated successfully', 'Server');
+    } catch (error) {
+      serverLog('error', 'Failed to validate Steam credentials for user update', 'Server', error instanceof Error ? error.message : String(error));
+      return res.status(400).json({ error: 'Failed to validate Steam credentials' });
+    }
+
+    // Update the user
+    config.users[username] = {
+      steamId,
+      steamApiKey
+    };
+
+    await configManager.saveConfig(config);
+    serverLog('info', 'User updated successfully', 'Server', { username });
+
+    // Return sanitized config
+    const sanitizedConfig = {
+      ...config,
+      users: Object.fromEntries(
+        Object.entries(config.users).map(([name, userData]) => [
+          name,
+          {
+            ...userData,
+            steamApiKey: '[REDACTED]'
+          }
+        ])
+      ),
+      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    };
+
+    res.json(sanitizedConfig);
+  } catch (error) {
+    serverLog('error', 'Failed to update user', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to update user' });
   }
 });
 
