@@ -489,8 +489,8 @@ app.post('/api/users', async (req, res) => {
         });
       }
 
-      const data = await response.json();
-      if (!data.response) {
+      const data = await response.json() as SteamApiResponse;
+      if (!data.response || !Array.isArray(data.response.games)) {
         serverLog('error', 'Invalid response from Steam API', 'Server', { data });
         return res.status(400).json({ error: 'Invalid response from Steam API' });
       }
@@ -609,8 +609,8 @@ app.put('/api/users/:username', async (req, res) => {
         });
       }
 
-      const data = await response.json();
-      if (!data.response) {
+      const data = await response.json() as SteamApiResponse;
+      if (!data.response || !Array.isArray(data.response.games)) {
         serverLog('error', 'Invalid response from Steam API', 'Server', { data });
         return res.status(400).json({ error: 'Invalid response from Steam API' });
       }
