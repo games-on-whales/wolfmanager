@@ -1,8 +1,8 @@
 export enum LogLevel {
-  DEBUG = 'DEBUG',
-  INFO = 'INFO',
-  WARN = 'WARN',
-  ERROR = 'ERROR'
+  DEBUG = 'debug',
+  INFO = 'info',
+  WARN = 'warn',
+  ERROR = 'error'
 }
 
 export interface LogEntry {
@@ -14,4 +14,4 @@ export interface LogEntry {
   error?: Error;
 }
 
-export type LogSubscriber = (entry: LogEntry) => void; 
+export type LogSubscriber = (entries: LogEntry[]) => void; 

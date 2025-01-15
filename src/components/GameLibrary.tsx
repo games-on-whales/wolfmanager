@@ -10,10 +10,8 @@ import {
   CardMedia,
   CardActionArea
 } from '@mui/material';
-import { SteamService } from '../services/SteamService';
-import { ConfigService } from '../services/ConfigService';
+import { SteamService, ConfigService, LogService } from '../services';
 import { SteamGame } from '../types/config';
-import Logger from '../services/LogService';
 
 interface Props {
   searchQuery: string;
@@ -42,7 +40,7 @@ export const GameLibrary: React.FC<Props> = ({ searchQuery }) => {
         const fetchedGames = await SteamService.getOwnedGames();
         setGames(fetchedGames);
       } catch (error) {
-        Logger.error('Failed to load games', error);
+        LogService.error('Failed to load games', error);
         setError('Failed to load games');
       } finally {
         setLoading(false);
@@ -55,7 +53,7 @@ export const GameLibrary: React.FC<Props> = ({ searchQuery }) => {
   useEffect(() => {
     const loadArtwork = async () => {
       const unloadedGames = games.filter(game => !gameArtwork[game.appid]);
-      Logger.debug('Loading artwork for games', 'GameLibrary', { 
+      LogService.debug('Loading artwork for games', 'GameLibrary', { 
         totalGames: games.length,
         unloadedCount: unloadedGames.length,
         loadedCount: Object.keys(gameArtwork).length
@@ -64,17 +62,17 @@ export const GameLibrary: React.FC<Props> = ({ searchQuery }) => {
       for (const game of unloadedGames) {
         try {
           // First try to get cached artwork
-          let artwork = await SteamService.getCachedArtwork(game.appid);
+          let artwork = await SteamService.getGameArtwork(game.appid);
           
           // If no cached artwork, try to fetch new artwork
           if (!artwork) {
-            Logger.debug('No cached artwork found, fetching new artwork', 'GameLibrary', { 
+            LogService.debug('No cached artwork found, fetching new artwork', 'GameLibrary', { 
               appId: game.appid,
               name: game.name
             });
             artwork = await SteamService.getGameArtwork(game.appid);
           } else {
-            Logger.debug('Using cached artwork', 'GameLibrary', { 
+            LogService.debug('Using cached artwork', 'GameLibrary', { 
               appId: game.appid,
               name: game.name
             });
@@ -86,17 +84,13 @@ export const GameLibrary: React.FC<Props> = ({ searchQuery }) => {
               [game.appid]: artwork
             }));
           } else {
-            Logger.warn('No artwork available for game', 'GameLibrary', {
+            LogService.warn('No artwork available for game', 'GameLibrary', {
               appId: game.appid,
               name: game.name
             });
           }
         } catch (error) {
-          Logger.error('Failed to load artwork for game', {
-            appId: game.appid,
-            name: game.name,
-            error
-          }, 'GameLibrary');
+          LogService.error('Failed to load artwork for game', error, 'GameLibrary');
         }
       }
     };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, ChangeEvent } from 'react';
 import {
   Box,
   TextField,
@@ -14,8 +14,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { AdminConfig } from '../types/config';
-import Logger from '../services/LogService';
-import { SteamService } from '../services/SteamService';
+import { LogService, SteamService } from '../services';
 
 interface AdminSettingsProps {
   config: AdminConfig;
@@ -36,10 +35,10 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
       setShowError(null);
       await onSave(settings);
       setShowSuccess(true);
-      Logger.info('Admin settings saved successfully');
+      LogService.info('Admin settings saved successfully');
     } catch (error) {
       setShowError('Failed to save admin settings');
-      Logger.error('Failed to save admin settings', error);
+      LogService.error('Failed to save admin settings', error);
     } finally {
       setIsSaving(false);
     }
@@ -51,13 +50,22 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
       setShowError(null);
       await SteamService.refreshAllArtwork();
       setShowSuccess(true);
-      Logger.info('Artwork refresh completed successfully');
+      LogService.info('Artwork refresh completed successfully');
     } catch (error) {
       setShowError('Failed to refresh artwork');
-      Logger.error('Failed to refresh artwork', error);
+      LogService.error('Failed to refresh artwork', error);
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  const handleTextFieldChange = (field: keyof AdminConfig) => (e: ChangeEvent<HTMLInputElement>) => {
+    setSettings({ ...settings, [field]: e.target.value });
+  };
+
+  const handleDebugToggle = (e: ChangeEvent<HTMLInputElement>) => {
+    setSettings({ ...settings, debugEnabled: e.target.checked });
+    LogService.debug('Debug mode toggled', 'AdminSettings', { enabled: e.target.checked });
   };
 
   return (
@@ -70,21 +78,21 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
         <TextField
           label="Library Path"
           value={settings.libraryPath}
-          onChange={(e) => setSettings({ ...settings, libraryPath: e.target.value })}
+          onChange={handleTextFieldChange('libraryPath')}
           helperText="Path to your games directory"
         />
 
         <TextField
           label="Users Path"
           value={settings.usersPath}
-          onChange={(e) => setSettings({ ...settings, usersPath: e.target.value })}
+          onChange={handleTextFieldChange('usersPath')}
           helperText="Path where user data will be stored"
         />
 
         <TextField
           label="Cache Path"
           value={settings.cachePath}
-          onChange={(e) => setSettings({ ...settings, cachePath: e.target.value })}
+          onChange={handleTextFieldChange('cachePath')}
           helperText="Path where artwork and other cached files will be stored"
         />
 
@@ -92,7 +100,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
           label="SteamGridDB API Key"
           type={showGridDbKey ? 'text' : 'password'}
           value={settings.steamGridDbApiKey}
-          onChange={(e) => setSettings({ ...settings, steamGridDbApiKey: e.target.value })}
+          onChange={handleTextFieldChange('steamGridDbApiKey')}
           helperText="API key from SteamGridDB"
           InputProps={{
             endAdornment: (
@@ -112,10 +120,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
           control={
             <Switch
               checked={settings.debugEnabled}
-              onChange={(e) => {
-                setSettings({ ...settings, debugEnabled: e.target.checked });
-                Logger.debug('Debug mode toggled', 'AdminSettings', { enabled: e.target.checked });
-              }}
+              onChange={handleDebugToggle}
             />
           }
           label={

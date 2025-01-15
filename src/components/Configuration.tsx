@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, CircularProgress, Tabs, Tab } from '@mui/material';
-import { ConfigService } from '../services/ConfigService';
+import { ConfigService, LogService } from '../services';
 import { Config, AdminConfig, UserConfig } from '../types/config';
-import Logger from '../services/LogService';
 import { AdminSettings } from './AdminSettings';
 import { UserSettings } from './UserSettings';
 import { TaskManager } from './TaskManager';
@@ -52,10 +51,10 @@ export const Configuration: React.FC = () => {
         setIsLoading(true);
         await ConfigService.loadConfig();
         const loadedConfig = ConfigService.getConfig();
-        Logger.debug('Config loaded successfully', 'Configuration', loadedConfig);
+        LogService.debug('Config loaded successfully', 'Configuration', loadedConfig);
         setConfig(loadedConfig);
       } catch (error) {
-        Logger.error('Failed to load config', error, 'Configuration');
+        LogService.error('Failed to load config', error, 'Configuration');
       } finally {
         setIsLoading(false);
       }
@@ -72,9 +71,9 @@ export const Configuration: React.FC = () => {
       await ConfigService.saveConfig(newConfig);
       await ConfigService.loadConfig();
       setConfig(ConfigService.getConfig());
-      Logger.info('Admin configuration saved successfully');
+      LogService.info('Admin configuration saved successfully');
     } catch (error) {
-      Logger.error('Failed to save admin config', error);
+      LogService.error('Failed to save admin config', error);
       throw error;
     }
   };
@@ -99,7 +98,7 @@ export const Configuration: React.FC = () => {
       await ConfigService.loadConfig();
       setConfig(ConfigService.getConfig());
     } catch (error) {
-      Logger.error('Failed to add user', error);
+      LogService.error('Failed to add user', error);
       throw error;
     }
   };
@@ -117,7 +116,7 @@ export const Configuration: React.FC = () => {
       await ConfigService.loadConfig();
       setConfig(ConfigService.getConfig());
     } catch (error) {
-      Logger.error('Failed to delete user', error);
+      LogService.error('Failed to delete user', error);
       throw error;
     }
   };
@@ -135,7 +134,7 @@ export const Configuration: React.FC = () => {
       await ConfigService.loadConfig();
       setConfig(ConfigService.getConfig());
     } catch (error) {
-      Logger.error('Failed to select user', error);
+      LogService.error('Failed to select user', error);
       throw error;
     }
   };

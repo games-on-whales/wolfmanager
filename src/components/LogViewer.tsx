@@ -21,8 +21,7 @@ import {
   Refresh as RefreshIcon,
   Delete as DeleteIcon 
 } from '@mui/icons-material';
-import { LogEntry, LogLevel } from '../services/LogService';
-import Logger from '../services/LogService';
+import { LogService, LogEntry, LogLevel } from '../services';
 
 interface LogFilter {
   level: LogLevel | 'all';
@@ -67,7 +66,7 @@ export const LogViewer: React.FC = () => {
         listRef.current.scrollTop = listRef.current.scrollHeight;
       }
     } catch (error) {
-      Logger.error('Failed to fetch logs', error, 'LogViewer');
+      LogService.error('Failed to fetch logs', error, 'LogViewer');
     } finally {
       setIsLoading(false);
     }
@@ -78,28 +77,13 @@ export const LogViewer: React.FC = () => {
     fetchLogs();
 
     // Subscribe to new logs
-    const subscription = Logger.subscribe((newLogs) => {
-      setLogs(newLogs);
-      // Update components list
-      const uniqueComponents = new Set<string>();
-      newLogs.forEach(log => {
-        if (log.component) {
-          uniqueComponents.add(log.component);
-        }
-      });
-      setComponents(Array.from(uniqueComponents));
-
-      // Scroll to bottom when new logs arrive
-      if (listRef.current) {
-        listRef.current.scrollTop = listRef.current.scrollHeight;
-      }
-    });
+    const subscription = LogService.subscribe(setLogs);
 
     // Set up polling for new logs every 5 seconds
     const interval = setInterval(fetchLogs, 5000);
 
     return () => {
-      subscription.unsubscribe();
+      subscription();
       clearInterval(interval);
     };
   }, []);
@@ -120,12 +104,12 @@ export const LogViewer: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      Logger.error('Failed to download logs', error, 'LogViewer');
+      LogService.error('Failed to download logs', error, 'LogViewer');
     }
   };
 
   const handleClearLogs = () => {
-    Logger.clearLogs();
+    LogService.clearLogs();
   };
 
   const isWithinTimeRange = (timestamp: string) => {
@@ -160,13 +144,13 @@ export const LogViewer: React.FC = () => {
 
   const getLevelColor = (level: LogLevel): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" => {
     switch (level) {
-      case 'error':
+      case LogLevel.ERROR:
         return 'error';
-      case 'warn':
+      case LogLevel.WARN:
         return 'warning';
-      case 'info':
+      case LogLevel.INFO:
         return 'info';
-      case 'debug':
+      case LogLevel.DEBUG:
         return 'default';
       default:
         return 'default';
@@ -175,9 +159,9 @@ export const LogViewer: React.FC = () => {
 
   const getLogItemStyle = (level: LogLevel) => {
     switch (level) {
-      case 'error':
+      case LogLevel.ERROR:
         return { backgroundColor: 'rgba(211, 47, 47, 0.1)' };
-      case 'warn':
+      case LogLevel.WARN:
         return { backgroundColor: 'rgba(237, 108, 2, 0.1)' };
       default:
         return {};

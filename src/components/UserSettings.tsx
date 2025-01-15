@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff, Delete, Add } from '@mui/icons-material';
 import { UserConfig } from '../types/config';
-import Logger from '../services/LogService';
+import { LogService } from '../services';
 
 interface UserSettingsProps {
   users: Record<string, UserConfig>;
@@ -62,10 +62,10 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       setShowAddDialog(false);
       setNewUser({ username: '', steamId: '', steamApiKey: '' });
       setShowSuccess(true);
-      Logger.info('User added successfully');
+      LogService.info('User added successfully');
     } catch (error) {
       setShowError('Failed to add user');
-      Logger.error('Failed to add user', error);
+      LogService.error('Failed to add user', error);
     }
   };
 
@@ -73,10 +73,10 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     try {
       await onDeleteUser(username);
       setShowSuccess(true);
-      Logger.info('User deleted successfully');
+      LogService.info('User deleted successfully');
     } catch (error) {
       setShowError('Failed to delete user');
-      Logger.error('Failed to delete user', error);
+      LogService.error('Failed to delete user', error);
     }
   };
 
@@ -84,10 +84,10 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     try {
       await onSelectUser(username);
       setShowSuccess(true);
-      Logger.info('User selected successfully');
+      LogService.info('User selected successfully');
     } catch (error) {
       setShowError('Failed to select user');
-      Logger.error('Failed to select user', error);
+      LogService.error('Failed to select user', error);
     }
   };
 

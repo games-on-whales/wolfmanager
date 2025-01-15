@@ -9,31 +9,26 @@ import {
   LinearProgress,
   Chip
 } from '@mui/material';
-import { TaskService, Task } from '../services/TaskService';
-import Logger from '../services/LogService';
+import { TaskService, Task, TaskStatus } from '../services';
+import { LogService } from '../services';
 
 export const TaskManager: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
-    const subscription = TaskService.subscribe((updatedTasks) => {
-      setTasks(updatedTasks);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    const subscription = TaskService.subscribe(setTasks);
+    return () => subscription();
   }, []);
 
-  const getStatusColor = (status: string): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" => {
+  const getStatusColor = (status: TaskStatus): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" => {
     switch (status) {
-      case 'completed':
+      case TaskStatus.COMPLETED:
         return 'success';
-      case 'failed':
+      case TaskStatus.FAILED:
         return 'error';
-      case 'running':
+      case TaskStatus.RUNNING:
         return 'primary';
-      case 'queued':
+      case TaskStatus.PENDING:
         return 'secondary';
       default:
         return 'default';
@@ -52,7 +47,7 @@ export const TaskManager: React.FC = () => {
         </Typography>
       ) : (
         <List>
-          {tasks.map((task) => (
+          {tasks.map((task: Task) => (
             <ListItem key={task.id} divider>
               <Box sx={{ width: '100%' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -66,7 +61,7 @@ export const TaskManager: React.FC = () => {
                   />
                 </Box>
                 
-                {task.progress !== undefined && task.status === 'running' && (
+                {task.progress !== undefined && task.status === TaskStatus.RUNNING && (
                   <Box sx={{ width: '100%', mt: 1 }}>
                     <LinearProgress 
                       variant="determinate" 
