@@ -40,6 +40,7 @@ export const Configuration: React.FC = () => {
     usersPath: '',
     cachePath: '/config/cache/artwork',
     steamGridDbApiKey: '',
+    debugEnabled: false,
     users: {}
   });
   const [isLoading, setIsLoading] = useState(true);
