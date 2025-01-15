@@ -1,6 +1,6 @@
 import { SteamGame } from './types';
-import { ConfigService } from '../../config';
-import Logger from '../../logs';
+import ConfigService from '../config';
+import Logger from '../logs';
 
 export async function getOwnedGames(username?: string): Promise<SteamGame[]> {
   Logger.debug('Starting owned games fetch process', 'SteamService', { username });
@@ -10,7 +10,7 @@ export async function getOwnedGames(username?: string): Promise<SteamGame[]> {
   // If no username provided, use current user
   if (!username) {
     if (!config.currentUser) {
-      Logger.error('No user selected', 'SteamService');
+      Logger.error('No user selected', null, 'SteamService');
       throw new Error('Please select a user in the configuration');
     }
     username = config.currentUser;
@@ -19,12 +19,12 @@ export async function getOwnedGames(username?: string): Promise<SteamGame[]> {
   // Get user's Steam credentials
   const user = config.users[username];
   if (!user) {
-    Logger.error('User not found', 'SteamService', { username });
+    Logger.error('User not found', null, 'SteamService');
     throw new Error(`User ${username} not found`);
   }
 
   if (!user.steamId || !user.steamApiKey) {
-    Logger.error('Missing Steam credentials', 'SteamService', { username });
+    Logger.error('Missing Steam credentials', null, 'SteamService');
     throw new Error('Steam ID and API key are required');
   }
 
@@ -44,7 +44,7 @@ export async function getOwnedGames(username?: string): Promise<SteamGame[]> {
 
     const data = await response.json();
     if (!data.response?.games) {
-      Logger.error('Invalid response from Steam API', 'SteamService', { data });
+      Logger.error('Invalid response from Steam API', null, 'SteamService');
       throw new Error('Invalid response from Steam API');
     }
 

@@ -1,7 +1,8 @@
 import { SteamGridResponse } from './types';
-import { ConfigService } from '../../config';
-import { CacheService } from '../../cache';
-import Logger from '../../logs';
+import ConfigService from '../config';
+import CacheService from '../cache';
+import Logger from '../logs';
+import { getOwnedGames } from './games';
 
 export async function getGameArtwork(appId: number): Promise<string | null> {
   Logger.debug('Starting artwork fetch process', 'SteamService', { appId });
