@@ -652,6 +652,19 @@ app.post('/api/users/:username/select', async (req, res) => {
   }
 });
 
+// Clear logs endpoint
+app.post('/api/logs/clear', async (req, res) => {
+  try {
+    // Clear the log file
+    fs.writeFileSync(logFile, '');
+    serverLog('info', 'Logs cleared successfully', 'Server');
+    res.json({ success: true });
+  } catch (error) {
+    serverLog('error', 'Failed to clear logs', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to clear logs' });
+  }
+});
+
 // All remaining requests return the React app, so it can handle routing
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '../../dist/index.html'));
