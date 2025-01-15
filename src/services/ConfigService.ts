@@ -2,7 +2,7 @@ import { Config } from '../types/config';
 import Logger from './LogService';
 
 export const ConfigService = {
-  private config: Config | null = null,
+  config: null as Config | null,
 
   async loadConfig(): Promise<void> {
     try {
