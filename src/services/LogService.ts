@@ -101,7 +101,7 @@ class Logger {
   }
 
   static debug(message: string, component?: string, data?: unknown): void {
-    // Only log debug messages if debug mode is enabled
+    // Only write debug logs if debug mode is enabled
     if (!ConfigService.isInitialized || !ConfigService.getConfig().debugEnabled) {
       return;
     }
@@ -109,29 +109,23 @@ class Logger {
   }
 
   static info(message: string, component?: string, data?: any) {
-    if (this.shouldLog('info')) {
-      this.writeLog(this.formatLogEntry('info', message, component, data));
-    }
+    this.writeLog(this.formatLogEntry('info', message, component, data));
   }
 
   static warn(message: string, component?: string, data?: any) {
-    if (this.shouldLog('warn')) {
-      this.writeLog(this.formatLogEntry('warn', message, component, data));
-    }
+    this.writeLog(this.formatLogEntry('warn', message, component, data));
   }
 
   static error(message: string, error?: any, component?: string) {
-    if (this.shouldLog('error')) {
-      let errorData = error;
-      if (error instanceof Error) {
-        errorData = {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        };
-      }
-      this.writeLog(this.formatLogEntry('error', message, component, errorData));
+    let errorData = error;
+    if (error instanceof Error) {
+      errorData = {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      };
     }
+    this.writeLog(this.formatLogEntry('error', message, component, errorData));
   }
 
   // Allow changing log level at runtime
