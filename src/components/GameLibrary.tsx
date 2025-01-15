@@ -153,7 +153,9 @@ export const GameLibrary: React.FC<GameLibraryProps> = ({ searchQuery }) => {
     const loadGames = async () => {
       Logger.info('Loading game library');
       try {
+        await ConfigService.loadConfig();
         const config = ConfigService.getConfig();
+        
         if (!config.steamId || !config.steamApiKey) {
           const errorMsg = 'Steam ID and API Key are required. Please check your configuration.';
           Logger.warn(errorMsg);
@@ -180,9 +182,9 @@ export const GameLibrary: React.FC<GameLibraryProps> = ({ searchQuery }) => {
         setFilteredGames(ownedGames);
         setStats(libraryStats);
         setError(null);
-      } catch (err) {
+      } catch (error) {
         const errorMsg = 'Failed to load games. Please check your configuration and try again.';
-        Logger.error(errorMsg, err);
+        Logger.error(errorMsg, error);
         setError(errorMsg);
       } finally {
         setLoading(false);

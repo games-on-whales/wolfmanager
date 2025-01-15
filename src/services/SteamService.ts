@@ -28,6 +28,7 @@ interface SteamGridResponse {
 export const SteamService = {
   getOwnedGames: async (steamId: string): Promise<SteamGame[]> => {
     Logger.debug('Fetching owned games for Steam ID', { steamId });
+    await ConfigService.loadConfig();
     const config = ConfigService.getConfig();
     
     try {
@@ -55,6 +56,7 @@ export const SteamService = {
 
   getGameArtwork: async (appId: number): Promise<string | null> => {
     Logger.debug('Starting artwork fetch process', { appId });
+    await ConfigService.loadConfig();
     const config = ConfigService.getConfig();
     
     if (!config.steamGridDbApiKey) {

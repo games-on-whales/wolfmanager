@@ -2,20 +2,31 @@ import { Config } from '../types/config';
 import Logger from './LogService';
 
 export const ConfigService = {
-  async getConfig(): Promise<Partial<Config>> {
+  private config: Config | null = null,
+
+  async loadConfig(): Promise<void> {
     try {
       const response = await fetch('/api/config');
       if (!response.ok) {
         throw new Error('Failed to fetch config');
       }
-      return await response.json();
+      this.config = await response.json();
     } catch (error) {
       Logger.error('Failed to load config', error);
-      return {
+      this.config = {
         steamId: '',
-        libraryPath: ''
+        libraryPath: '',
+        steamApiKey: '',
+        steamGridDbApiKey: ''
       };
     }
+  },
+
+  getConfig(): Config {
+    if (!this.config) {
+      throw new Error('Config not loaded');
+    }
+    return this.config;
   },
 
   async saveConfig(config: Config): Promise<void> {
@@ -32,6 +43,7 @@ export const ConfigService = {
         throw new Error('Failed to save config');
       }
 
+      this.config = config;
       Logger.info('Config saved successfully');
     } catch (error) {
       Logger.error('Failed to save config', error);

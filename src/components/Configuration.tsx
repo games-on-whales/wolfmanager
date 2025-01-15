@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   TextField,
@@ -15,14 +15,31 @@ import { ConfigService } from '../services/ConfigService';
 import { Config } from '../types/config';
 
 export const Configuration: React.FC = () => {
-  const [config, setConfig] = useState<Config>(ConfigService.getConfig());
+  const [config, setConfig] = useState<Config>({
+    steamId: '',
+    libraryPath: '',
+    steamApiKey: '',
+    steamGridDbApiKey: ''
+  });
   const [showSuccess, setShowSuccess] = useState(false);
   const [showSteamKey, setShowSteamKey] = useState(false);
   const [showGridDbKey, setShowGridDbKey] = useState(false);
 
-  const handleSave = () => {
-    ConfigService.saveConfig(config);
-    setShowSuccess(true);
+  useEffect(() => {
+    const loadConfig = async () => {
+      await ConfigService.loadConfig();
+      setConfig(ConfigService.getConfig());
+    };
+    loadConfig();
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      await ConfigService.saveConfig(config);
+      setShowSuccess(true);
+    } catch (error) {
+      // ... error handling
+    }
   };
 
   return (
