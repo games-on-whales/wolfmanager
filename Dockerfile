@@ -3,23 +3,18 @@ FROM node:20-alpine
 # Set working directory
 WORKDIR /app
 
-# Install build essentials
-RUN apk add --no-cache python3 make g++
-
-# Copy package files first
+# Install dependencies
 COPY package*.json ./
-
-# Install all dependencies (including devDependencies)
 RUN npm install
 
-# Copy the rest of the application
+# Copy source code
 COPY . .
 
-# Build the application
+# Build the app
 RUN npm run build
 
-# Expose port 9971
+# Expose port
 EXPOSE 9971
 
-# Start the application
+# Start the server
 CMD ["npm", "start"] 

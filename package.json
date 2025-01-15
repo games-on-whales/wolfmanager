@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && tsc -p tsconfig.server.json",
     "preview": "vite preview",
-    "start": "node server/index.js"
+    "start": "node dist-server/server/index.js"
   },
   "dependencies": {
     "react": "^18.2.0",
