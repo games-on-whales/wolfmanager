@@ -26,20 +26,22 @@ interface SteamGridResponse {
 }
 
 export const SteamService = {
-  getOwnedGames: async (): Promise<SteamGame[]> => {
-    Logger.debug('Fetching owned games');
+  getOwnedGames: async (username?: string): Promise<SteamGame[]> => {
+    Logger.debug('Fetching owned games', { username });
     await ConfigService.loadConfig();
     const config = ConfigService.getConfig();
-    const currentUser = ConfigService.getCurrentUser();
+    const user = username ? 
+      config.users[username] : 
+      ConfigService.getCurrentUser();
     
-    if (!currentUser) {
+    if (!user) {
       Logger.error('No user selected');
       throw new Error('No user selected');
     }
 
     try {
       const response = await fetch(
-        `/api/steam/games?steamApiKey=${currentUser.steamApiKey}&steamId=${currentUser.steamId}`
+        `/api/steam/games?steamApiKey=${user.steamApiKey}&steamId=${user.steamId}`
       );
       
       if (!response.ok) {
@@ -146,5 +148,54 @@ export const SteamService = {
       });
       return null;
     }
+  },
+
+  getCachedArtwork: async (appId: number): Promise<string | null> => {
+    return CacheService.getCachedArtwork(appId);
+  },
+
+  refreshAllArtwork: async (): Promise<void> => {
+    Logger.info('Starting artwork refresh for all games');
+    await ConfigService.loadConfig();
+    const config = ConfigService.getConfig();
+    
+    // Get all unique game IDs across all users
+    const allGames = new Set<number>();
+    for (const username of Object.keys(config.users)) {
+      try {
+        const games = await SteamService.getOwnedGames(username);
+        games.forEach(game => allGames.add(game.appid));
+      } catch (error) {
+        Logger.error(`Failed to get games for user ${username}`, error);
+      }
+    }
+
+    Logger.info(`Found ${allGames.size} unique games across all users`);
+
+    // Check cache and download missing artwork
+    let processed = 0;
+    for (const appId of allGames) {
+      try {
+        // Check if already cached
+        const cached = await CacheService.getCachedArtwork(appId);
+        if (!cached) {
+          Logger.debug(`Fetching artwork for game ${appId}`);
+          const artwork = await SteamService.getGameArtwork(appId);
+          if (artwork) {
+            processed++;
+            if (processed % 10 === 0) {
+              Logger.info(`Processed ${processed} games`);
+            }
+          }
+        }
+      } catch (error) {
+        Logger.error(`Failed to process artwork for game ${appId}`, error);
+      }
+      
+      // Add a small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    Logger.info(`Artwork refresh complete. Processed ${processed} games`);
   }
 }; 

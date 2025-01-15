@@ -13,6 +13,7 @@ import {
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { AdminConfig } from '../types/config';
 import Logger from '../services/LogService';
+import { SteamService } from '../services/SteamService';
 
 interface AdminSettingsProps {
   config: AdminConfig;
@@ -25,6 +26,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSave = async () => {
     try {
@@ -38,6 +40,21 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
       Logger.error('Failed to save admin settings', error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRefreshArtwork = async () => {
+    try {
+      setIsRefreshing(true);
+      setShowError(null);
+      await SteamService.refreshAllArtwork();
+      setShowSuccess(true);
+      Logger.info('Artwork refresh completed successfully');
+    } catch (error) {
+      setShowError('Failed to refresh artwork');
+      Logger.error('Failed to refresh artwork', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -82,14 +99,23 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
           }}
         />
         
-        <Button 
-          variant="contained" 
-          onClick={handleSave}
-          disabled={isSaving}
-          sx={{ mt: 2 }}
-        >
-          {isSaving ? 'Saving...' : 'Save Admin Settings'}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+          <Button 
+            variant="contained" 
+            onClick={handleSave}
+            disabled={isSaving || isRefreshing}
+          >
+            {isSaving ? 'Saving...' : 'Save Admin Settings'}
+          </Button>
+
+          <Button
+            variant="outlined"
+            onClick={handleRefreshArtwork}
+            disabled={isSaving || isRefreshing}
+          >
+            {isRefreshing ? 'Refreshing Artwork...' : 'Refresh Game Artwork'}
+          </Button>
+        </Box>
       </Box>
 
       <Snackbar

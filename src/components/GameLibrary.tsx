@@ -53,29 +53,30 @@ export const GameLibrary: React.FC<Props> = ({ searchQuery }) => {
   }, []);
 
   useEffect(() => {
-    const loadArtwork = async () => {
-      for (const game of games) {
-        if (!gameArtwork[game.appid]) {
-          try {
-            const artwork = await SteamService.getGameArtwork(game.appid);
-            if (artwork) {
-              setGameArtwork((prev: Record<number, string>) => ({
-                ...prev,
-                [game.appid]: artwork
-              }));
-            }
-          } catch (error) {
-            Logger.error('Failed to load artwork for game', {
-              appId: game.appid,
-              error
-            });
+    const loadCachedArtwork = async () => {
+      const unloadedGames = games.filter(game => !gameArtwork[game.appid]);
+      for (const game of unloadedGames) {
+        try {
+          const artwork = await SteamService.getCachedArtwork(game.appid);
+          if (artwork) {
+            setGameArtwork(prev => ({
+              ...prev,
+              [game.appid]: artwork
+            }));
           }
+        } catch (error) {
+          Logger.error('Failed to load cached artwork for game', {
+            appId: game.appid,
+            error
+          });
         }
       }
     };
 
-    loadArtwork();
-  }, [games, gameArtwork]);
+    if (games.length > 0) {
+      loadCachedArtwork();
+    }
+  }, [games]);
 
   const filteredGames = games.filter((game: SteamGame) =>
     game.name.toLowerCase().includes(searchQuery.toLowerCase())
