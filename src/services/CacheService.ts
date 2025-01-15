@@ -1,34 +1,57 @@
 import Logger from './LogService';
 
+const FETCH_TIMEOUT = 5000; // 5 seconds
+
+const fetchWithTimeout = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+};
+
 export const CacheService = {
   async ensureCacheDir() {
     try {
-      const response = await fetch('/api/cache/ensure', { method: 'POST' });
+      const response = await fetchWithTimeout('/api/cache/ensure', { method: 'POST' });
       if (!response.ok) {
         throw new Error('Failed to ensure cache directory exists');
       }
     } catch (error) {
-      Logger.error('Failed to ensure cache directory', error);
+      Logger.error('Failed to ensure cache directory', error, 'CacheService');
     }
   },
 
   async getCachedArtwork(appId: number): Promise<string | null> {
     try {
-      const response = await fetch(`/api/cache/artwork/${appId}`);
+      const response = await fetchWithTimeout(`/api/cache/artwork/${appId}`);
       if (response.ok) {
         const blob = await response.blob();
         return URL.createObjectURL(blob);
       }
       return null;
     } catch (error) {
-      Logger.error(`Failed to get cached artwork for ${appId}`, error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        Logger.error(`Request timeout getting cached artwork for ${appId}`, error, 'CacheService');
+      } else {
+        Logger.error(`Failed to get cached artwork for ${appId}`, error, 'CacheService');
+      }
       return null;
     }
   },
 
   async cacheArtwork(appId: number, imageUrl: string): Promise<string | null> {
     try {
-      const response = await fetch('/api/cache/artwork', {
+      const response = await fetchWithTimeout('/api/cache/artwork', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -41,7 +64,11 @@ export const CacheService = {
       }
       return null;
     } catch (error) {
-      Logger.error(`Failed to cache artwork for ${appId}`, error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        Logger.error(`Request timeout caching artwork for ${appId}`, error, 'CacheService');
+      } else {
+        Logger.error(`Failed to cache artwork for ${appId}`, error, 'CacheService');
+      }
       return null;
     }
   }

@@ -80,6 +80,13 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
         />
 
         <TextField
+          label="Cache Path"
+          value={settings.cachePath}
+          onChange={(e) => setSettings({ ...settings, cachePath: e.target.value })}
+          helperText="Path where artwork and other cached files will be stored"
+        />
+
+        <TextField
           label="SteamGridDB API Key"
           type={showGridDbKey ? 'text' : 'password'}
           value={settings.steamGridDbApiKey}

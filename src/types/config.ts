@@ -6,6 +6,7 @@ export interface UserConfig {
 export interface AdminConfig {
   libraryPath: string;
   usersPath: string;
+  cachePath: string;
   steamGridDbApiKey: string;
   users: Record<string, UserConfig>;
 }

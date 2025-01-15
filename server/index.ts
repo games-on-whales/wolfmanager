@@ -278,6 +278,68 @@ app.get('/api/logs/download', (req, res) => {
   }
 });
 
+// Ensure cache directory exists
+app.post('/api/cache/ensure', (req, res) => {
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    serverLog('info', 'Cache directory ensured', 'Server', { path: CACHE_DIR });
+    res.json({ success: true });
+  } catch (error) {
+    serverLog('error', 'Failed to ensure cache directory', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to ensure cache directory' });
+  }
+});
+
+// Get cached artwork
+app.get('/api/cache/artwork/:appId', (req, res) => {
+  try {
+    const { appId } = req.params;
+    const artworkPath = path.join(CACHE_DIR, `${appId}.jpg`);
+    
+    if (!fs.existsSync(artworkPath)) {
+      serverLog('debug', 'Artwork not found in cache', 'Server', { appId, path: artworkPath });
+      return res.status(404).json({ error: 'Artwork not found in cache' });
+    }
+
+    serverLog('debug', 'Serving cached artwork', 'Server', { appId, path: artworkPath });
+    res.sendFile(artworkPath);
+  } catch (error) {
+    serverLog('error', 'Failed to get cached artwork', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to get cached artwork' });
+  }
+});
+
+// Cache new artwork
+app.post('/api/cache/artwork', async (req, res) => {
+  try {
+    const { appId, imageUrl } = req.body;
+    if (!appId || !imageUrl) {
+      return res.status(400).json({ error: 'appId and imageUrl are required' });
+    }
+
+    const artworkPath = path.join(CACHE_DIR, `${appId}.jpg`);
+    serverLog('debug', 'Caching artwork', 'Server', { appId, imageUrl, path: artworkPath });
+
+    // Ensure cache directory exists
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+
+    // Download and save the image
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download image: ${response.statusText}`);
+    }
+
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(artworkPath, Buffer.from(buffer));
+    
+    serverLog('info', 'Artwork cached successfully', 'Server', { appId, path: artworkPath });
+    res.json({ success: true });
+  } catch (error) {
+    serverLog('error', 'Failed to cache artwork', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to cache artwork' });
+  }
+});
+
 // All remaining requests return the React app, so it can handle routing
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '../../dist/index.html'));
