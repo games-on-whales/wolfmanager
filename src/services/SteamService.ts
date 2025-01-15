@@ -104,7 +104,9 @@ export const SteamService = {
       Logger.debug('Received SteamGridDB response', 'SteamService', { 
         appId, 
         success: data.success,
-        gridCount: data.data?.grids?.length || 0 
+        gridCount: data.data?.grids?.length || 0,
+        availableStyles: data.data?.grids ? [...new Set(data.data.grids.map(g => g.style))] : [],
+        availableDimensions: data.data?.grids ? [...new Set(data.data.grids.map(g => `${g.width}x${g.height}`))] : []
       });
       
       // Find the first 600x900 grid in the alternate style

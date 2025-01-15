@@ -53,28 +53,56 @@ export const GameLibrary: React.FC<Props> = ({ searchQuery }) => {
   }, []);
 
   useEffect(() => {
-    const loadCachedArtwork = async () => {
+    const loadArtwork = async () => {
       const unloadedGames = games.filter(game => !gameArtwork[game.appid]);
+      Logger.debug('Loading artwork for games', 'GameLibrary', { 
+        totalGames: games.length,
+        unloadedCount: unloadedGames.length,
+        loadedCount: Object.keys(gameArtwork).length
+      });
+
       for (const game of unloadedGames) {
         try {
-          const artwork = await SteamService.getCachedArtwork(game.appid);
+          // First try to get cached artwork
+          let artwork = await SteamService.getCachedArtwork(game.appid);
+          
+          // If no cached artwork, try to fetch new artwork
+          if (!artwork) {
+            Logger.debug('No cached artwork found, fetching new artwork', 'GameLibrary', { 
+              appId: game.appid,
+              name: game.name
+            });
+            artwork = await SteamService.getGameArtwork(game.appid);
+          } else {
+            Logger.debug('Using cached artwork', 'GameLibrary', { 
+              appId: game.appid,
+              name: game.name
+            });
+          }
+
           if (artwork) {
             setGameArtwork(prev => ({
               ...prev,
               [game.appid]: artwork
             }));
+          } else {
+            Logger.warn('No artwork available for game', 'GameLibrary', {
+              appId: game.appid,
+              name: game.name
+            });
           }
         } catch (error) {
-          Logger.error('Failed to load cached artwork for game', {
+          Logger.error('Failed to load artwork for game', {
             appId: game.appid,
+            name: game.name,
             error
-          });
+          }, 'GameLibrary');
         }
       }
     };
 
     if (games.length > 0) {
-      loadCachedArtwork();
+      loadArtwork();
     }
   }, [games]);
 
