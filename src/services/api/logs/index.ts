@@ -9,6 +9,7 @@ class LogService {
 
   subscribe(subscriber: LogSubscriber): () => void {
     this.subscribers.push(subscriber);
+    subscriber(this.logEntries);
     return () => {
       const index = this.subscribers.indexOf(subscriber);
       if (index !== -1) {
@@ -30,7 +31,7 @@ class LogService {
     }
 
     // Notify subscribers
-    this.subscribers.forEach(subscriber => subscriber(entry));
+    this.subscribers.forEach(subscriber => subscriber(this.logEntries));
 
     // Write to server
     try {
@@ -116,12 +117,7 @@ class LogService {
       await handleApiResponse<void>(response, 'LogService');
       this.logEntries = [];
       this.subscribers.forEach(subscriber => {
-        subscriber({
-          timestamp: new Date().toISOString(),
-          level: LogLevel.INFO,
-          message: 'Logs cleared',
-          component: 'LogService'
-        });
+        subscriber([]);
       });
     } catch (error) {
       await handleApiError(error, 'LogService');

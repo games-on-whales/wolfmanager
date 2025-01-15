@@ -1,6 +1,6 @@
 import { Config, UserConfig } from './types';
 import { handleApiResponse, handleApiError, ApiError } from '../base';
-import Logger from '../../logs';
+import Logger from '../logs';
 
 class ConfigService {
   private config: Config | null = null;

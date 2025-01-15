@@ -1,4 +1,4 @@
-import Logger from '../logs';
+import Logger from './logs';
 
 export class ApiError extends Error {
   constructor(

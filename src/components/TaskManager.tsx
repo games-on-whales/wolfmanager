@@ -81,7 +81,7 @@ export const TaskManager: React.FC = () => {
 
                 {task.error && (
                   <Typography variant="body2" color="error">
-                    Error: {task.error}
+                    Error: {task.error.message}
                   </Typography>
                 )}
               </Box>
