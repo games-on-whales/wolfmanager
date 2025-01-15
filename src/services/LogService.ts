@@ -50,7 +50,7 @@ class Logger {
     return data;
   }
 
-  private static writeLog(entry: LogEntry) {
+  private static async writeLog(entry: LogEntry) {
     // Add to in-memory logs
     this.logs.push(entry);
     // Keep only the last MAX_LOGS entries
@@ -61,6 +61,19 @@ class Logger {
     // Notify subscribers
     this.subscribers.forEach(callback => callback([...this.logs]));
     
+    // Send to server
+    try {
+      await fetch('/api/logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(entry)
+      });
+    } catch (error) {
+      console.error('Failed to send log to server:', error);
+    }
+
     // Browser environment
     if (typeof window !== 'undefined') {
       const consoleMethod = console[entry.level] || console.log;

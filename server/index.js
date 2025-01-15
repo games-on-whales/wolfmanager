@@ -257,35 +257,29 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
   }
 });
 
-// Log endpoints
-app.get('/api/logs', (req, res) => {
+// Ensure logs directory exists
+const logsDir = path.join('/config/logs');
+fs.mkdirSync(logsDir, { recursive: true });
+const logFile = path.join(logsDir, 'wolf-manager.log');
+
+// Function to write log to file
+const writeLogToFile = (logEntry) => {
   try {
-    // Read the last 1000 lines from the log file
-    const logs = [];
-    const logFile = path.join('/config/logs', 'wolf-manager.log');
-    
-    // If log file doesn't exist, return empty array
-    if (!fs.existsSync(logFile)) {
-      return res.json([]);
-    }
-
-    const fileContent = fs.readFileSync(logFile, 'utf-8');
-    const lines = fileContent.split('\n').filter(Boolean);
-    const lastLines = lines.slice(-1000);
-
-    for (const line of lastLines) {
-      try {
-        const log = JSON.parse(line);
-        logs.push(log);
-      } catch (e) {
-        console.error('Failed to parse log line:', e);
-      }
-    }
-
-    res.json(logs);
+    fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
   } catch (error) {
-    console.error('Error getting logs:', error);
-    res.status(500).json({ error: 'Failed to get logs' });
+    console.error('Failed to write log to file:', error);
+  }
+};
+
+// Log endpoint for client-side logs
+app.post('/api/logs', (req, res) => {
+  try {
+    const logEntry = req.body;
+    writeLogToFile(logEntry);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error writing log:', error);
+    res.status(500).json({ error: 'Failed to write log' });
   }
 });
 
