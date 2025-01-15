@@ -33,6 +33,7 @@
     "@types/archiver": "^5.3.4",
     "@emotion/types": "^0.7.0",
     "@types/react-router-dom": "^5.3.3",
-    "@mui/types": "^7.2.13"
+    "@mui/types": "^7.2.13",
+    "@types/node-fetch": "^2.6.11"
   }
 } 

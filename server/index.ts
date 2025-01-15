@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { ConfigManager } from './config/ConfigManager.js';
 import archiver from 'archiver';
+import { Config, UserConfig } from '../src/types/config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,13 +30,13 @@ app.get('/api/config', async (req, res) => {
     const config = configManager.getConfig();
     
     // Redact sensitive information
-    const sanitizedConfig = {
+    const sanitizedConfig: Config = {
       ...config,
       users: config.users ? Object.fromEntries(
         Object.entries(config.users).map(([username, userData]) => [
           username,
           {
-            ...userData,
+            ...userData as UserConfig,
             steamApiKey: userData.steamApiKey ? '[REDACTED]' : ''
           }
         ])
@@ -74,10 +75,23 @@ app.get('/api/steam/games', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (error) {
-    console.error('Steam API error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Steam API error:', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
+
+interface SteamGridResponse {
+  success: boolean;
+  data: {
+    id: number;
+    grids: Array<{
+      id: string;
+      score: number;
+      style: string;
+      url: string;
+    }>;
+  };
+}
 
 // SteamGridDB proxy endpoint
 app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
@@ -103,24 +117,32 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
       throw new Error(`SteamGridDB API responded with ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log(`Retrieved ${data.data?.length || 0} artwork options for app ${appId}`);
+    const data = await response.json() as SteamGridResponse;
+    console.log(`Retrieved ${data.data?.grids?.length || 0} artwork options for app ${appId}`);
     
     // Transform response to match our expected structure
     const transformedData = {
       success: data.success,
       data: {
         id: parseInt(appId),
-        grids: data.data || []
+        grids: data.data?.grids || []
       }
     };
     
     res.json(transformedData);
   } catch (error) {
-    console.error('SteamGridDB API error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('SteamGridDB API error:', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
+
+interface LogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+  component?: string;
+  data?: unknown;
+}
 
 // Ensure logs directory exists
 const logsDir = path.join('/config/logs');
@@ -128,22 +150,22 @@ fs.mkdirSync(logsDir, { recursive: true });
 const logFile = path.join(logsDir, 'wolf-manager.log');
 
 // Function to write log to file
-const writeLogToFile = (logEntry: any) => {
+const writeLogToFile = (logEntry: LogEntry) => {
   try {
     fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
   } catch (error) {
-    console.error('Failed to write log to file:', error);
+    console.error('Failed to write log to file:', error instanceof Error ? error.message : String(error));
   }
 };
 
 // Log endpoint for client-side logs
 app.post('/api/logs', (req, res) => {
   try {
-    const logEntry = req.body;
+    const logEntry = req.body as LogEntry;
     writeLogToFile(logEntry);
     res.json({ success: true });
   } catch (error) {
-    console.error('Error writing log:', error);
+    console.error('Error writing log:', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: 'Failed to write log' });
   }
 });
@@ -170,7 +192,7 @@ app.get('/api/logs/download', (req, res) => {
 
     archive.finalize();
   } catch (error) {
-    console.error('Error creating log archive:', error);
+    console.error('Error creating log archive:', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: 'Failed to create log archive' });
   }
 });

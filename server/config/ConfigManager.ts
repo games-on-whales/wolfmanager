@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { Config } from '../../src/types/config';
+import { Config, UserConfig } from '../../src/types/config';
 
 const CONFIG_PATH = '/config/wolf-manager.json';
 const LOG_PATH = '/config/logs/wolf-manager.log';
@@ -58,6 +58,20 @@ export class ConfigManager {
     }
   }
 
+  getConfig(): Config {
+    return this.config;
+  }
+
+  getCurrentUser(): (UserConfig & { username: string }) | null {
+    if (!this.config.currentUser || !this.config.users[this.config.currentUser]) {
+      return null;
+    }
+    return {
+      username: this.config.currentUser,
+      ...this.config.users[this.config.currentUser]
+    };
+  }
+
   async saveConfig(config: Config): Promise<void> {
     try {
       writeLog('debug', 'Saving config...');
@@ -71,7 +85,7 @@ export class ConfigManager {
     }
   }
 
-  async addUser(username: string, userConfig: any): Promise<boolean> {
+  async addUser(username: string, userConfig: UserConfig): Promise<boolean> {
     try {
       writeLog('debug', 'Adding user', 'ConfigManager', { username });
       // Ensure users object exists
