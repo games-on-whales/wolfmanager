@@ -6,6 +6,11 @@ const CONFIG_PATH = '/config/wolf-manager.json';
 const LOG_PATH = '/config/logs/wolf-manager.log';
 
 function writeLog(level: string, message: string, component = 'ConfigManager', data?: any) {
+  // Skip debug logs if debug mode is disabled
+  if (level === 'debug' && !ConfigManager.instance?.config.debugEnabled) {
+    return;
+  }
+
   const logEntry = {
     timestamp: new Date().toISOString(),
     level,

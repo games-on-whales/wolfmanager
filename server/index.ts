@@ -78,6 +78,36 @@ app.get('/api/config', async (req, res) => {
   }
 });
 
+app.post('/api/config', async (req, res) => {
+  try {
+    const configManager = await ConfigManager.getInstance();
+    const newConfig = req.body;
+    await configManager.saveConfig(newConfig);
+    
+    // Get the updated config and sanitize it
+    const config = configManager.getConfig();
+    const sanitizedConfig: Config = {
+      ...config,
+      users: config.users ? Object.fromEntries(
+        Object.entries(config.users).map(([username, userData]) => [
+          username,
+          {
+            ...userData as UserConfig,
+            steamApiKey: userData.steamApiKey ? '[REDACTED]' : ''
+          }
+        ])
+      ) : {},
+      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    };
+
+    serverLog('info', 'Config saved successfully', 'Server');
+    res.json(sanitizedConfig);
+  } catch (error) {
+    serverLog('error', 'Failed to save config', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to save configuration' });
+  }
+});
+
 interface SteamGame {
   appid: number;
   name: string;
