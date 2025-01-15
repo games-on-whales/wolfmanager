@@ -1,49 +1,40 @@
 import { Config } from '../types/config';
 import Logger from './LogService';
 
-const CONFIG_KEY = 'wolf_manager_config';
-
-const defaultConfig: Config = {
-  steamId: '',
-  libraryPath: '/games',
-  steamApiKey: '',
-  steamGridDbApiKey: ''
-};
-
 export const ConfigService = {
-  getConfig: (): Config => {
-    Logger.debug('Retrieving configuration');
-    const stored = localStorage.getItem(CONFIG_KEY);
-    if (stored) {
-      try {
-        const config = JSON.parse(stored);
-        Logger.info('Configuration loaded successfully');
-        Logger.debug('Config values:', {
-          ...config,
-          steamApiKey: config.steamApiKey ? '[REDACTED]' : '',
-          steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
-        });
-        return config;
-      } catch (error) {
-        Logger.error('Failed to parse stored configuration', error);
-        return defaultConfig;
+  async getConfig(): Promise<Partial<Config>> {
+    try {
+      const response = await fetch('/api/config');
+      if (!response.ok) {
+        throw new Error('Failed to fetch config');
       }
+      return await response.json();
+    } catch (error) {
+      Logger.error('Failed to load config', error);
+      return {
+        steamId: '',
+        libraryPath: ''
+      };
     }
-    Logger.info('Using default configuration');
-    return defaultConfig;
   },
 
-  saveConfig: (config: Config): void => {
+  async saveConfig(config: Config): Promise<void> {
     try {
-      Logger.debug('Saving configuration', {
-        ...config,
-        steamApiKey: config.steamApiKey ? '[REDACTED]' : '',
-        steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+      const response = await fetch('/api/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config)
       });
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-      Logger.info('Configuration saved successfully');
+
+      if (!response.ok) {
+        throw new Error('Failed to save config');
+      }
+
+      Logger.info('Config saved successfully');
     } catch (error) {
-      Logger.error('Failed to save configuration', error);
+      Logger.error('Failed to save config', error);
       throw error;
     }
   }

@@ -1,13 +1,12 @@
+version: '3.8'
 services:
   wolf-manager:
-    image: ghcr.io/salty2011/wolfmanager:main
-    network_mode: host
+    build: .
     ports:
       - "9971:9971"
     volumes:
-      - /var/run/wolf:/var/run/wolf
-      - /games:/games
       - ./config:/config
+      - ${STEAM_LIBRARY_PATH}:/games:ro
     environment:
       - NODE_ENV=production
     logging:
