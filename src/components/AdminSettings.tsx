@@ -8,7 +8,9 @@ import {
   Snackbar,
   Alert,
   InputAdornment,
-  IconButton
+  IconButton,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { AdminConfig } from '../types/config';
@@ -104,6 +106,26 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
               </InputAdornment>
             ),
           }}
+        />
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={settings.debugEnabled}
+              onChange={(e) => {
+                setSettings({ ...settings, debugEnabled: e.target.checked });
+                Logger.debug('Debug mode toggled', 'AdminSettings', { enabled: e.target.checked });
+              }}
+            />
+          }
+          label={
+            <Box>
+              <Typography>Debug Mode</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Enable detailed logging for troubleshooting
+              </Typography>
+            </Box>
+          }
         />
         
         <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>

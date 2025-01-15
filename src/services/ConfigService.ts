@@ -23,6 +23,7 @@ export const ConfigService = {
         usersPath: '/config/users',
         cachePath: '/config/cache/artwork',
         steamGridDbApiKey: '',
+        debugEnabled: false,
         users: {},
         currentUser: undefined
       };

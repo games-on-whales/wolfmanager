@@ -8,6 +8,7 @@ export interface AdminConfig {
   usersPath: string;
   cachePath: string;
   steamGridDbApiKey: string;
+  debugEnabled: boolean;
   users: Record<string, UserConfig>;
 }
 

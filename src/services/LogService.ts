@@ -1,3 +1,5 @@
+import { ConfigService } from './ConfigService';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogEntry {
@@ -98,10 +100,12 @@ class Logger {
     };
   }
 
-  static debug(message: string, component?: string, data?: any) {
-    if (this.shouldLog('debug')) {
-      this.writeLog(this.formatLogEntry('debug', message, component, data));
+  static debug(message: string, component?: string, data?: unknown): void {
+    // Only log debug messages if debug mode is enabled
+    if (!ConfigService.isInitialized || !ConfigService.getConfig().debugEnabled) {
+      return;
     }
+    this.writeLog(this.formatLogEntry('debug', message, component, data));
   }
 
   static info(message: string, component?: string, data?: any) {
