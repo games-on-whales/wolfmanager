@@ -28,7 +28,14 @@ export class ConfigManager {
   async loadConfig() {
     try {
       const configData = await fs.readFile(CONFIG_PATH, 'utf-8');
-      this.config = JSON.parse(configData);
+      const loadedConfig = JSON.parse(configData);
+      
+      // Ensure users object exists
+      if (!loadedConfig.users) {
+        loadedConfig.users = {};
+      }
+      
+      this.config = loadedConfig;
     } catch (error) {
       // If file doesn't exist, we'll use default config
       if (error.code !== 'ENOENT') {
@@ -39,6 +46,11 @@ export class ConfigManager {
 
   async saveConfig(config) {
     try {
+      // Ensure users object exists
+      if (!config.users) {
+        config.users = {};
+      }
+
       await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
       await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2));
       this.config = config;
@@ -50,6 +62,11 @@ export class ConfigManager {
 
   async addUser(username, userConfig) {
     try {
+      // Ensure users object exists
+      if (!this.config.users) {
+        this.config.users = {};
+      }
+
       // Create user directory
       const userPath = path.join(this.config.usersPath, username);
       await fs.mkdir(userPath, { recursive: true });
@@ -67,6 +84,12 @@ export class ConfigManager {
 
   async deleteUser(username) {
     try {
+      // Ensure users object exists
+      if (!this.config.users) {
+        this.config.users = {};
+        return true;
+      }
+
       // Remove user directory
       const userPath = path.join(this.config.usersPath, username);
       await fs.rm(userPath, { recursive: true, force: true });
@@ -86,6 +109,12 @@ export class ConfigManager {
   }
 
   async setCurrentUser(username) {
+    // Ensure users object exists
+    if (!this.config.users) {
+      this.config.users = {};
+      throw new Error('User does not exist');
+    }
+
     if (!this.config.users[username]) {
       throw new Error('User does not exist');
     }
@@ -94,10 +123,20 @@ export class ConfigManager {
   }
 
   getConfig() {
+    // Ensure users object exists
+    if (!this.config.users) {
+      this.config.users = {};
+    }
     return this.config;
   }
 
   getCurrentUser() {
+    // Ensure users object exists
+    if (!this.config.users) {
+      this.config.users = {};
+      return null;
+    }
+
     if (!this.config.currentUser || !this.config.users[this.config.currentUser]) {
       return null;
     }

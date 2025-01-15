@@ -30,7 +30,7 @@ app.get('/api/config', async (req, res) => {
     // Redact sensitive information
     const sanitizedConfig = {
       ...config,
-      users: Object.fromEntries(
+      users: config.users ? Object.fromEntries(
         Object.entries(config.users).map(([username, userData]) => [
           username,
           {
@@ -38,7 +38,7 @@ app.get('/api/config', async (req, res) => {
             steamApiKey: userData.steamApiKey ? '[REDACTED]' : ''
           }
         ])
-      ),
+      ) : {},
       steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
     };
 
@@ -63,9 +63,14 @@ app.post('/api/config', async (req, res) => {
       return;
     }
 
+    // Ensure users object exists
+    if (!newConfig.users) {
+      newConfig.users = {};
+    }
+
     // Preserve existing user data
     const currentConfig = configManager.getConfig();
-    newConfig.users = currentConfig.users;
+    newConfig.users = currentConfig.users || {};
 
     console.log('Saving admin config (sensitive data redacted)', {
       ...newConfig,
