@@ -13,14 +13,16 @@ import {
   ListItemIcon,
   ListItemText,
   InputBase,
-  alpha,
+  Collapse,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
   Settings as SettingsIcon,
   SportsEsports as GamesIcon,
-  Group as SessionsIcon,
   Search as SearchIcon,
+  ExpandLess,
+  ExpandMore,
+  Games as SteamIcon,
 } from '@mui/icons-material';
 import { Configuration } from './Configuration';
 import { styled } from '@mui/material/styles';
@@ -30,9 +32,9 @@ const drawerWidth = 240;
 const Search = styled('div')(({ theme }) => ({
   position: 'relative',
   borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
+  backgroundColor: 'rgba(255, 255, 255, 0.1)',
   '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   marginRight: theme.spacing(2),
   marginLeft: 0,
@@ -66,49 +68,139 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
-interface LayoutProps {
+export interface LayoutProps {
   children: React.ReactNode;
-  onSearch?: (query: string) => void;
+  onSearch: (query: string) => void;
+  onTabChange: (tab: string) => void;
+  currentTab: string;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, onSearch }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange, currentTab }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
+  const [librariesOpen, setLibrariesOpen] = useState(true);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const handleNavigation = (section: string) => {
-    if (section === 'Library') {
-      setShowConfig(false);
-    }
-    setMobileOpen(false);
+  const handleLibrariesClick = () => {
+    setLibrariesOpen(!librariesOpen);
   };
 
   const drawer = (
-    <Box sx={{ overflow: 'auto' }}>
-      <Toolbar>
-        <Typography variant="h6" noWrap component="div">
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ 
+        p: 2.5,
+        display: 'flex', 
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            fontWeight: 600,
+            background: 'linear-gradient(45deg, #1E88E5, #90CAF9)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '0.5px'
+          }}
+        >
           Wolf Manager
         </Typography>
-      </Toolbar>
-      <Divider />
-      <List>
+      </Box>
+      <Divider sx={{ opacity: 0.1, mx: 2, mb: 1 }} />
+      <List sx={{ px: 1 }}>
         <ListItem disablePadding>
-          <ListItemButton onClick={() => handleNavigation('Sessions')}>
+          <ListItemButton 
+            onClick={handleLibrariesClick}
+            sx={{ mb: librariesOpen ? 1 : 0 }}
+          >
             <ListItemIcon>
-              <SessionsIcon />
+              <GamesIcon sx={{ color: currentTab.startsWith('library') ? '#1E88E5' : undefined }} />
             </ListItemIcon>
-            <ListItemText primary="Active Sessions" />
+            <ListItemText 
+              primary="Libraries" 
+              primaryTypographyProps={{
+                sx: { 
+                  fontWeight: currentTab.startsWith('library') ? 500 : 400,
+                  color: currentTab.startsWith('library') ? '#fff' : 'rgba(255,255,255,0.7)'
+                }
+              }}
+            />
+            {librariesOpen ? <ExpandLess /> : <ExpandMore />}
           </ListItemButton>
         </ListItem>
+        <Collapse in={librariesOpen} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            <ListItem disablePadding>
+              <ListItemButton 
+                onClick={() => onTabChange('library/all')}
+                selected={currentTab === 'library/all'}
+                sx={{ pl: 4 }}
+              >
+                <ListItemIcon>
+                  <GamesIcon sx={{ 
+                    color: currentTab === 'library/all' ? '#1E88E5' : undefined,
+                    opacity: 0.7,
+                    fontSize: '1.2rem'
+                  }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="All Games" 
+                  primaryTypographyProps={{
+                    sx: { 
+                      fontWeight: currentTab === 'library/all' ? 500 : 400,
+                      color: currentTab === 'library/all' ? '#fff' : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.95rem'
+                    }
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+            <ListItem disablePadding>
+              <ListItemButton 
+                onClick={() => onTabChange('library/steam')}
+                selected={currentTab === 'library/steam'}
+                sx={{ pl: 4 }}
+              >
+                <ListItemIcon>
+                  <SteamIcon sx={{ 
+                    color: currentTab === 'library/steam' ? '#1E88E5' : undefined,
+                    opacity: 0.7,
+                    fontSize: '1.2rem'
+                  }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Steam" 
+                  primaryTypographyProps={{
+                    sx: { 
+                      fontWeight: currentTab === 'library/steam' ? 500 : 400,
+                      color: currentTab === 'library/steam' ? '#fff' : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.95rem'
+                    }
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          </List>
+        </Collapse>
         <ListItem disablePadding>
-          <ListItemButton onClick={() => handleNavigation('Library')}>
+          <ListItemButton 
+            onClick={() => onTabChange('config')}
+            selected={currentTab === 'config'}
+          >
             <ListItemIcon>
-              <GamesIcon />
+              <SettingsIcon sx={{ color: currentTab === 'config' ? '#1E88E5' : undefined }} />
             </ListItemIcon>
-            <ListItemText primary="Library" />
+            <ListItemText 
+              primary="Configuration"
+              primaryTypographyProps={{
+                sx: { 
+                  fontWeight: currentTab === 'config' ? 500 : 400,
+                  color: currentTab === 'config' ? '#fff' : 'rgba(255,255,255,0.7)'
+                }
+              }}
+            />
           </ListItemButton>
         </ListItem>
       </List>
@@ -144,7 +236,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch }) => {
             />
           </Search>
           <Box sx={{ flexGrow: 1 }} />
-          <IconButton color="inherit" onClick={() => setShowConfig(true)}>
+          <IconButton color="inherit" onClick={() => onTabChange('config')}>
             <SettingsIcon />
           </IconButton>
         </Toolbar>
@@ -187,7 +279,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch }) => {
           mt: '64px',
         }}
       >
-        {showConfig ? <Configuration /> : children}
+        {currentTab === 'config' ? <Configuration /> : children}
       </Box>
     </Box>
   );

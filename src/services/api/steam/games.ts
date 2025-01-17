@@ -1,37 +1,15 @@
 import { SteamGame } from './types';
 import ConfigService from '../config';
 import Logger from '../logs';
+import { handleApiResponse, handleApiError } from '../base';
 
 export async function getOwnedGames(username?: string): Promise<SteamGame[]> {
   Logger.debug('Starting owned games fetch process', 'SteamService', { username });
-  await ConfigService.loadConfig();
-  const config = ConfigService.getConfig();
   
-  // If no username provided, use current user
-  if (!username) {
-    if (!config.currentUser) {
-      Logger.error('No user selected', null, 'SteamService');
-      throw new Error('Please select a user in the configuration');
-    }
-    username = config.currentUser;
-  }
-
-  // Get user's Steam credentials
-  const user = config.users[username];
-  if (!user) {
-    Logger.error('User not found', null, 'SteamService');
-    throw new Error(`User ${username} not found`);
-  }
-
-  if (!user.steamId || !user.steamApiKey) {
-    Logger.error('Missing Steam credentials', null, 'SteamService');
-    throw new Error('Steam ID and API key are required');
-  }
-
   try {
     Logger.debug('Making Steam API request', 'SteamService', { username });
     const response = await fetch(
-      `/api/steam/games?username=${encodeURIComponent(username)}`
+      `/api/steam/games${username ? `?username=${encodeURIComponent(username)}` : ''}`
     );
 
     if (!response.ok) {

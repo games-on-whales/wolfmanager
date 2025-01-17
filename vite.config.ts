@@ -10,5 +10,17 @@ export default defineConfig({
   preview: {
     port: 9971,
     host: true
+  },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-mui': ['@mui/material', '@mui/icons-material'],
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-utils': ['lodash']
+        }
+      }
+    }
   }
 }) 

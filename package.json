@@ -19,7 +19,8 @@
     "express": "^4.18.2",
     "node-fetch": "^3.3.2",
     "cors": "^2.8.5",
-    "archiver": "^6.0.1"
+    "archiver": "^6.0.1",
+    "lodash": "^4.17.21"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
@@ -34,6 +35,7 @@
     "@emotion/types": "^0.7.0",
     "@types/react-router-dom": "^5.3.3",
     "@mui/types": "^7.2.13",
-    "@types/node-fetch": "^2.6.11"
+    "@types/node-fetch": "^2.6.11",
+    "@types/lodash": "^4.14.202"
   }
 } 

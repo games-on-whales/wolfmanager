@@ -7,7 +7,8 @@ import fs from 'fs';
 import path from 'path';
 import { ConfigManager } from './config/ConfigManager.js';
 import archiver from 'archiver';
-import { Config, UserConfig } from '../src/types/config';
+import { Config, UserConfig, SteamGame } from '../src/types/config';
+import { GameManager } from './games/GameManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -81,11 +82,33 @@ app.get('/api/config', async (req, res) => {
 app.post('/api/config', async (req, res) => {
   try {
     const configManager = await ConfigManager.getInstance();
-    const newConfig = req.body;
+    const currentConfig = configManager.getConfig();
+    const newConfig = req.body as Config;
 
-    await configManager.saveConfig(newConfig);
+    // Merge the configs, preserving sensitive data
+    const mergedConfig: Config = {
+      ...currentConfig,
+      ...newConfig,
+      steamGridDbApiKey: newConfig.steamGridDbApiKey === '[REDACTED]' 
+        ? currentConfig.steamGridDbApiKey 
+        : newConfig.steamGridDbApiKey,
+      users: Object.fromEntries(
+        Object.entries(newConfig.users || {}).map(([username, userData]) => [
+          username,
+          {
+            ...userData,
+            steamApiKey: (userData as UserConfig).steamApiKey === '[REDACTED]'
+              ? (currentConfig.users[username]?.steamApiKey || '')
+              : (userData as UserConfig).steamApiKey
+          }
+        ])
+      )
+    };
+
+    // Save the merged config
+    await configManager.saveConfig(mergedConfig);
     
-    // Get the updated config and sanitize it
+    // Get the updated config and sanitize it for the response only
     const config = configManager.getConfig();
     const sanitizedConfig: Config = {
       ...config,
@@ -109,17 +132,6 @@ app.post('/api/config', async (req, res) => {
   }
 });
 
-interface SteamGame {
-  appid: number;
-  name: string;
-  playtime_forever: number;
-  img_icon_url: string;
-  has_community_visible_stats: boolean;
-  playtime_windows_forever: number;
-  playtime_mac_forever: number;
-  playtime_linux_forever: number;
-}
-
 interface SteamApiResponse {
   response: {
     game_count: number;
@@ -131,6 +143,7 @@ interface SteamApiResponse {
 app.get('/api/steam/games', async (req, res) => {
   try {
     const configManager = await ConfigManager.getInstance();
+    const gameManager = await GameManager.getInstance();
     const currentUser = configManager.getCurrentUser();
     
     serverLog('debug', 'Attempting to fetch games', 'Server', { 
@@ -154,9 +167,24 @@ app.get('/api/steam/games', async (req, res) => {
       return res.status(400).json({ error: 'Missing Steam credentials' });
     }
 
+    // Check if we have cached data and it's not too old (24 hours)
+    const lastUpdated = gameManager.getLastUpdated(currentUser.username);
+    const now = new Date();
+    const useCache = lastUpdated && 
+      (now.getTime() - new Date(lastUpdated).getTime() < 24 * 60 * 60 * 1000);
+
+    if (useCache) {
+      serverLog('debug', 'Using cached games list', 'Server', {
+        username: currentUser.username,
+        lastUpdated
+      });
+      const games = await gameManager.getUserGames(currentUser.username);
+      return res.json({ response: { games, game_count: games.length } });
+    }
+
     const { steamId, steamApiKey } = currentUser;
     const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
-    serverLog('debug', 'Fetching owned games', 'Server', { 
+    serverLog('debug', 'Fetching owned games from Steam API', 'Server', { 
       steamId, 
       url: url.replace(steamApiKey, '[REDACTED]'),
       username: currentUser.username
@@ -187,6 +215,9 @@ app.get('/api/steam/games', async (req, res) => {
         serverLog('error', errorMsg, 'Server', { data });
         return res.status(500).json({ error: errorMsg, details: data });
       }
+
+      // Update the game manager with the new data
+      await gameManager.updateUserGames(currentUser.username, data.response.games);
       
       serverLog('info', `Successfully retrieved ${data.response.games.length} games`, 'Server', {
         username: currentUser.username
@@ -212,26 +243,38 @@ app.get('/api/steam/games', async (req, res) => {
 
 interface SteamGridResponse {
   success: boolean;
-  data: {
+  data: Array<{
     id: number;
-    grids: Array<{
-      id: string;
-      score: number;
-      style: string;
-      url: string;
-    }>;
-  };
+    score: number;
+    style: string;
+    width: number;
+    height: number;
+    nsfw: boolean;
+    humor: boolean;
+    url: string;
+    thumb: string;
+    lock: boolean;
+    epilepsy: boolean;
+    upvotes: number;
+    downvotes: number;
+    author: {
+      name: string;
+      steam64: string;
+      avatar: string;
+    };
+  }>;
 }
 
 // SteamGridDB proxy endpoint
 app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
   try {
     const { appId } = req.params;
-    const gridDbKey = req.headers['x-steamgriddb-key'] as string;
-
-    if (!gridDbKey) {
-      serverLog('error', 'Missing SteamGridDB API key', 'Server', { appId });
-      throw new Error('SteamGridDB API key is required');
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+    
+    if (!config.steamGridDbApiKey) {
+      serverLog('error', 'SteamGridDB API key not configured', 'Server', { appId });
+      throw new Error('SteamGridDB API key is not configured');
     }
 
     serverLog('debug', 'Fetching artwork', 'Server', { appId });
@@ -239,7 +282,7 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
       `https://www.steamgriddb.com/api/v2/grids/steam/${appId}`,
       {
         headers: {
-          Authorization: `Bearer ${gridDbKey}`
+          Authorization: `Bearer ${config.steamGridDbApiKey}`
         }
       }
     );
@@ -257,20 +300,26 @@ app.get('/api/steamgrid/artwork/:appId', async (req, res) => {
     serverLog('debug', 'Raw SteamGridDB response', 'Server', rawData);
 
     const data = rawData as SteamGridResponse;
-    serverLog('info', 'Retrieved artwork options', 'Server', {
-      appId,
-      count: data.data?.grids?.length || 0,
-      styles: data.data?.grids ? [...new Set(data.data.grids.map(g => g.style))] : []
-    });
     
     // Transform response to match our expected structure
     const transformedData = {
       success: data.success,
       data: {
         id: parseInt(appId),
-        grids: data.data?.grids || []
+        grids: data.data.map(grid => ({
+          id: grid.id.toString(),
+          score: grid.score,
+          style: grid.style,
+          url: grid.url
+        }))
       }
     };
+    
+    serverLog('info', 'Retrieved artwork options', 'Server', {
+      appId,
+      count: transformedData.data.grids.length,
+      styles: [...new Set(transformedData.data.grids.map(g => g.style))]
+    });
     
     res.json(transformedData);
   } catch (error) {
@@ -477,7 +526,7 @@ app.post('/api/users', async (req, res) => {
       return res.status(400).json({ error: 'Failed to validate Steam credentials' });
     }
 
-    // Add the new user
+    // Add the new user with original values
     config.users[username] = {
       steamId,
       steamApiKey
@@ -487,6 +536,7 @@ app.post('/api/users', async (req, res) => {
     config.currentUser = username;
     serverLog('debug', 'Automatically selecting new user', 'Server', { username });
 
+    // Save the original config
     await configManager.saveConfig(config);
     serverLog('info', 'User added and selected successfully', 'Server', { username });
 
@@ -516,6 +566,7 @@ app.delete('/api/users/:username', async (req, res) => {
   try {
     const { username } = req.params;
     const configManager = await ConfigManager.getInstance();
+    const gameManager = await GameManager.getInstance();
     const config = configManager.getConfig();
 
     if (!config.users[username]) {
@@ -527,11 +578,12 @@ app.delete('/api/users/:username', async (req, res) => {
       config.currentUser = undefined;
     }
 
-    // Delete the user
+    // Delete the user's games
+    await gameManager.deleteUserGames(username);
+
+    // Delete the user from config
     delete config.users[username];
     await configManager.saveConfig(config);
-    
-    serverLog('info', 'User deleted successfully', 'Server', { username });
 
     // Return sanitized config
     const sanitizedConfig = {
@@ -548,6 +600,7 @@ app.delete('/api/users/:username', async (req, res) => {
       steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
     };
 
+    serverLog('info', 'User deleted successfully', 'Server', { username });
     res.json(sanitizedConfig);
   } catch (error) {
     serverLog('error', 'Failed to delete user', 'Server', error instanceof Error ? error.message : String(error));
@@ -601,12 +654,13 @@ app.put('/api/users/:username', async (req, res) => {
       return res.status(400).json({ error: 'Failed to validate Steam credentials' });
     }
 
-    // Update the user
+    // Update the user with original values
     config.users[username] = {
       steamId,
       steamApiKey
     };
 
+    // Save the original config
     await configManager.saveConfig(config);
     serverLog('info', 'User updated successfully', 'Server', { username });
 
@@ -682,6 +736,65 @@ app.post('/api/logs/clear', async (req, res) => {
   } catch (error) {
     serverLog('error', 'Failed to clear logs', 'Server', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: 'Failed to clear logs' });
+  }
+});
+
+// Get unredacted SteamGridDB API key
+app.get('/api/config/steamgriddb-key', async (req, res) => {
+  try {
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+    
+    if (!config.steamGridDbApiKey) {
+      res.json({ key: '' });
+    } else {
+      res.json({ key: config.steamGridDbApiKey });
+    }
+  } catch (error) {
+    serverLog('error', 'Error getting SteamGridDB API key', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to get API key' });
+  }
+});
+
+// Get unredacted Steam API key for a user
+app.get('/api/users/:username/steam-key', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+    
+    if (!config.users[username]) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ key: config.users[username].steamApiKey });
+  } catch (error) {
+    serverLog('error', 'Error getting Steam API key', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to get API key' });
+  }
+});
+
+// Clear artwork cache
+app.post('/api/cache/artwork/clear', (req, res) => {
+  try {
+    const artworkPath = path.join(CACHE_DIR, '*.jpg');
+    serverLog('info', 'Clearing artwork cache', 'Server', { path: artworkPath });
+
+    // Delete all jpg files in the cache directory
+    const files = fs.readdirSync(CACHE_DIR);
+    let cleared = 0;
+    for (const file of files) {
+      if (file.endsWith('.jpg')) {
+        fs.unlinkSync(path.join(CACHE_DIR, file));
+        cleared++;
+      }
+    }
+
+    serverLog('info', 'Artwork cache cleared', 'Server', { filesCleared: cleared });
+    res.json({ success: true, filesCleared: cleared });
+  } catch (error) {
+    serverLog('error', 'Failed to clear artwork cache', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to clear artwork cache' });
   }
 });
 

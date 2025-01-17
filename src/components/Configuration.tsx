@@ -5,7 +5,7 @@ import { Config, AdminConfig, UserConfig } from '../types/config';
 import { AdminSettings } from './AdminSettings';
 import { UserSettings } from './UserSettings';
 import { TaskManager } from './TaskManager';
-import { LogViewer } from './LogViewer';
+import LogViewer from './LogViewer';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -139,6 +139,28 @@ export const Configuration: React.FC = () => {
     }
   };
 
+  const handleUpdateUser = async (username: string, userConfig: UserConfig) => {
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userConfig)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update user');
+      }
+
+      await ConfigService.loadConfig();
+      setConfig(ConfigService.getConfig());
+    } catch (error) {
+      LogService.error('Failed to update user', error);
+      throw error;
+    }
+  };
+
   if (isLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -172,6 +194,7 @@ export const Configuration: React.FC = () => {
           onAddUser={handleAddUser}
           onDeleteUser={handleDeleteUser}
           onSelectUser={handleSelectUser}
+          onUpdateUser={handleUpdateUser}
         />
       </TabPanel>
 

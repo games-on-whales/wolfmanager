@@ -1,9 +1,50 @@
 import { Task, TaskStatus, TaskSubscriber } from './types';
 import Logger from '../logs';
+import SteamService from '../steam';
 
 class TaskService {
   private tasks: Task[] = [];
   private subscribers: TaskSubscriber[] = [];
+  private gamesListTaskId: string;
+  private artworkTaskId: string;
+  private clearCacheTaskId: string;
+
+  constructor() {
+    // Create the persistent tasks
+    this.gamesListTaskId = crypto.randomUUID();
+    this.artworkTaskId = crypto.randomUUID();
+    this.clearCacheTaskId = crypto.randomUUID();
+
+    this.tasks = [
+      {
+        id: this.gamesListTaskId,
+        name: 'Refresh Games List',
+        status: TaskStatus.COMPLETED,
+        progress: 0,
+        message: 'Idle',
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString()
+      },
+      {
+        id: this.artworkTaskId,
+        name: 'Refresh Game Artwork',
+        status: TaskStatus.COMPLETED,
+        progress: 0,
+        message: 'Idle',
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString()
+      },
+      {
+        id: this.clearCacheTaskId,
+        name: 'Clear Artwork Cache',
+        status: TaskStatus.COMPLETED,
+        progress: 0,
+        message: 'Idle',
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString()
+      }
+    ];
+  }
 
   subscribe(subscriber: TaskSubscriber): () => void {
     this.subscribers.push(subscriber);
@@ -20,35 +61,7 @@ class TaskService {
     this.subscribers.forEach(subscriber => subscriber(this.tasks));
   }
 
-  private cleanupOldTasks(): void {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    this.tasks = this.tasks.filter(task => {
-      if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.FAILED) {
-        const endTime = task.endTime ? new Date(task.endTime) : new Date();
-        return endTime > oneHourAgo;
-      }
-      return true;
-    });
-  }
-
-  createTask(name: string): Task {
-    const task: Task = {
-      id: crypto.randomUUID(),
-      name,
-      status: TaskStatus.PENDING,
-      progress: 0,
-      startTime: new Date().toISOString()
-    };
-
-    this.tasks.push(task);
-    this.cleanupOldTasks();
-    this.notifySubscribers();
-    Logger.debug('Task created', 'TaskService', task);
-
-    return task;
-  }
-
-  updateTask(
+  private updateTask(
     taskId: string,
     update: Partial<Pick<Task, 'status' | 'progress' | 'message' | 'error'>>
   ): void {
@@ -62,24 +75,95 @@ class TaskService {
 
     if (update.status === TaskStatus.COMPLETED || update.status === TaskStatus.FAILED) {
       task.endTime = new Date().toISOString();
+    } else if (update.status === TaskStatus.RUNNING) {
+      task.startTime = new Date().toISOString();
+      task.endTime = undefined;
     }
 
     this.notifySubscribers();
     Logger.debug('Task updated', 'TaskService', { taskId, update });
   }
 
-  removeTask(taskId: string): void {
-    const index = this.tasks.findIndex(t => t.id === taskId);
-    if (index !== -1) {
-      this.tasks.splice(index, 1);
-      this.notifySubscribers();
-      Logger.debug('Task removed', 'TaskService', { taskId });
+  getTasks(): Task[] {
+    return this.tasks;
+  }
+
+  async refreshGameArtwork(): Promise<void> {
+    try {
+      this.updateTask(this.artworkTaskId, {
+        status: TaskStatus.RUNNING,
+        message: 'Starting artwork refresh...',
+        progress: 0
+      });
+
+      await SteamService.refreshAllArtwork();
+      
+      this.updateTask(this.artworkTaskId, {
+        status: TaskStatus.COMPLETED,
+        message: 'Artwork refresh completed',
+        progress: 100
+      });
+    } catch (error) {
+      this.updateTask(this.artworkTaskId, {
+        status: TaskStatus.FAILED,
+        error: error instanceof Error ? error : new Error('Unknown error'),
+        message: 'Failed to refresh artwork'
+      });
+      throw error;
     }
   }
 
-  getTasks(): Task[] {
-    this.cleanupOldTasks();
-    return this.tasks;
+  async refreshGamesList(): Promise<void> {
+    try {
+      this.updateTask(this.gamesListTaskId, {
+        status: TaskStatus.RUNNING,
+        message: 'Fetching games list...',
+        progress: 0
+      });
+
+      await SteamService.getOwnedGames();
+      
+      this.updateTask(this.gamesListTaskId, {
+        status: TaskStatus.COMPLETED,
+        message: 'Games list updated',
+        progress: 100
+      });
+    } catch (error) {
+      this.updateTask(this.gamesListTaskId, {
+        status: TaskStatus.FAILED,
+        error: error instanceof Error ? error : new Error('Unknown error'),
+        message: 'Failed to refresh games list'
+      });
+      throw error;
+    }
+  }
+
+  async clearArtworkCache(): Promise<void> {
+    try {
+      this.updateTask(this.clearCacheTaskId, {
+        status: TaskStatus.RUNNING,
+        message: 'Clearing artwork cache...',
+        progress: 0
+      });
+
+      const response = await fetch('/api/cache/artwork/clear', { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to clear artwork cache');
+      }
+      
+      this.updateTask(this.clearCacheTaskId, {
+        status: TaskStatus.COMPLETED,
+        message: 'Artwork cache cleared',
+        progress: 100
+      });
+    } catch (error) {
+      this.updateTask(this.clearCacheTaskId, {
+        status: TaskStatus.FAILED,
+        error: error instanceof Error ? error : new Error('Unknown error'),
+        message: 'Failed to clear artwork cache'
+      });
+      throw error;
+    }
   }
 }
 

@@ -7,13 +7,17 @@ import {
   ListItem,
   ListItemText,
   LinearProgress,
-  Chip
+  Chip,
+  IconButton,
+  Tooltip
 } from '@mui/material';
+import { PlayArrow as PlayIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { TaskService, Task, TaskStatus } from '../services';
 import { LogService } from '../services';
 
 export const TaskManager: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [executing, setExecuting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const subscription = TaskService.subscribe(setTasks);
@@ -35,6 +39,45 @@ export const TaskManager: React.FC = () => {
     }
   };
 
+  const formatTime = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleString();
+  };
+
+  const handleExecuteTask = async (task: Task) => {
+    if (task.status === TaskStatus.RUNNING || executing[task.id]) {
+      return;
+    }
+
+    setExecuting(prev => ({ ...prev, [task.id]: true }));
+    try {
+      switch (task.name) {
+        case 'Refresh Games List':
+          await TaskService.refreshGamesList();
+          break;
+        case 'Refresh Game Artwork':
+          await TaskService.refreshGameArtwork();
+          break;
+        case 'Clear Artwork Cache':
+          await TaskService.clearArtworkCache();
+          break;
+      }
+    } catch (error) {
+      LogService.error('Failed to execute task', error);
+    } finally {
+      setExecuting(prev => ({ ...prev, [task.id]: false }));
+    }
+  };
+
+  const getTaskIcon = (task: Task) => {
+    switch (task.name) {
+      case 'Clear Artwork Cache':
+        return <DeleteIcon />;
+      default:
+        return <PlayIcon />;
+    }
+  };
+
   return (
     <Paper sx={{ p: 3, maxWidth: 800, mx: 'auto' }}>
       <Typography variant="h5" gutterBottom>
@@ -48,8 +91,22 @@ export const TaskManager: React.FC = () => {
       ) : (
         <List>
           {tasks.map((task: Task) => (
-            <ListItem key={task.id} divider>
-              <Box sx={{ width: '100%' }}>
+            <ListItem 
+              key={task.id} 
+              divider
+              secondaryAction={
+                <Tooltip title={`Run ${task.name.toLowerCase()}`}>
+                  <IconButton
+                    edge="end"
+                    onClick={() => handleExecuteTask(task)}
+                    disabled={task.status === TaskStatus.RUNNING || executing[task.id]}
+                  >
+                    {getTaskIcon(task)}
+                  </IconButton>
+                </Tooltip>
+              }
+            >
+              <Box sx={{ width: '100%', pr: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle1">
                     {task.name}
@@ -84,6 +141,17 @@ export const TaskManager: React.FC = () => {
                     Error: {task.error.message}
                   </Typography>
                 )}
+
+                <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Started: {formatTime(task.startTime)}
+                  </Typography>
+                  {task.endTime && (
+                    <Typography variant="caption" color="text.secondary">
+                      Completed: {formatTime(task.endTime)}
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             </ListItem>
           ))}

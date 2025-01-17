@@ -1,90 +1,70 @@
-import { SteamGridResponse } from './types';
+import { SteamGridResponse, SteamGridImage } from './types';
 import ConfigService from '../config';
 import CacheService from '../cache';
 import Logger from '../logs';
 import { getOwnedGames } from './games';
 
-export async function getGameArtwork(appId: number): Promise<string | null> {
-  Logger.debug('Starting artwork fetch process', 'SteamService', { appId });
-  await ConfigService.loadConfig();
-  const config = ConfigService.getConfig();
-  
-  if (!config.steamGridDbApiKey) {
-    Logger.warn('SteamGridDB API key not configured, skipping artwork fetch', 'SteamService');
-    return null;
-  }
-
-  // Check cache first
-  Logger.debug('Checking artwork cache', 'SteamService', { appId });
-  const cachedArtwork = await CacheService.getCachedArtwork(appId);
-  if (cachedArtwork) {
-    Logger.info('Using cached artwork', 'SteamService', { appId });
-    return cachedArtwork;
-  }
-  Logger.debug('No cached artwork found, fetching from API', 'SteamService', { appId });
-
+export const getGameArtwork = async (appId: number): Promise<string | null> => {
   try {
-    Logger.debug('Making SteamGridDB API request', 'SteamService', { appId });
-    const response = await fetch(
-      `/api/steamgrid/artwork/${appId}`,
-      {
-        headers: {
-          'X-SteamGridDB-Key': config.steamGridDbApiKey
-        }
-      }
-    );
-
-    if (!response.ok) {
-      Logger.error('SteamGridDB API request failed', {
-        status: response.status,
-        statusText: response.statusText
-      }, 'SteamService');
-      throw new Error(`SteamGridDB API request failed: ${response.statusText}`);
+    // First try to get from cache
+    const cachedArtwork = await getCachedArtwork(appId);
+    if (cachedArtwork) {
+      Logger.debug('Using cached artwork', 'SteamService', { appId });
+      return cachedArtwork;
     }
 
-    const data = await response.json() as SteamGridResponse;
-    Logger.debug('Received SteamGridDB response', 'SteamService', { 
-      appId, 
-      success: data.success,
-      gridCount: data.data?.grids?.length || 0,
-      availableStyles: data.data?.grids ? [...new Set(data.data.grids.map(g => g.style))] : [],
-      availableDimensions: data.data?.grids ? [...new Set(data.data.grids.map(g => `${g.width}x${g.height}`))] : []
-    });
-    
-    // Find the first 600x900 grid in the alternate style
-    const grid = data.data?.grids?.find(item => 
-      item.style === 'alternate' && 
-      item.width === 600 && 
-      item.height === 900
-    );
-
-    if (grid?.url) {
-      Logger.info('Found suitable artwork', 'SteamService', { 
-        appId,
-        style: grid.style,
-        dimensions: `${grid.width}x${grid.height}`,
-        url: grid.url
-      });
-      const cachedUrl = await CacheService.cacheArtwork(appId, grid.url);
-      if (cachedUrl) {
-        Logger.info('Successfully cached artwork', 'SteamService', { appId });
-        return cachedUrl;
-      }
-    } else {
-      const availableGrids = data.data?.grids || [];
-      Logger.warn('No suitable artwork found', 'SteamService', { 
-        appId,
-        availableStyles: [...new Set(availableGrids.map(item => item.style))],
-        availableDimensions: [...new Set(availableGrids.map(item => `${item.width}x${item.height}`))]
-      });
+    // If not in cache, fetch from SteamGridDB
+    const options = await getArtworkOptions(appId);
+    if (!options || options.length === 0) {
+      Logger.debug('No artwork options available', 'SteamService', { appId });
+      return null;
     }
 
-    return null;
+    // Find suitable artwork
+    const artwork = findSuitableArtwork(options);
+    if (!artwork) {
+      Logger.debug('No suitable artwork found', 'SteamService', { appId });
+      return null;
+    }
+
+    // Try to cache the artwork
+    try {
+      await cacheArtwork(appId, artwork.url);
+      const newCachedArtwork = await getCachedArtwork(appId);
+      if (newCachedArtwork) {
+        Logger.debug('Successfully cached and retrieved artwork', 'SteamService', { appId });
+        return newCachedArtwork;
+      }
+    } catch (cacheError) {
+      Logger.warn('Failed to cache artwork, using direct URL', 'SteamService');
+      return artwork.url;
+    }
+
+    // If caching failed but we have a URL, use it directly
+    Logger.debug('Using artwork URL directly', 'SteamService', { appId });
+    return artwork.url;
   } catch (error) {
-    Logger.error('Failed to fetch game artwork', error, 'SteamService');
+    Logger.error('Failed to get game artwork', 'SteamService');
     return null;
   }
-}
+};
+
+const getCachedArtwork = async (appId: number): Promise<string | null> => {
+  try {
+    const response = await fetch(`/api/cache/artwork/${appId}`);
+    if (!response.ok) {
+      if (response.status !== 404) {
+        Logger.warn('Failed to get cached artwork', 'SteamService');
+      }
+      return null;
+    }
+    const data = await response.json();
+    return data.url || null;
+  } catch (error) {
+    Logger.warn('Error getting cached artwork', 'SteamService');
+    return null;
+  }
+};
 
 export async function refreshAllArtwork(): Promise<void> {
   Logger.info('Starting artwork refresh for all games');
@@ -130,3 +110,80 @@ export async function refreshAllArtwork(): Promise<void> {
 
   Logger.info(`Artwork refresh complete. Processed ${processed} games`);
 } 
+
+const getArtworkOptions = async (appId: number): Promise<SteamGridImage[]> => {
+  try {
+    Logger.debug('Making SteamGridDB API request', 'SteamService', { appId });
+    const response = await fetch(`/api/steamgrid/artwork/${appId}`);
+
+    if (!response.ok) {
+      Logger.error('SteamGridDB API request failed', 'SteamService');
+      return [];
+    }
+
+    const data = await response.json() as SteamGridResponse;
+    const availableGrids = data.data?.grids || [];
+    
+    Logger.debug('Received SteamGridDB response', 'SteamService', { 
+      appId, 
+      success: data.success,
+      gridCount: availableGrids.length,
+      availableStyles: [...new Set(availableGrids.map(g => g.style))],
+      availableDimensions: [...new Set(availableGrids.map(g => `${g.width}x${g.height}`))]
+    });
+
+    return availableGrids;
+  } catch (error) {
+    Logger.error('Failed to fetch artwork options', 'SteamService');
+    return [];
+  }
+};
+
+const findSuitableArtwork = (options: SteamGridImage[]): SteamGridImage | null => {
+  // Try to find the best grid in this order:
+  // 1. 600x900 alternate style
+  // 2. Any 600x900
+  // 3. Any alternate style
+  // 4. First available grid
+  let artwork = options.find(item => 
+    item.style === 'alternate' && 
+    item.width === 600 && 
+    item.height === 900
+  );
+
+  if (!artwork) {
+    artwork = options.find(item => 
+      item.width === 600 && 
+      item.height === 900
+    );
+  }
+
+  if (!artwork) {
+    artwork = options.find(item => 
+      item.style === 'alternate'
+    );
+  }
+
+  if (!artwork && options.length > 0) {
+    artwork = options[0];
+  }
+
+  return artwork || null;
+};
+
+const cacheArtwork = async (appId: number, imageUrl: string): Promise<void> => {
+  const response = await fetch('/api/cache/artwork', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      appId: appId.toString(),
+      imageUrl
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to cache artwork: ${response.statusText}`);
+  }
+}; 

@@ -18,7 +18,7 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
-import { Visibility, VisibilityOff, Delete, Add } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Delete, Add, Edit } from '@mui/icons-material';
 import { UserConfig } from '../types/config';
 import { LogService } from '../services';
 
@@ -28,6 +28,13 @@ interface UserSettingsProps {
   onAddUser: (username: string, config: UserConfig) => Promise<void>;
   onDeleteUser: (username: string) => Promise<void>;
   onSelectUser: (username: string) => Promise<void>;
+  onUpdateUser: (username: string, config: UserConfig) => Promise<void>;
+}
+
+interface UserFormState {
+  username: string;
+  steamId: string;
+  steamApiKey: string;
 }
 
 export const UserSettings: React.FC<UserSettingsProps> = ({
@@ -35,37 +42,72 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
   currentUser,
   onAddUser,
   onDeleteUser,
-  onSelectUser
+  onSelectUser,
+  onUpdateUser
 }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showSteamKey, setShowSteamKey] = useState(false);
-  const [newUser, setNewUser] = useState({
+  const [editingUser, setEditingUser] = useState<string | null>(null);
+  const [userForm, setUserForm] = useState<UserFormState>({
     username: '',
     steamId: '',
     steamApiKey: ''
   });
 
+  const resetForm = () => {
+    setUserForm({
+      username: '',
+      steamId: '',
+      steamApiKey: ''
+    });
+    setShowSteamKey(false);
+  };
+
   const handleAddUser = async () => {
     try {
-      if (!newUser.username || !newUser.steamId || !newUser.steamApiKey) {
+      if (!userForm.username || !userForm.steamId || !userForm.steamApiKey) {
         setShowError('All fields are required');
         return;
       }
 
-      await onAddUser(newUser.username, {
-        steamId: newUser.steamId,
-        steamApiKey: newUser.steamApiKey
+      await onAddUser(userForm.username, {
+        steamId: userForm.steamId,
+        steamApiKey: userForm.steamApiKey
       });
 
       setShowAddDialog(false);
-      setNewUser({ username: '', steamId: '', steamApiKey: '' });
+      resetForm();
       setShowSuccess(true);
       LogService.info('User added successfully');
     } catch (error) {
       setShowError('Failed to add user');
       LogService.error('Failed to add user', error);
+    }
+  };
+
+  const handleEditUser = async () => {
+    try {
+      if (!editingUser || !userForm.steamId || !userForm.steamApiKey) {
+        setShowError('All fields are required');
+        return;
+      }
+
+      await onUpdateUser(editingUser, {
+        steamId: userForm.steamId,
+        steamApiKey: userForm.steamApiKey
+      });
+
+      setShowEditDialog(false);
+      resetForm();
+      setEditingUser(null);
+      setShowSuccess(true);
+      LogService.info('User updated successfully');
+    } catch (error) {
+      setShowError('Failed to update user');
+      LogService.error('Failed to update user', error);
     }
   };
 
@@ -91,6 +133,75 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     }
   };
 
+  const openEditDialog = (username: string) => {
+    const user = users[username];
+    setEditingUser(username);
+    setUserForm({
+      username,
+      steamId: user.steamId,
+      steamApiKey: user.steamApiKey
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleToggleSteamKey = async () => {
+    if (!showSteamKey && editingUser) {
+      try {
+        const response = await fetch(`/api/users/${encodeURIComponent(editingUser)}/steam-key`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch API key');
+        }
+        const data = await response.json();
+        setUserForm(prev => ({ ...prev, steamApiKey: data.key }));
+      } catch (error) {
+        LogService.error('Failed to fetch unredacted API key', error);
+        setShowError('Failed to reveal API key');
+        return;
+      }
+    }
+    setShowSteamKey(!showSteamKey);
+  };
+
+  const UserFormFields = () => (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2, minWidth: 400 }}>
+      {!editingUser && (
+        <TextField
+          label="Username"
+          value={userForm.username}
+          onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+          helperText="Choose a username for this user"
+        />
+      )}
+      
+      <TextField
+        label="Steam ID"
+        value={userForm.steamId}
+        onChange={(e) => setUserForm({ ...userForm, steamId: e.target.value })}
+        helperText="Steam ID for this user"
+      />
+
+      <TextField
+        label="Steam API Key"
+        type={showSteamKey ? 'text' : 'password'}
+        value={userForm.steamApiKey}
+        onChange={(e) => setUserForm({ ...userForm, steamApiKey: e.target.value })}
+        helperText="API key from Steam Developer Portal"
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                onClick={handleToggleSteamKey}
+                edge="end"
+              >
+                {showSteamKey ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
+    </Box>
+  );
+
   return (
     <Paper sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -100,7 +211,10 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         <Button
           variant="contained"
           startIcon={<Add />}
-          onClick={() => setShowAddDialog(true)}
+          onClick={() => {
+            resetForm();
+            setShowAddDialog(true);
+          }}
         >
           Add User
         </Button>
@@ -123,6 +237,16 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
                 edge="end"
                 onClick={(e) => {
                   e.stopPropagation();
+                  openEditDialog(username);
+                }}
+                sx={{ mr: 1 }}
+              >
+                <Edit />
+              </IconButton>
+              <IconButton
+                edge="end"
+                onClick={(e) => {
+                  e.stopPropagation();
                   handleDeleteUser(username);
                 }}
               >
@@ -136,41 +260,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       <Dialog open={showAddDialog} onClose={() => setShowAddDialog(false)}>
         <DialogTitle>Add New User</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2, minWidth: 400 }}>
-            <TextField
-              label="Username"
-              value={newUser.username}
-              onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-              helperText="Choose a username for this user"
-            />
-            
-            <TextField
-              label="Steam ID"
-              value={newUser.steamId}
-              onChange={(e) => setNewUser({ ...newUser, steamId: e.target.value })}
-              helperText="Steam ID for this user"
-            />
-
-            <TextField
-              label="Steam API Key"
-              type={showSteamKey ? 'text' : 'password'}
-              value={newUser.steamApiKey}
-              onChange={(e) => setNewUser({ ...newUser, steamApiKey: e.target.value })}
-              helperText="API key from Steam Developer Portal"
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowSteamKey(!showSteamKey)}
-                      edge="end"
-                    >
-                      {showSteamKey ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Box>
+          <UserFormFields />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowAddDialog(false)}>Cancel</Button>
@@ -178,9 +268,20 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
         </DialogActions>
       </Dialog>
 
+      <Dialog open={showEditDialog} onClose={() => setShowEditDialog(false)}>
+        <DialogTitle>Edit User: {editingUser}</DialogTitle>
+        <DialogContent>
+          <UserFormFields />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowEditDialog(false)}>Cancel</Button>
+          <Button onClick={handleEditUser} variant="contained">Save Changes</Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={showSuccess}
-        autoHideDuration={6000}
+        autoHideDuration={3000}
         onClose={() => setShowSuccess(false)}
       >
         <Alert severity="success">Operation completed successfully!</Alert>
@@ -188,7 +289,7 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
 
       <Snackbar
         open={!!showError}
-        autoHideDuration={6000}
+        autoHideDuration={3000}
         onClose={() => setShowError(null)}
       >
         <Alert severity="error">{showError}</Alert>

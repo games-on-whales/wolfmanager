@@ -52,10 +52,7 @@ class CacheService {
         throw new Error(`Failed to cache artwork: ${response.statusText}`);
       }
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      Logger.debug('Successfully cached artwork', 'CacheService', { appId });
-      return url;
+      return await this.getCachedArtwork(appId);
     } catch (error) {
       Logger.error('Failed to cache artwork', error, 'CacheService');
       return null;

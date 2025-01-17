@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { AdminConfig } from '../types/config';
-import { LogService, SteamService } from '../services';
+import { LogService } from '../services';
 
 interface AdminSettingsProps {
   config: AdminConfig;
@@ -27,7 +27,6 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSave = async () => {
     try {
@@ -44,21 +43,6 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
     }
   };
 
-  const handleRefreshArtwork = async () => {
-    try {
-      setIsRefreshing(true);
-      setShowError(null);
-      await SteamService.refreshAllArtwork();
-      setShowSuccess(true);
-      LogService.info('Artwork refresh completed successfully');
-    } catch (error) {
-      setShowError('Failed to refresh artwork');
-      LogService.error('Failed to refresh artwork', error);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
   const handleTextFieldChange = (field: keyof AdminConfig) => (e: ChangeEvent<HTMLInputElement>) => {
     setSettings({ ...settings, [field]: e.target.value });
   };
@@ -66,6 +50,24 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
   const handleDebugToggle = (e: ChangeEvent<HTMLInputElement>) => {
     setSettings({ ...settings, debugEnabled: e.target.checked });
     LogService.debug('Debug mode toggled', 'AdminSettings', { enabled: e.target.checked });
+  };
+
+  const handleToggleGridDbKey = async () => {
+    if (!showGridDbKey) {
+      try {
+        const response = await fetch('/api/config/steamgriddb-key');
+        if (!response.ok) {
+          throw new Error('Failed to fetch API key');
+        }
+        const data = await response.json();
+        setSettings(prev => ({ ...prev, steamGridDbApiKey: data.key }));
+      } catch (error) {
+        LogService.error('Failed to fetch unredacted API key', error);
+        setShowError('Failed to reveal API key');
+        return;
+      }
+    }
+    setShowGridDbKey(!showGridDbKey);
   };
 
   return (
@@ -106,7 +108,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
             endAdornment: (
               <InputAdornment position="end">
                 <IconButton
-                  onClick={() => setShowGridDbKey(!showGridDbKey)}
+                  onClick={handleToggleGridDbKey}
                   edge="end"
                 >
                   {showGridDbKey ? <VisibilityOff /> : <Visibility />}
@@ -132,37 +134,29 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ config, onSave }) 
             </Box>
           }
         />
-        
-        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+
+        <Box sx={{ mt: 2 }}>
           <Button 
             variant="contained" 
             onClick={handleSave}
-            disabled={isSaving || isRefreshing}
+            disabled={isSaving}
           >
             {isSaving ? 'Saving...' : 'Save Admin Settings'}
-          </Button>
-
-          <Button
-            variant="outlined"
-            onClick={handleRefreshArtwork}
-            disabled={isSaving || isRefreshing}
-          >
-            {isRefreshing ? 'Refreshing Artwork...' : 'Refresh Game Artwork'}
           </Button>
         </Box>
       </Box>
 
       <Snackbar
         open={showSuccess}
-        autoHideDuration={6000}
+        autoHideDuration={3000}
         onClose={() => setShowSuccess(false)}
       >
-        <Alert severity="success">Admin settings saved successfully!</Alert>
+        <Alert severity="success">Settings saved successfully</Alert>
       </Snackbar>
 
       <Snackbar
         open={!!showError}
-        autoHideDuration={6000}
+        autoHideDuration={3000}
         onClose={() => setShowError(null)}
       >
         <Alert severity="error">{showError}</Alert>

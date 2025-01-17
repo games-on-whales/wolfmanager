@@ -1,0 +1,2 @@
+{"timestamp":"2025-01-17T01:19:56.040Z","level":"info","message":"Sending config to client (sensitive data redacted)","component":"Server","data":{"libraryPath":"","usersPath":"/config/users","cachePath":"/config/cache/artwork","steamGridDbApiKey":"","debugEnabled":false,"users":{}}}
+{"timestamp":"2025-01-17T01:19:56.056Z","level":"info","message":"Sending config to client (sensitive data redacted)","component":"Server","data":{"libraryPath":"","usersPath":"/config/users","cachePath":"/config/cache/artwork","steamGridDbApiKey":"","debugEnabled":false,"users":{}}}
