@@ -22,14 +22,16 @@ import {
   Alert,
   Snackbar,
   InputAdornment,
+  ListItemSecondaryAction,
 } from '@mui/material';
 import {
   Close as CloseIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
   Save as SaveIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { ConfigService } from '../services';
+import { ConfigService, WolfService } from '../services';
 import { UserConfig } from '../types/config';
 import { PairingDialog } from './pairing/PairingDialog';
 
@@ -178,6 +180,29 @@ export function UserMenu({ open, onClose }: UserMenuProps) {
     }
   };
 
+  const handleUnpairClient = async (clientId: string) => {
+    try {
+      // Unpair from Wolf server
+      const result = await WolfService.unpairClient(clientId);
+      if (!result.success) {
+        throw new Error('Failed to unpair client from Wolf server');
+      }
+
+      // Remove from local config
+      if (currentUser) {
+        const updatedClients = { ...users[currentUser].clients };
+        delete updatedClients[clientId];
+        await ConfigService.editUser(currentUser, undefined, undefined, updatedClients);
+      }
+
+      // Refresh the client list
+      loadUserData();
+    } catch (err) {
+      console.error('Failed to unpair client:', err);
+      setError('Failed to unpair client');
+    }
+  };
+
   return (
     <>
       <Drawer
@@ -232,6 +257,15 @@ export function UserMenu({ open, onClose }: UserMenuProps) {
             pairedClients.map((client) => (
               <ListItem key={client.id}>
                 <ListItemText primary={client.name} secondary={`ID: ${client.id}`} />
+                <ListItemSecondaryAction>
+                  <IconButton
+                    edge="end"
+                    aria-label="unpair"
+                    onClick={() => handleUnpairClient(client.id)}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </ListItemSecondaryAction>
               </ListItem>
             ))
           )}

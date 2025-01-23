@@ -26,7 +26,7 @@ interface PairResponse {
 
 interface WolfClient {
   client_id: string;
-  name: string;
+  app_state_folder: string;
 }
 
 interface ClientResponse {
@@ -700,31 +700,77 @@ app.put('/api/users/:username', async (req, res) => {
       }
     }
 
-    // Update the user with merged data
-    const updatedUserData = {
-      ...existingUserData,  // Keep existing data
-      ...(isUpdatingSteam ? { steamId, steamApiKey } : {}),  // Only update Steam if provided
-      clients: clients || existingUserData.clients  // Use new clients if provided, otherwise keep existing
+    // Fetch current client list from Wolf API to validate client IDs
+    const agent = new http.Agent({
+      keepAlive: false
+    });
+    const socketPath = '/var/run/wolf/wolf.sock';
+    
+    (agent as any).createConnection = (options: http.RequestOptions, cb: (err: Error | null, socket: net.Socket) => void) => {
+      const connection = net.createConnection(socketPath);
+      connection.once('error', (err) => {
+        serverLog('error', 'Socket connection error', 'Server', { error: err });
+        connection.destroy();
+        cb(err, connection);
+      });
+      connection.once('connect', () => {
+        cb(null, connection);
+      });
+      return connection;
     };
 
-    serverLog('debug', 'Updating user with new data', 'Server', { 
-      username,
-      hasClients: !!clients,
-      updatedClients: clients,
-      existingClients: existingUserData.clients,
-      isUpdatingSteam
+    const wolfResponse = await fetch('http://localhost/api/v1/clients', { agent });
+    const responseText = await wolfResponse.text();
+    
+    // Log raw response for debugging
+    serverLog('debug', 'Raw response from Wolf API', 'Server', { responseText });
+    
+    // Extract client_id directly from the raw response text to preserve exact value
+    const clientIdMatch = responseText.match(/"client_id":(\d+)/);
+    const exactClientId = clientIdMatch ? clientIdMatch[1] : null;
+    
+    serverLog('debug', 'Extracted client ID', 'Server', { exactClientId });
+    
+    // Create a set of valid client IDs using the exact value
+    const validClientIds = new Set(exactClientId ? [exactClientId] : []);
+    
+    // Log the valid client IDs
+    serverLog('debug', 'Valid client IDs from Wolf API', 'Server', { 
+      validClientIds: Array.from(validClientIds)
     });
+    
+    // Filter out any clients that aren't in the Wolf API response
+    const validatedClients = clients ? Object.entries(clients).reduce((acc, [clientId, clientData]) => {
+      // Ensure clientData has the correct type
+      if (validClientIds.has(clientId) && 
+          clientData && 
+          typeof clientData === 'object' && 
+          'friendlyName' in clientData && 
+          typeof clientData.friendlyName === 'string') {
+        acc[clientId] = {
+          friendlyName: clientData.friendlyName
+        };
+      } else {
+        // If the client ID doesn't match, but it's a new pairing, use the exact ID
+        if (exactClientId && Object.keys(existingUserData.clients || {}).length === 0 &&
+            clientData && typeof clientData === 'object' && 
+            'friendlyName' in clientData && 
+            typeof clientData.friendlyName === 'string') {
+          acc[exactClientId] = {
+            friendlyName: clientData.friendlyName
+          };
+        } else {
+          serverLog('warn', 'Removing invalid client data from config', 'Server', { clientId, clientData });
+        }
+      }
+      return acc;
+    }, {} as Record<string, { friendlyName: string }>) : existingUserData.clients;
 
-    config.users[username] = updatedUserData;
+    // Update the user's clients in the config
+    config.users[username].clients = validatedClients;
 
-    // Save the config
+    // Save the updated config
     await configManager.saveConfig(config);
-    serverLog('info', 'User updated successfully', 'Server', { 
-      username, 
-      hasClients: !!config.users[username].clients,
-      finalClients: config.users[username].clients,
-      isUpdatingSteam
-    });
 
     // Return sanitized config
     const sanitizedConfig = {
@@ -741,6 +787,7 @@ app.put('/api/users/:username', async (req, res) => {
       steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
     };
 
+    serverLog('info', 'User updated successfully', 'Server', { username });
     res.json(sanitizedConfig);
   } catch (error) {
     serverLog('error', 'Failed to update user', 'Server', error instanceof Error ? error.message : String(error));
@@ -748,119 +795,55 @@ app.put('/api/users/:username', async (req, res) => {
   }
 });
 
-// Select user endpoint
-app.post('/api/users/:username/select', async (req, res) => {
+// Unpair client endpoint
+app.post('/api/wolf/unpair/client', async (req, res) => {
   try {
-    const { username } = req.params;
-    const configManager = await ConfigManager.getInstance();
-    const config = configManager.getConfig();
-
-    if (!config.users[username]) {
-      serverLog('error', 'User not found for selection', 'Server', { username });
-      return res.status(404).json({ error: 'User not found' });
+    const { client_id } = req.body;
+    if (!client_id) {
+      serverLog('error', 'Missing client_id in unpair request', 'Server');
+      return res.status(400).json({ error: 'Missing client_id' });
     }
 
-    // Update current user
-    config.currentUser = username;
-    await configManager.saveConfig(config);
+    serverLog('debug', 'Attempting to unpair client', 'Server', { client_id });
     
-    serverLog('info', 'User selected successfully', 'Server', { username });
-
-    // Return sanitized config
-    const sanitizedConfig = {
-      ...config,
-      users: Object.fromEntries(
-        Object.entries(config.users).map(([name, userData]) => [
-          name,
-          {
-            ...userData,
-            steamApiKey: '[REDACTED]'
-          }
-        ])
-      ),
-      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    const agent = new http.Agent({
+      keepAlive: false // Disable keep-alive to ensure fresh connections
+    });
+    const socketPath = '/var/run/wolf/wolf.sock';
+    
+    // Override createConnection with proper typing and error handling
+    (agent as any).createConnection = (options: http.RequestOptions, cb: (err: Error | null, socket: net.Socket) => void) => {
+      const connection = net.createConnection(socketPath);
+      connection.once('error', (err) => {
+        serverLog('error', 'Socket connection error during unpair', 'Server', { error: err });
+        connection.destroy();
+        cb(err, connection);
+      });
+      connection.once('connect', () => {
+        cb(null, connection);
+      });
+      return connection;
     };
 
-    res.json(sanitizedConfig);
+    const response = await fetch('http://localhost/api/v1/unpair/client', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ client_id }),
+      agent
+    });
+
+    const data = await response.json();
+    serverLog('info', 'Successfully unpaired client', 'Server', { client_id });
+    res.json(data);
   } catch (error) {
-    serverLog('error', 'Failed to select user', 'Server', error instanceof Error ? error.message : String(error));
-    res.status(500).json({ error: 'Failed to select user' });
+    serverLog('error', 'Failed to unpair client', 'Server', { error });
+    res.status(500).json({ error: 'Failed to unpair client' });
   }
 });
 
-// Clear logs endpoint
-app.post('/api/logs/clear', async (req, res) => {
-  try {
-    // Clear the log file
-    fs.writeFileSync(logFile, '');
-    serverLog('info', 'Logs cleared successfully', 'Server');
-    res.json({ success: true });
-  } catch (error) {
-    serverLog('error', 'Failed to clear logs', 'Server', error instanceof Error ? error.message : String(error));
-    res.status(500).json({ error: 'Failed to clear logs' });
-  }
-});
-
-// Get unredacted SteamGridDB API key
-app.get('/api/config/steamgriddb-key', async (req, res) => {
-  try {
-    const configManager = await ConfigManager.getInstance();
-    const config = configManager.getConfig();
-    
-    if (!config.steamGridDbApiKey) {
-      res.json({ key: '' });
-    } else {
-      res.json({ key: config.steamGridDbApiKey });
-    }
-  } catch (error) {
-    serverLog('error', 'Error getting SteamGridDB API key', 'Server', error instanceof Error ? error.message : String(error));
-    res.status(500).json({ error: 'Failed to get API key' });
-  }
-});
-
-// Get unredacted Steam API key for a user
-app.get('/api/users/:username/steam-key', async (req, res) => {
-  try {
-    const { username } = req.params;
-    const configManager = await ConfigManager.getInstance();
-    const config = configManager.getConfig();
-    
-    if (!config.users[username]) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({ key: config.users[username].steamApiKey });
-  } catch (error) {
-    serverLog('error', 'Error getting Steam API key', 'Server', error instanceof Error ? error.message : String(error));
-    res.status(500).json({ error: 'Failed to get API key' });
-  }
-});
-
-// Clear artwork cache
-app.post('/api/cache/artwork/clear', (req, res) => {
-  try {
-    const artworkPath = path.join(CACHE_DIR, '*.jpg');
-    serverLog('info', 'Clearing artwork cache', 'Server', { path: artworkPath });
-
-    // Delete all jpg files in the cache directory
-    const files = fs.readdirSync(CACHE_DIR);
-    let cleared = 0;
-    for (const file of files) {
-      if (file.endsWith('.jpg')) {
-        fs.unlinkSync(path.join(CACHE_DIR, file));
-        cleared++;
-      }
-    }
-
-    serverLog('info', 'Artwork cache cleared', 'Server', { filesCleared: cleared });
-    res.json({ success: true, filesCleared: cleared });
-  } catch (error) {
-    serverLog('error', 'Failed to clear artwork cache', 'Server', error instanceof Error ? error.message : String(error));
-    res.status(500).json({ error: 'Failed to clear artwork cache' });
-  }
-});
-
-// Wolf API proxy endpoints
+// Get pending pair requests
 app.get('/api/wolf/pair/pending', async (req, res) => {
   try {
     serverLog('debug', 'Fetching pending pair requests', 'Server');
@@ -890,6 +873,64 @@ app.get('/api/wolf/pair/pending', async (req, res) => {
   } catch (error) {
     serverLog('error', 'Failed to fetch pending pair requests', 'Server', { error });
     res.status(500).json({ error: 'Failed to fetch pending pairs' });
+  }
+});
+
+// Wolf API proxy endpoints
+app.get('/api/wolf/clients', async (req, res) => {
+  try {
+    serverLog('debug', 'Fetching client list', 'Server');
+    const agent = new http.Agent({
+      keepAlive: false // Disable keep-alive to ensure fresh connections
+    });
+    const socketPath = '/var/run/wolf/wolf.sock';
+    
+    // Override createConnection with proper typing and error handling
+    (agent as any).createConnection = (options: http.RequestOptions, cb: (err: Error | null, socket: net.Socket) => void) => {
+      const connection = net.createConnection(socketPath);
+      connection.once('error', (err) => {
+        serverLog('error', 'Socket connection error', 'Server', { error: err });
+        connection.destroy();
+        cb(err, connection);
+      });
+      connection.once('connect', () => {
+        cb(null, connection);
+      });
+      return connection;
+    };
+
+    const response = await fetch('http://localhost/api/v1/clients', { agent });
+    const responseText = await response.text();
+    
+    // Log raw response for debugging
+    serverLog('debug', 'Raw response from Wolf API', 'Server', { responseText });
+    
+    // Extract client_id directly from the raw response text to preserve exact value
+    const clientIdMatch = responseText.match(/"client_id":(\d+)/);
+    const exactClientId = clientIdMatch ? clientIdMatch[1] : null;
+    
+    // Parse the rest of the response normally
+    const data = JSON.parse(responseText) as { success: boolean; clients: Array<{ client_id: number; app_state_folder: string }> };
+    
+    // Use the exact client ID in the response
+    const clientResponse: ClientResponse = {
+      success: data.success,
+      clients: data.clients.map(client => ({
+        client_id: exactClientId || String(client.client_id),
+        app_state_folder: client.app_state_folder
+      }))
+    };
+    
+    // Log the client IDs for debugging
+    serverLog('debug', 'Client IDs', 'Server', {
+      clientIds: clientResponse.clients.map(c => c.client_id)
+    });
+    
+    serverLog('info', 'Successfully fetched client list', 'Server', { count: clientResponse.clients?.length || 0 });
+    res.json(clientResponse);
+  } catch (error) {
+    serverLog('error', 'Failed to fetch client list', 'Server', { error });
+    res.status(500).json({ error: 'Failed to fetch client list' });
   }
 });
 
@@ -960,39 +1001,6 @@ app.post('/api/wolf/pair/client', async (req, res) => {
   } catch (error) {
     serverLog('error', 'Error confirming pair', 'Server', { error });
     res.status(500).json({ error: 'Failed to confirm pairing' });
-  }
-});
-
-// Wolf API proxy endpoints
-app.get('/api/wolf/clients', async (req, res) => {
-  try {
-    serverLog('debug', 'Fetching client list', 'Server');
-    const agent = new http.Agent({
-      keepAlive: false // Disable keep-alive to ensure fresh connections
-    });
-    const socketPath = '/var/run/wolf/wolf.sock';
-    
-    // Override createConnection with proper typing and error handling
-    (agent as any).createConnection = (options: http.RequestOptions, cb: (err: Error | null, socket: net.Socket) => void) => {
-      const connection = net.createConnection(socketPath);
-      connection.once('error', (err) => {
-        serverLog('error', 'Socket connection error', 'Server', { error: err });
-        connection.destroy();
-        cb(err, connection);
-      });
-      connection.once('connect', () => {
-        cb(null, connection);
-      });
-      return connection;
-    };
-
-    const response = await fetch('http://localhost/api/v1/clients', { agent });
-    const data = await response.json() as ClientResponse;
-    serverLog('info', 'Successfully fetched client list', 'Server', { count: data.clients?.length || 0 });
-    res.json(data);
-  } catch (error) {
-    serverLog('error', 'Failed to fetch client list', 'Server', { error });
-    res.status(500).json({ error: 'Failed to fetch client list' });
   }
 });
 

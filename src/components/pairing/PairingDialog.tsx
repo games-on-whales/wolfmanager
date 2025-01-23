@@ -153,12 +153,24 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
             await new Promise(resolve => setTimeout(resolve, 1000))
             
             clientsData = await WolfService.getClients()
-            Logger.debug('Received client list', 'PairingDialog', { clientsData, attempt: retryCount + 1 })
+            Logger.debug('Received client list', 'PairingDialog', { 
+              clientsData, 
+              attempt: retryCount + 1,
+              rawClientIds: clientsData.clients.map(c => ({
+                original: c.client_id,
+                asBigInt: BigInt(c.client_id).toString(),
+                asString: c.client_id.toString()
+              }))
+            })
             
             if (clientsData.success && clientsData.clients && clientsData.clients.length > 0) {
               // Check for duplicate client IDs
-              const clientIds = clientsData.clients.map(client => client.client_id)
-              const uniqueClientIds = new Set(clientIds)
+              const clientIds = clientsData.clients.map(client => ({
+                original: client.client_id,
+                asBigInt: BigInt(client.client_id).toString(),
+                asString: client.client_id.toString()
+              }))
+              const uniqueClientIds = new Set(clientIds.map(c => c.asBigInt))
               
               if (clientIds.length !== uniqueClientIds.size) {
                 const duplicates = clientIds.filter((id, index) => clientIds.indexOf(id) !== index)
@@ -202,9 +214,10 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
             })
             
             if (newClient) {
+              const clientId = BigInt(newClient.client_id).toString()
               const updatedClients = {
                 ...clients,
-                [newClient.client_id.toString()]: {
+                [clientId]: {
                   friendlyName: friendlyName.trim()
                 }
               }

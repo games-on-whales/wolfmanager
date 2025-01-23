@@ -15,7 +15,7 @@ export interface PairResponse {
 
 export interface PairedClient {
   app_state_folder: string;
-  client_id: number;
+  client_id: string;
 }
 
 export interface PairedClientsResponse {
@@ -151,6 +151,33 @@ class WolfService {
     }
   }
 
+  async unpairClient(clientId: string): Promise<{ success: boolean }> {
+    try {
+      Logger.debug('Unpairing client', 'WolfService', { 
+        clientId,
+        clientIdAsBigInt: BigInt(clientId).toString(),
+        clientIdAsString: clientId.toString()
+      });
+      const response = await fetch('/api/wolf/unpair/client', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ client_id: clientId })
+      });
+      const data = await handleApiResponse<{ success: boolean }>(response, 'WolfService');
+      Logger.info('Successfully unpaired client', 'WolfService', { 
+        clientId,
+        clientIdAsBigInt: BigInt(clientId).toString(),
+        clientIdAsString: clientId.toString()
+      });
+      return data;
+    } catch (error) {
+      await handleApiError(error, 'WolfService');
+      throw error;
+    }
+  }
+
   async validateClients(): Promise<void> {
     try {
       Logger.info('Starting client validation', 'WolfService');
@@ -162,11 +189,11 @@ class WolfService {
       }
       
       const wolfClients = wolfClientsResponse.clients;
-      const wolfClientIds = new Set(wolfClients.map(client => client.client_id.toString()));
+      const wolfClientIds = new Set(wolfClients.map(client => BigInt(client.client_id).toString()));
       
       // Check for duplicate client IDs in Wolf
       const duplicateIds = wolfClients
-        .map(client => client.client_id.toString())
+        .map(client => BigInt(client.client_id).toString())
         .filter((id, index, array) => array.indexOf(id) !== index);
       
       if (duplicateIds.length > 0) {
