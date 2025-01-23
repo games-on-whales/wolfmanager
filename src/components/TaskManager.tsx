@@ -62,6 +62,9 @@ export const TaskManager: React.FC = () => {
         case 'Clear Artwork Cache':
           await TaskService.clearArtworkCache();
           break;
+        case 'Validate Wolf Clients':
+          await TaskService.validateClients();
+          break;
       }
     } catch (error) {
       LogService.error('Failed to execute task', error);

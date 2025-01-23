@@ -1,10 +1,11 @@
-import React, { useState, createContext } from 'react';
+import React, { useState, createContext, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { GameLibrary } from './components/GameLibrary';
 import Configuration from './components/Configuration';
 import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { Logs } from './components/Logs';
+import { TaskService, LogService } from './services';
 
 interface ThemeContextType {
   isDarkMode: boolean;
@@ -587,6 +588,18 @@ export const App: React.FC = () => {
     const savedTheme = localStorage.getItem('theme');
     return savedTheme ? savedTheme === 'dark' : true;
   });
+
+  // Run client validation on startup
+  useEffect(() => {
+    const validateClients = async () => {
+      try {
+        await TaskService.validateClients();
+      } catch (error) {
+        LogService.error('Failed to validate clients on startup', error);
+      }
+    };
+    validateClients();
+  }, []);
 
   const themeContext = {
     isDarkMode,

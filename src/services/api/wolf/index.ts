@@ -1,6 +1,7 @@
 import { WolfGame, WolfGameUpdate } from './types';
 import { handleApiResponse, handleApiError } from '../base';
 import Logger from '../logs';
+import ConfigService from '../config';
 
 export interface PairRequest {
   pair_secret: string;
@@ -146,6 +147,74 @@ class WolfService {
       return data;
     } catch (error) {
       await handleApiError(error, 'WolfService');
+      throw error;
+    }
+  }
+
+  async validateClients(): Promise<void> {
+    try {
+      Logger.info('Starting client validation', 'WolfService');
+      
+      // Get current Wolf clients
+      const wolfClientsResponse = await this.getClients();
+      if (!wolfClientsResponse.success) {
+        throw new Error('Failed to fetch Wolf clients');
+      }
+      
+      const wolfClients = wolfClientsResponse.clients;
+      const wolfClientIds = new Set(wolfClients.map(client => client.client_id.toString()));
+      
+      // Check for duplicate client IDs in Wolf
+      const duplicateIds = wolfClients
+        .map(client => client.client_id.toString())
+        .filter((id, index, array) => array.indexOf(id) !== index);
+      
+      if (duplicateIds.length > 0) {
+        Logger.warn('Duplicate client IDs found in Wolf', 'WolfService', {
+          duplicateIds: Array.from(new Set(duplicateIds))
+        });
+      }
+      
+      // Get current config and user
+      const config = ConfigService.getConfig();
+      const currentUser = config.currentUser;
+      
+      if (!currentUser) {
+        Logger.warn('No current user found during client validation', 'WolfService');
+        return;
+      }
+      
+      const userConfig = config.users[currentUser];
+      const configClients = userConfig.clients || {};
+      
+      // Find orphaned clients (in config but not in Wolf)
+      const orphanedClients = Object.keys(configClients).filter(
+        clientId => !wolfClientIds.has(clientId)
+      );
+      
+      if (orphanedClients.length > 0) {
+        Logger.info('Found orphaned clients to remove', 'WolfService', {
+          orphanedClientIds: orphanedClients,
+          orphanedClientNames: orphanedClients.map(id => configClients[id].friendlyName)
+        });
+        
+        // Remove orphaned clients from config
+        const updatedClients = { ...configClients };
+        orphanedClients.forEach(clientId => {
+          delete updatedClients[clientId];
+        });
+        
+        // Update config with cleaned client list
+        await ConfigService.editUser(currentUser, undefined, undefined, updatedClients);
+        
+        Logger.info('Successfully removed orphaned clients', 'WolfService', {
+          removedCount: orphanedClients.length
+        });
+      } else {
+        Logger.info('No orphaned clients found', 'WolfService');
+      }
+    } catch (error) {
+      Logger.error('Error during client validation', error, 'WolfService');
       throw error;
     }
   }
