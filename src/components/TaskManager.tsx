@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Paper,
-  Typography,
   List,
   ListItem,
-  ListItemText,
+  Typography,
   LinearProgress,
   Chip,
   IconButton,
   Tooltip
 } from '@mui/material';
-import { PlayArrow as PlayIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import {
+  Cancel as CancelIcon,
+  Refresh as RefreshIcon
+} from '@mui/icons-material';
 import { TaskService, Task, TaskStatus } from '../services';
 import { LogService } from '../services';
 
@@ -49,7 +50,7 @@ export const TaskManager: React.FC = () => {
       return;
     }
 
-    setExecuting(prev => ({ ...prev, [task.id]: true }));
+    setExecuting((prev: Record<string, boolean>) => ({ ...prev, [task.id]: true }));
     try {
       switch (task.name) {
         case 'Refresh Games List':
@@ -65,25 +66,21 @@ export const TaskManager: React.FC = () => {
     } catch (error) {
       LogService.error('Failed to execute task', error);
     } finally {
-      setExecuting(prev => ({ ...prev, [task.id]: false }));
+      setExecuting((prev: Record<string, boolean>) => ({ ...prev, [task.id]: false }));
     }
   };
 
   const getTaskIcon = (task: Task) => {
     switch (task.name) {
       case 'Clear Artwork Cache':
-        return <DeleteIcon />;
+        return <CancelIcon />;
       default:
-        return <PlayIcon />;
+        return <RefreshIcon />;
     }
   };
 
   return (
-    <Paper sx={{ p: 3, maxWidth: 800, mx: 'auto' }}>
-      <Typography variant="h5" gutterBottom>
-        Background Tasks
-      </Typography>
-
+    <>
       {tasks.length === 0 ? (
         <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
           No active tasks
@@ -117,7 +114,7 @@ export const TaskManager: React.FC = () => {
                     size="small"
                   />
                 </Box>
-                
+
                 {task.progress !== undefined && task.status === TaskStatus.RUNNING && (
                   <Box sx={{ width: '100%', mt: 1 }}>
                     <LinearProgress 
@@ -157,6 +154,6 @@ export const TaskManager: React.FC = () => {
           ))}
         </List>
       )}
-    </Paper>
+    </>
   );
 }; 

@@ -1,6 +1,9 @@
 export interface UserConfig {
   steamId: string;
   steamApiKey: string;
+  clients?: Record<string, { // client_id as key
+    friendlyName: string;
+  }>;
 }
 
 export interface AdminConfig {

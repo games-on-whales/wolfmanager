@@ -1,7 +1,5 @@
 import { SteamGame } from './types';
-import ConfigService from '../config';
 import Logger from '../logs';
-import { handleApiResponse, handleApiError } from '../base';
 
 export async function getOwnedGames(username?: string): Promise<SteamGame[]> {
   Logger.debug('Starting owned games fetch process', 'SteamService', { username });

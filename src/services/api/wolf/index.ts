@@ -2,6 +2,16 @@ import { WolfGame, WolfGameUpdate } from './types';
 import { handleApiResponse, handleApiError } from '../base';
 import Logger from '../logs';
 
+interface PairRequest {
+  pair_secret: string;
+  pin: string;
+}
+
+interface PairResponse {
+  requests: PairRequest[];
+  success: boolean;
+}
+
 class WolfService {
   async getGames(): Promise<WolfGame[]> {
     try {
@@ -71,6 +81,50 @@ class WolfService {
       await handleApiError(error, 'WolfService');
       throw error;
     }
+  }
+
+  async getPendingPairRequests(): Promise<PairResponse> {
+    try {
+      Logger.debug('Fetching pending pair requests', 'WolfService');
+      const response = await fetch('/api/wolf/pair/pending');
+      const data = await handleApiResponse<PairResponse>(response, 'WolfService');
+      Logger.info('Successfully fetched pending pair requests', 'WolfService', { count: data.requests.length });
+      return data;
+    } catch (error) {
+      await handleApiError(error, 'WolfService');
+      throw error;
+    }
+  }
+
+  async findPairRequestByPin(pin: string): Promise<PairRequest | null> {
+    try {
+      Logger.debug('Looking for pair request with PIN', 'WolfService', { pin });
+      const response = await fetch('/api/wolf/pair/pending');
+      const data = await handleApiResponse<PairResponse>(response, 'WolfService');
+      const request = data.requests.find(req => req.pin === pin);
+      
+      if (request) {
+        Logger.info('Found matching pair request', 'WolfService', { pin });
+      } else {
+        Logger.info('No matching pair request found', 'WolfService', { pin });
+      }
+      
+      return request || null;
+    } catch (error) {
+      await handleApiError(error, 'WolfService');
+      throw error;
+    }
+  }
+
+  async confirmPairing(pair_secret: string, pin: string): Promise<{ success: boolean }> {
+    const response = await fetch('/api/wolf/pair/client', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ pair_secret, pin })
+    });
+    return response.json();
   }
 }
 

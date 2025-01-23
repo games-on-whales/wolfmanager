@@ -9,9 +9,30 @@ import { ConfigManager } from './config/ConfigManager.js';
 import archiver from 'archiver';
 import { Config, UserConfig, SteamGame } from '../src/types/config';
 import { GameManager } from './games/GameManager.js';
+import * as http from 'http';
+import * as net from 'net';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Add after other interfaces, before the app initialization
+interface PairResponse {
+  requests: Array<{
+    pair_secret: string;
+    pin: string;
+  }>;
+  success: boolean;
+}
+
+interface WolfClient {
+  client_id: string;
+  name: string;
+}
+
+interface ClientResponse {
+  success: boolean;
+  clients: WolfClient[];
+}
 
 const app = express();
 const port = process.env.PORT || 9971;
@@ -611,58 +632,99 @@ app.delete('/api/users/:username', async (req, res) => {
 app.put('/api/users/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const { steamId, steamApiKey } = req.body;
+    const { steamId, steamApiKey, clients } = req.body;
     
-    if (!steamId || !steamApiKey) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    serverLog('debug', 'Received user update request', 'Server', {
+      username,
+      hasClients: !!clients,
+      clientsData: clients,
+      hasSteamId: !!steamId,
+      hasSteamApiKey: !!steamApiKey
+    });
+
+    // Only require Steam credentials if they are being updated
+    const isUpdatingSteam = steamId !== undefined || steamApiKey !== undefined;
+    if (isUpdatingSteam && (!steamId || !steamApiKey)) {
+      serverLog('error', 'Missing required fields for Steam update', 'Server', {
+        hasSteamId: !!steamId,
+        hasSteamApiKey: !!steamApiKey
+      });
+      return res.status(400).json({ error: 'Missing required fields for Steam update' });
     }
 
     const configManager = await ConfigManager.getInstance();
     const config = configManager.getConfig();
 
     if (!config.users[username]) {
+      serverLog('error', 'User not found', 'Server', { username });
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Test Steam credentials before updating
-    try {
-      const testUrl = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
-      const response = await fetch(testUrl);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        serverLog('error', 'Invalid Steam credentials for user update', 'Server', {
-          status: response.status,
-          error: errorText,
-          url: testUrl.replace(steamApiKey, '[REDACTED]')
-        });
-        return res.status(400).json({ 
-          error: 'Invalid Steam credentials',
-          details: `Steam API test failed: ${response.statusText}`
-        });
-      }
+    // Get existing user data
+    const existingUserData = config.users[username];
+    serverLog('debug', 'Current user data', 'Server', {
+      username,
+      hasExistingClients: !!existingUserData.clients,
+      existingClients: existingUserData.clients
+    });
 
-      const data = await response.json() as SteamApiResponse;
-      if (!data.response || !Array.isArray(data.response.games)) {
-        serverLog('error', 'Invalid response from Steam API', 'Server', { data });
-        return res.status(400).json({ error: 'Invalid response from Steam API' });
+    // Only validate Steam credentials if they are being updated
+    if (isUpdatingSteam) {
+      try {
+        const testUrl = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
+        const response = await fetch(testUrl);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          serverLog('error', 'Invalid Steam credentials for user update', 'Server', {
+            status: response.status,
+            error: errorText,
+            url: testUrl.replace(steamApiKey, '[REDACTED]')
+          });
+          return res.status(400).json({ 
+            error: 'Invalid Steam credentials',
+            details: `Steam API test failed: ${response.statusText}`
+          });
+        }
+
+        const data = await response.json() as SteamApiResponse;
+        if (!data.response || !Array.isArray(data.response.games)) {
+          serverLog('error', 'Invalid response from Steam API', 'Server', { data });
+          return res.status(400).json({ error: 'Invalid response from Steam API' });
+        }
+        
+        serverLog('info', 'Steam credentials validated successfully', 'Server');
+      } catch (error) {
+        serverLog('error', 'Failed to validate Steam credentials for user update', 'Server', error instanceof Error ? error.message : String(error));
+        return res.status(400).json({ error: 'Failed to validate Steam credentials' });
       }
-      
-      serverLog('info', 'Steam credentials validated successfully', 'Server');
-    } catch (error) {
-      serverLog('error', 'Failed to validate Steam credentials for user update', 'Server', error instanceof Error ? error.message : String(error));
-      return res.status(400).json({ error: 'Failed to validate Steam credentials' });
     }
 
-    // Update the user with original values
-    config.users[username] = {
-      steamId,
-      steamApiKey
+    // Update the user with merged data
+    const updatedUserData = {
+      ...existingUserData,  // Keep existing data
+      ...(isUpdatingSteam ? { steamId, steamApiKey } : {}),  // Only update Steam if provided
+      clients: clients || existingUserData.clients  // Use new clients if provided, otherwise keep existing
     };
 
-    // Save the original config
+    serverLog('debug', 'Updating user with new data', 'Server', { 
+      username,
+      hasClients: !!clients,
+      updatedClients: clients,
+      existingClients: existingUserData.clients,
+      isUpdatingSteam
+    });
+
+    config.users[username] = updatedUserData;
+
+    // Save the config
     await configManager.saveConfig(config);
-    serverLog('info', 'User updated successfully', 'Server', { username });
+    serverLog('info', 'User updated successfully', 'Server', { 
+      username, 
+      hasClients: !!config.users[username].clients,
+      finalClients: config.users[username].clients,
+      isUpdatingSteam
+    });
 
     // Return sanitized config
     const sanitizedConfig = {
@@ -795,6 +857,142 @@ app.post('/api/cache/artwork/clear', (req, res) => {
   } catch (error) {
     serverLog('error', 'Failed to clear artwork cache', 'Server', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: 'Failed to clear artwork cache' });
+  }
+});
+
+// Wolf API proxy endpoints
+app.get('/api/wolf/pair/pending', async (req, res) => {
+  try {
+    serverLog('debug', 'Fetching pending pair requests', 'Server');
+    const agent = new http.Agent({
+      keepAlive: false // Disable keep-alive to ensure fresh connections
+    });
+    const socketPath = '/var/run/wolf/wolf.sock';
+    
+    // Override createConnection with proper typing and error handling
+    (agent as any).createConnection = (options: http.RequestOptions, cb: (err: Error | null, socket: net.Socket) => void) => {
+      const connection = net.createConnection(socketPath);
+      connection.once('error', (err) => {
+        serverLog('error', 'Socket connection error', 'Server', { error: err });
+        connection.destroy();
+        cb(err, connection);
+      });
+      connection.once('connect', () => {
+        cb(null, connection);
+      });
+      return connection;
+    };
+
+    const response = await fetch('http://localhost/api/v1/pair/pending', { agent });
+    const data = await response.json() as PairResponse;
+    serverLog('info', 'Successfully fetched pending pair requests', 'Server', { count: data.requests?.length || 0 });
+    res.json(data);
+  } catch (error) {
+    serverLog('error', 'Failed to fetch pending pair requests', 'Server', { error });
+    res.status(500).json({ error: 'Failed to fetch pending pairs' });
+  }
+});
+
+app.post('/api/wolf/pair/client', async (req, res) => {
+  try {
+    const { pair_secret, pin } = req.body;
+    if (!pair_secret || !pin) {
+      serverLog('error', 'Missing required pairing parameters', 'Server', { pair_secret: !!pair_secret, pin: !!pin });
+      return res.status(400).json({ error: 'Missing pair_secret or pin' });
+    }
+
+    serverLog('debug', 'Attempting to pair client', 'Server', { pin });
+    
+    // Create a new agent for each request with retry logic
+    const maxRetries = 2;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const agent = new http.Agent({
+          keepAlive: false // Disable keep-alive to ensure fresh connections
+        });
+        const socketPath = '/var/run/wolf/wolf.sock';
+        
+        // Override createConnection with proper typing and error handling
+        (agent as any).createConnection = (options: http.RequestOptions, cb: (err: Error | null, socket: net.Socket) => void) => {
+          const connection = net.createConnection(socketPath);
+          connection.once('error', (err) => {
+            serverLog('error', `Socket connection error (attempt ${attempt + 1})`, 'Server', { error: err });
+            connection.destroy();
+            cb(err, connection);
+          });
+          connection.once('connect', () => {
+            cb(null, connection);
+          });
+          return connection;
+        };
+
+        const response = await fetch('http://localhost/api/v1/pair/client', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ pair_secret, pin }),
+          agent
+        });
+
+        const data = await response.json() as { success: boolean };
+        if (data.success) {
+          serverLog('info', 'Successfully paired client', 'Server', { pin });
+          return res.json(data);
+        } else {
+          lastError = new Error('Pairing unsuccessful');
+          continue;
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error occurred');
+        if (attempt < maxRetries - 1) {
+          serverLog('warn', `Pairing attempt ${attempt + 1} failed, retrying...`, 'Server', { error });
+          await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between retries
+          continue;
+        }
+      }
+    }
+    
+    // If we get here, all retries failed
+    throw lastError;
+  } catch (error) {
+    serverLog('error', 'Error confirming pair', 'Server', { error });
+    res.status(500).json({ error: 'Failed to confirm pairing' });
+  }
+});
+
+// Wolf API proxy endpoints
+app.get('/api/wolf/clients', async (req, res) => {
+  try {
+    serverLog('debug', 'Fetching client list', 'Server');
+    const agent = new http.Agent({
+      keepAlive: false // Disable keep-alive to ensure fresh connections
+    });
+    const socketPath = '/var/run/wolf/wolf.sock';
+    
+    // Override createConnection with proper typing and error handling
+    (agent as any).createConnection = (options: http.RequestOptions, cb: (err: Error | null, socket: net.Socket) => void) => {
+      const connection = net.createConnection(socketPath);
+      connection.once('error', (err) => {
+        serverLog('error', 'Socket connection error', 'Server', { error: err });
+        connection.destroy();
+        cb(err, connection);
+      });
+      connection.once('connect', () => {
+        cb(null, connection);
+      });
+      return connection;
+    };
+
+    const response = await fetch('http://localhost/api/v1/clients', { agent });
+    const data = await response.json() as ClientResponse;
+    serverLog('info', 'Successfully fetched client list', 'Server', { count: data.clients?.length || 0 });
+    res.json(data);
+  } catch (error) {
+    serverLog('error', 'Failed to fetch client list', 'Server', { error });
+    res.status(500).json({ error: 'Failed to fetch client list' });
   }
 });
 

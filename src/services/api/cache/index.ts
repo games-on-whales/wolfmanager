@@ -1,7 +1,23 @@
 import { handleApiResponse, handleApiError } from '../base';
 import Logger from '../logs';
 
-const FETCH_TIMEOUT = 5000; // 5 seconds
+export async function getArtwork(appId: number): Promise<Blob> {
+  try {
+    const response = await fetch(`/api/cache/artwork/${appId}`);
+    return handleApiResponse(response, 'CacheService');
+  } catch (error) {
+    throw handleApiError(error, 'CacheService');
+  }
+}
+
+export async function clearArtworkCache(): Promise<void> {
+  try {
+    const response = await fetch('/api/cache/artwork', { method: 'DELETE' });
+    await handleApiResponse(response, 'CacheService');
+  } catch (error) {
+    throw handleApiError(error, 'CacheService');
+  }
+}
 
 class CacheService {
   async ensureCacheDir(): Promise<void> {

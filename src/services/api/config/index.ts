@@ -1,5 +1,5 @@
 import { Config, UserConfig } from './types';
-import { handleApiResponse, handleApiError, ApiError } from '../base';
+import { handleApiResponse, handleApiError } from '../base';
 import Logger from '../logs';
 
 class ConfigService {
@@ -51,7 +51,7 @@ class ConfigService {
 
   async addUser(username: string, steamId: string, steamApiKey: string): Promise<void> {
     try {
-      Logger.debug('Adding user...', 'ConfigService', { username });
+      Logger.debug('Starting addUser request', 'ConfigService', { username, steamId });
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
@@ -59,35 +59,76 @@ class ConfigService {
         },
         body: JSON.stringify({ username, steamId, steamApiKey })
       });
+      Logger.debug('Received addUser response', 'ConfigService', { status: response.status });
       this.config = await handleApiResponse<Config>(response, 'ConfigService');
       Logger.info('User added successfully', 'ConfigService', { username });
     } catch (error) {
+      Logger.error('Failed to add user', error, 'ConfigService');
       await handleApiError(error, 'ConfigService');
     }
   }
 
   async deleteUser(username: string): Promise<void> {
     try {
-      Logger.debug('Deleting user...', 'ConfigService', { username });
+      Logger.debug('Starting deleteUser request', 'ConfigService', { username });
       const response = await fetch(`/api/users/${encodeURIComponent(username)}`, {
         method: 'DELETE'
       });
+      Logger.debug('Received deleteUser response', 'ConfigService', { status: response.status });
       this.config = await handleApiResponse<Config>(response, 'ConfigService');
       Logger.info('User deleted successfully', 'ConfigService', { username });
     } catch (error) {
+      Logger.error('Failed to delete user', error, 'ConfigService');
       await handleApiError(error, 'ConfigService');
     }
   }
 
   async selectUser(username: string): Promise<void> {
     try {
-      Logger.debug('Selecting user...', 'ConfigService', { username });
+      Logger.debug('Starting selectUser request', 'ConfigService', { username });
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/select`, {
         method: 'POST'
       });
+      Logger.debug('Received selectUser response', 'ConfigService', { status: response.status });
       this.config = await handleApiResponse<Config>(response, 'ConfigService');
       Logger.info('User selected successfully', 'ConfigService', { username });
     } catch (error) {
+      Logger.error('Failed to select user', error, 'ConfigService');
+      await handleApiError(error, 'ConfigService');
+    }
+  }
+
+  async editUser(
+    username: string, 
+    steamId?: string, 
+    steamApiKey?: string, 
+    clients?: Record<string, { friendlyName: string }>
+  ): Promise<void> {
+    try {
+      Logger.debug('Starting editUser request', 'ConfigService', { 
+        username, 
+        isUpdatingSteam: steamId !== undefined || steamApiKey !== undefined,
+        isUpdatingClients: clients !== undefined
+      });
+
+      // Only include fields that are being updated
+      const updateData: any = {};
+      if (steamId !== undefined) updateData.steamId = steamId;
+      if (steamApiKey !== undefined) updateData.steamApiKey = steamApiKey;
+      if (clients !== undefined) updateData.clients = clients;
+
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      });
+      Logger.debug('Received editUser response', 'ConfigService', { status: response.status });
+      this.config = await handleApiResponse<Config>(response, 'ConfigService');
+      Logger.info('User edited successfully', 'ConfigService', { username });
+    } catch (error) {
+      Logger.error('Failed to edit user', error, 'ConfigService');
       await handleApiError(error, 'ConfigService');
     }
   }
@@ -100,4 +141,4 @@ class ConfigService {
   }
 }
 
-export default new ConfigService(); 
+export default new ConfigService();

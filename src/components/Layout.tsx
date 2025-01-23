@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   Box,
-  Drawer,
+  Drawer as MuiDrawer,
   AppBar,
   Toolbar,
   List,
@@ -14,38 +14,40 @@ import {
   ListItemText,
   InputBase,
   Collapse,
+  Theme
 } from '@mui/material';
 import {
   Menu as MenuIcon,
-  Settings as SettingsIcon,
-  SportsEsports as GamesIcon,
   Search as SearchIcon,
   ExpandLess,
   ExpandMore,
   Games as SteamIcon,
+  Person as PersonIcon,
+  Task as TaskIcon,
+  List as ListIcon,
+  LightMode as LightModeIcon,
+  DarkMode as DarkModeIcon,
+  Settings as SettingsIcon,
+  Computer as ComputerIcon,
+  LibraryBooks as LibraryIcon,
 } from '@mui/icons-material';
-import { Configuration } from './Configuration';
 import { styled } from '@mui/material/styles';
+import { ThemeContext } from '../App';
+import { ThemeContextType } from '../types/theme';
+import { UserMenu } from './UserMenu';
 
 const drawerWidth = 240;
 
-const Search = styled('div')(({ theme }) => ({
+const Search = styled('div')({
   position: 'relative',
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  '&:hover': {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  marginRight: theme.spacing(2),
-  marginLeft: 0,
+  flexGrow: 0,
+  marginLeft: 'auto',
+  marginRight: 'auto',
   width: '100%',
-  [theme.breakpoints.up('sm')]: {
-    marginLeft: theme.spacing(3),
-    width: 'auto',
-  },
-}));
+  maxWidth: '600px',
+});
 
-const SearchIconWrapper = styled('div')(({ theme }) => ({
+const SearchIconWrapper = styled('div')(({ theme }: { theme: Theme }) => ({
   padding: theme.spacing(0, 2),
   height: '100%',
   position: 'absolute',
@@ -53,24 +55,79 @@ const SearchIconWrapper = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.54)',
+  left: 0,
+  top: 0,
+  width: '48px',
+  zIndex: 1
 }));
 
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
+const StyledInputBase = styled(InputBase)(({ theme }: { theme: Theme }) => ({
   color: 'inherit',
+  width: '100%',
+  height: '40px',
+  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+  borderRadius: '4px',
   '& .MuiInputBase-input': {
-    padding: theme.spacing(1, 1, 1, 0),
-    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create('width'),
+    padding: '8px 8px 8px 48px',
     width: '100%',
-    [theme.breakpoints.up('md')]: {
-      width: '20ch',
+    '&::placeholder': {
+      color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)',
+      opacity: 1,
     },
   },
 }));
 
+const StyledDrawer = styled(MuiDrawer)<{ theme?: Theme }>(({ theme }) => ({
+  '& .MuiDrawer-paper': {
+    width: drawerWidth,
+    backgroundColor: theme?.palette.mode === 'dark' 
+      ? 'rgba(22, 28, 36, 0.95)'
+      : 'rgba(255, 255, 255, 0.95)',
+    borderRight: '1px solid',
+    borderColor: 'divider',
+    backdropFilter: 'blur(6px)',
+    transform: 'translateZ(0)',
+    willChange: 'transform',
+    backfaceVisibility: 'hidden',
+    boxShadow: theme?.palette.mode === 'dark'
+      ? '0px 8px 24px rgba(0, 0, 0, 0.4)'
+      : '0px 8px 24px rgba(145, 158, 171, 0.2)',
+    '& .MuiListItemButton-root': {
+      borderRadius: 1,
+      transform: 'translateZ(0)',
+      willChange: 'transform, background-color',
+      transition: 'background-color 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+      '&:hover': {
+        backgroundColor: theme?.palette.mode === 'dark'
+          ? 'rgba(145, 158, 171, 0.08)'
+          : 'rgba(0, 0, 0, 0.04)',
+      },
+      '&.Mui-selected': {
+        backgroundColor: theme?.palette.mode === 'dark'
+          ? 'rgba(145, 158, 171, 0.16)'
+          : 'rgba(0, 0, 0, 0.08)',
+        '&:hover': {
+          backgroundColor: theme?.palette.mode === 'dark'
+            ? 'rgba(145, 158, 171, 0.24)'
+            : 'rgba(0, 0, 0, 0.12)',
+        }
+      }
+    }
+  }
+}));
+
+const StyledCollapse = styled(Collapse)({
+  '& .MuiCollapse-wrapper': {
+    transform: 'translateZ(0)',
+    willChange: 'height',
+    backfaceVisibility: 'hidden'
+  }
+});
+
 export interface LayoutProps {
   children: React.ReactNode;
-  onSearch: (query: string) => void;
+  onSearch?: (query: string) => void;
   onTabChange: (tab: string) => void;
   currentTab: string;
 }
@@ -78,6 +135,9 @@ export interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange, currentTab }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [librariesOpen, setLibrariesOpen] = useState(true);
+  const [configOpen, setConfigOpen] = useState(true);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { isDarkMode, toggleTheme } = useContext(ThemeContext) as ThemeContextType;
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -116,7 +176,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange,
             sx={{ mb: librariesOpen ? 1 : 0 }}
           >
             <ListItemIcon>
-              <GamesIcon sx={{ color: currentTab.startsWith('library') ? '#1E88E5' : undefined }} />
+              <LibraryIcon sx={{ color: currentTab.startsWith('library') ? '#1E88E5' : undefined }} />
             </ListItemIcon>
             <ListItemText 
               primary="Libraries" 
@@ -130,7 +190,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange,
             {librariesOpen ? <ExpandLess /> : <ExpandMore />}
           </ListItemButton>
         </ListItem>
-        <Collapse in={librariesOpen} timeout="auto" unmountOnExit>
+        <StyledCollapse in={librariesOpen} timeout={200} unmountOnExit>
           <List component="div" disablePadding>
             <ListItem disablePadding>
               <ListItemButton 
@@ -139,7 +199,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange,
                 sx={{ pl: 4 }}
               >
                 <ListItemIcon>
-                  <GamesIcon sx={{ 
+                  <SteamIcon sx={{ 
                     color: currentTab === 'library/all' ? '#1E88E5' : undefined,
                     opacity: 0.7,
                     fontSize: '1.2rem'
@@ -183,26 +243,133 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange,
               </ListItemButton>
             </ListItem>
           </List>
-        </Collapse>
+        </StyledCollapse>
         <ListItem disablePadding>
           <ListItemButton 
-            onClick={() => onTabChange('config')}
-            selected={currentTab === 'config'}
+            onClick={() => {
+              setConfigOpen(!configOpen);
+            }}
+            sx={{ mb: configOpen ? 1 : 0 }}
           >
             <ListItemIcon>
-              <SettingsIcon sx={{ color: currentTab === 'config' ? '#1E88E5' : undefined }} />
+              <SettingsIcon sx={{ color: currentTab.startsWith('config') ? '#1E88E5' : undefined }} />
             </ListItemIcon>
             <ListItemText 
               primary="Configuration"
               primaryTypographyProps={{
                 sx: { 
-                  fontWeight: currentTab === 'config' ? 500 : 400,
-                  color: currentTab === 'config' ? '#fff' : 'rgba(255,255,255,0.7)'
+                  fontWeight: currentTab.startsWith('config') ? 500 : 400,
+                  color: currentTab.startsWith('config') ? '#fff' : 'rgba(255,255,255,0.7)'
                 }
               }}
             />
+            {configOpen ? <ExpandLess /> : <ExpandMore />}
           </ListItemButton>
         </ListItem>
+        <StyledCollapse in={configOpen} timeout={200} unmountOnExit>
+          <List component="div" disablePadding>
+            <ListItem disablePadding>
+              <ListItemButton 
+                onClick={() => onTabChange('config#system')}
+                selected={currentTab === 'config#system'}
+                sx={{ pl: 4 }}
+              >
+                <ListItemIcon>
+                  <ComputerIcon sx={{ 
+                    color: currentTab === 'config#system' ? '#1E88E5' : undefined,
+                    opacity: 0.7,
+                    fontSize: '1.2rem'
+                  }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="System" 
+                  primaryTypographyProps={{
+                    sx: { 
+                      fontWeight: currentTab === 'config#system' ? 500 : 400,
+                      color: currentTab === 'config#system' ? '#fff' : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.95rem'
+                    }
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+            <ListItem disablePadding>
+              <ListItemButton 
+                onClick={() => onTabChange('config#users')}
+                selected={currentTab === 'config#users'}
+                sx={{ pl: 4 }}
+              >
+                <ListItemIcon>
+                  <PersonIcon sx={{ 
+                    color: currentTab === 'config#users' ? '#1E88E5' : undefined,
+                    opacity: 0.7,
+                    fontSize: '1.2rem'
+                  }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Users" 
+                  primaryTypographyProps={{
+                    sx: { 
+                      fontWeight: currentTab === 'config#users' ? 500 : 400,
+                      color: currentTab === 'config#users' ? '#fff' : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.95rem'
+                    }
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+            <ListItem disablePadding>
+              <ListItemButton 
+                onClick={() => onTabChange('config#tasks')}
+                selected={currentTab === 'config#tasks'}
+                sx={{ pl: 4 }}
+              >
+                <ListItemIcon>
+                  <TaskIcon sx={{ 
+                    color: currentTab === 'config#tasks' ? '#1E88E5' : undefined,
+                    opacity: 0.7,
+                    fontSize: '1.2rem'
+                  }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Tasks" 
+                  primaryTypographyProps={{
+                    sx: { 
+                      fontWeight: currentTab === 'config#tasks' ? 500 : 400,
+                      color: currentTab === 'config#tasks' ? '#fff' : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.95rem'
+                    }
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+            <ListItem disablePadding>
+              <ListItemButton 
+                onClick={() => onTabChange('config/logs')}
+                selected={currentTab === 'logs'}
+                sx={{ pl: 4 }}
+              >
+                <ListItemIcon>
+                  <ListIcon sx={{ 
+                    color: currentTab === 'logs' ? '#1E88E5' : undefined,
+                    opacity: 0.7,
+                    fontSize: '1.2rem'
+                  }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Logs" 
+                  primaryTypographyProps={{
+                    sx: { 
+                      fontWeight: currentTab === 'logs' ? 500 : 400,
+                      color: currentTab === 'logs' ? '#fff' : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.95rem'
+                    }
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          </List>
+        </StyledCollapse>
       </List>
     </Box>
   );
@@ -212,75 +379,79 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange,
       <AppBar
         position="fixed"
         sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
+          width: '100%',
+          backgroundColor: 'background.paper',
+          backgroundImage: 'none',
+          boxShadow: 'none',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <IconButton
             color="inherit"
+            aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
-          <Search>
-            <SearchIconWrapper>
-              <SearchIcon />
-            </SearchIconWrapper>
-            <StyledInputBase
-              placeholder="Search games…"
-              inputProps={{ 'aria-label': 'search' }}
-              onChange={(e) => onSearch?.(e.target.value)}
-            />
-          </Search>
-          <Box sx={{ flexGrow: 1 }} />
-          <IconButton color="inherit" onClick={() => onTabChange('config')}>
-            <SettingsIcon />
-          </IconButton>
+          
+          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+            {onSearch && (
+              <Search>
+                <SearchIconWrapper>
+                  <SearchIcon />
+                </SearchIconWrapper>
+                <StyledInputBase
+                  placeholder="Search games..."
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearch(e.target.value)}
+                />
+              </Search>
+            )}
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton onClick={() => setUserMenuOpen(true)} color="inherit">
+              <PersonIcon />
+            </IconButton>
+            <IconButton onClick={toggleTheme} color="inherit">
+              {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
+            </IconButton>
+          </Box>
         </Toolbar>
       </AppBar>
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+
+      <StyledDrawer
+        anchor="left"
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: drawerWidth,
+          },
+        }}
       >
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true,
-          }}
-          sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-        >
-          {drawer}
-        </Drawer>
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
+        {drawer}
+      </StyledDrawer>
+
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: '64px',
+          minHeight: '100vh',
+          backgroundColor: 'background.default',
         }}
       >
-        {currentTab === 'config' ? <Configuration /> : children}
+        <Toolbar />
+        {children}
       </Box>
+
+      <UserMenu
+        open={userMenuOpen}
+        onClose={() => setUserMenuOpen(false)}
+      />
     </Box>
   );
 }; 
