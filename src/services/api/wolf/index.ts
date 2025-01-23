@@ -2,13 +2,23 @@ import { WolfGame, WolfGameUpdate } from './types';
 import { handleApiResponse, handleApiError } from '../base';
 import Logger from '../logs';
 
-interface PairRequest {
+export interface PairRequest {
   pair_secret: string;
   pin: string;
 }
 
-interface PairResponse {
+export interface PairResponse {
   requests: PairRequest[];
+  success: boolean;
+}
+
+export interface PairedClient {
+  app_state_folder: string;
+  client_id: number;
+}
+
+export interface PairedClientsResponse {
+  clients: PairedClient[];
   success: boolean;
 }
 
@@ -125,6 +135,19 @@ class WolfService {
       body: JSON.stringify({ pair_secret, pin })
     });
     return response.json();
+  }
+
+  async getClients(): Promise<PairedClientsResponse> {
+    try {
+      Logger.debug('Fetching paired clients', 'WolfService');
+      const response = await fetch('/api/wolf/clients');
+      const data = await handleApiResponse<PairedClientsResponse>(response, 'WolfService');
+      Logger.info('Successfully fetched paired clients', 'WolfService', { count: data.clients.length });
+      return data;
+    } catch (error) {
+      await handleApiError(error, 'WolfService');
+      throw error;
+    }
   }
 }
 

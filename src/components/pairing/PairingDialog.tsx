@@ -18,7 +18,7 @@ import {
   Tooltip
 } from '@mui/material'
 import { Refresh as RefreshIcon } from '@mui/icons-material'
-import WolfService from '../../services/api/wolf'
+import WolfService, { PairedClient } from '../../services/api/wolf'
 import { ConfigService } from '../../services'
 import Logger from '../../services/api/logs'
 
@@ -50,6 +50,7 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
   const [friendlyName, setFriendlyName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([])
   const [selectedIP, setSelectedIP] = useState<string>('')
@@ -106,6 +107,7 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
       setPinCode('')
       setSelectedIP('')
       setError(null)
+      setWarning(null)
       setSuccess(false)
       setPendingRequests([])
       fetchPendingRequests()
@@ -116,6 +118,7 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
     try {
       setLoading(true)
       setError(null)
+      setWarning(null)
       setSuccess(false)
 
       if (!selectedIP) {
@@ -139,68 +142,102 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
       if (confirmResponse.success) {
         // Get the current list of clients to find the new one
         try {
-          Logger.debug('Fetching client list after successful pairing', 'PairingDialog');
-          const clientsResponse = await fetch('/api/wolf/clients');
-          const clientsData = await clientsResponse.json()
-          Logger.debug('Received client list', 'PairingDialog', clientsData);
+          Logger.debug('Fetching client list after successful pairing', 'PairingDialog')
           
-          if (clientsData.success && clientsData.clients) {
-            // Get current config
-            const config = ConfigService.getConfig()
-            const currentUser = config.currentUser
+          // Add retry mechanism
+          let retryCount = 0
+          let clientsData
+          
+          while (retryCount < 3) {
+            // Wait for a short delay before fetching
+            await new Promise(resolve => setTimeout(resolve, 1000))
             
-            if (currentUser) {
-              const userConfig = config.users[currentUser]
-              const clients = userConfig.clients || {}
-              Logger.debug('Current client list', 'PairingDialog', clients);
+            clientsData = await WolfService.getClients()
+            Logger.debug('Received client list', 'PairingDialog', { clientsData, attempt: retryCount + 1 })
+            
+            if (clientsData.success && clientsData.clients && clientsData.clients.length > 0) {
+              // Check for duplicate client IDs
+              const clientIds = clientsData.clients.map(client => client.client_id)
+              const uniqueClientIds = new Set(clientIds)
               
-              // Find the new client (the one not in our current list)
-              const newClient = clientsData.clients.find((client: any) => 
-                !clients[client.client_id.toString()]
-              )
-              Logger.debug('Found new client', 'PairingDialog', newClient);
-              
-              if (newClient) {
-                const updatedClients = {
-                  ...clients,
-                  [newClient.client_id.toString()]: {
-                    friendlyName: friendlyName.trim()
-                  }
-                };
-                Logger.debug('Updating config with new client', 'PairingDialog', updatedClients);
-                
-                // Update the config with the new client
-                await ConfigService.editUser(
-                  currentUser,
-                  undefined,  // Don't update steamId
-                  undefined,  // Don't update steamApiKey
-                  updatedClients
-                )
-                
-                setSuccess(true)
-                // Give time for the success message to be seen
-                setTimeout(() => {
-                  onClose()
-                }, 2000)
-              } else {
-                Logger.error('Could not find newly paired client', 'PairingDialog');
-                setError('Could not find newly paired client')
+              if (clientIds.length !== uniqueClientIds.size) {
+                const duplicates = clientIds.filter((id, index) => clientIds.indexOf(id) !== index)
+                Logger.warn('Duplicate client IDs detected in Wolf config', 'PairingDialog', {
+                  duplicateIds: duplicates,
+                  totalClients: clientIds.length,
+                  uniqueClients: uniqueClientIds.size
+                })
+                // Show warning but continue with pairing
+                setWarning('Duplicate client IDs detected in Wolf configuration. Please check your Wolf config file after pairing completes.')
               }
+              break
+            }
+            
+            retryCount++
+            if (retryCount < 3) {
+              Logger.debug('Retrying client list fetch', 'PairingDialog', { attempt: retryCount + 1 })
+            }
+          }
+          
+          if (!clientsData || !clientsData.success || !clientsData.clients || clientsData.clients.length === 0) {
+            Logger.error('Failed to get client list after retries', 'PairingDialog', JSON.stringify({ attempts: retryCount + 1 }))
+            setError('Failed to get client list after multiple attempts')
+            return
+          }
+          
+          // Get current config
+          const config = ConfigService.getConfig()
+          const currentUser = config.currentUser
+          
+          if (currentUser) {
+            const userConfig = config.users[currentUser]
+            const clients = userConfig.clients || {}
+            Logger.debug('Current client list', 'PairingDialog', clients)
+            
+            // Find the new client (the one not in our current list)
+            const newClient: PairedClient = clientsData.clients[clientsData.clients.length - 1]
+            Logger.debug('Using last client from list as new client', 'PairingDialog', { 
+              newClient,
+              totalClients: clientsData.clients.length
+            })
+            
+            if (newClient) {
+              const updatedClients = {
+                ...clients,
+                [newClient.client_id.toString()]: {
+                  friendlyName: friendlyName.trim()
+                }
+              }
+              Logger.debug('Updating config with new client', 'PairingDialog', updatedClients)
+              
+              // Update the config with the new client
+              await ConfigService.editUser(
+                currentUser,
+                undefined,  // Don't update steamId
+                undefined,  // Don't update steamApiKey
+                updatedClients
+              )
+              
+              setSuccess(true)
+              // Give time for the success message to be seen
+              setTimeout(() => {
+                onClose()
+              }, 2000)
             } else {
-              Logger.error('No active user found', 'PairingDialog');
-              setError('No active user found')
+              Logger.error('Could not find newly paired client', 'PairingDialog')
+              setError('Could not find newly paired client')
             }
           } else {
-            Logger.error('Failed to get client list', 'PairingDialog', clientsData);
-            setError('Failed to get client list')
+            Logger.error('No active user found', 'PairingDialog')
+            setError('No active user found')
           }
         } catch (err) {
-          Logger.error('Error updating client config', err, 'PairingDialog');
+          Logger.error('Error updating client config', err, 'PairingDialog')
           console.error('Error updating client config:', err)
           setError('Failed to update client configuration')
         }
       } else {
-        Logger.error('Failed to confirm pairing: ' + JSON.stringify(confirmResponse), 'PairingDialog');
+        Logger.error('Failed to confirm pairing: ' + JSON.stringify(confirmResponse), 'PairingDialog')
         setError('Failed to confirm pairing, please try again')
       }
     } catch (err) {
@@ -220,6 +257,7 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
       <DialogTitle>Pair client</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {warning && <Alert severity="warning" sx={{ mb: 2 }}>{warning}</Alert>}
         {success && <Alert severity="success" sx={{ mb: 2 }}>Successfully paired with client!</Alert>}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
