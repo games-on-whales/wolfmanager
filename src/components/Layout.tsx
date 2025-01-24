@@ -375,17 +375,27 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange,
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box 
+      className="min-h-screen flex bg-[#0d1117] relative overflow-hidden"
+      sx={{ display: 'flex' }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-b from-[#1a2332] via-[#0d1117] to-[#0d1117] opacity-80" />
+      
       <AppBar
         position="fixed"
-        sx={{
-          width: '100%',
-          backgroundColor: 'background.paper',
-          backgroundImage: 'none',
-          boxShadow: 'none',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-        }}
+  sx={(theme) => ({
+    width: '100%',
+    background: theme.palette.mode === 'dark' 
+      ? 'rgba(13, 17, 23, 0.8)' 
+      : 'rgba(255, 255, 255, 0.95)',
+    backdropFilter: 'blur(10px)',
+    boxShadow: 'none',
+    borderBottom: '1px solid',
+    borderColor: theme.palette.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.1)'
+      : 'rgba(0, 0, 0, 0.1)',
+    zIndex: theme.zIndex.drawer + 1
+  })}
       >
         <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <IconButton
@@ -437,11 +447,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSearch, onTabChange,
 
       <Box
         component="main"
+        className="relative z-1"
         sx={{
           flexGrow: 1,
           p: 3,
           minHeight: '100vh',
-          backgroundColor: 'background.default',
+          background: 'transparent',
         }}
       >
         <Toolbar />

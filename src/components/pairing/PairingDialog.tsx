@@ -153,41 +153,127 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
             await new Promise(resolve => setTimeout(resolve, 1000))
             
             clientsData = await WolfService.getClients()
-            Logger.debug('Received client list', 'PairingDialog', { 
-              clientsData, 
-              attempt: retryCount + 1,
-              rawClientIds: clientsData.clients.map(c => ({
-                original: c.client_id,
-                asBigInt: BigInt(c.client_id).toString(),
-                asString: c.client_id.toString()
+            
+            // Log raw client data for debugging
+            Logger.debug('Raw client data from Wolf API', 'PairingDialog', {
+              rawData: (clientsData.clients as PairedClient[]).map((client: PairedClient) => ({
+                client_id: client.client_id,
+                client_id_type: typeof client.client_id,
+                client_id_bigint: BigInt(client.client_id).toString(),
+                app_state_folder: client.app_state_folder
               }))
             })
             
             if (clientsData.success && clientsData.clients && clientsData.clients.length > 0) {
-              // Check for duplicate client IDs
-              const clientIds = clientsData.clients.map(client => ({
-                original: client.client_id,
-                asBigInt: BigInt(client.client_id).toString(),
-                asString: client.client_id.toString()
+              // First, ensure we're working with the raw client IDs directly
+              const rawClientData = (clientsData.clients as PairedClient[]).map((client: PairedClient) => ({
+                client_id: BigInt(client.client_id).toString(),
+                app_state_folder: client.app_state_folder
               }))
-              const uniqueClientIds = new Set(clientIds.map(c => c.asBigInt))
               
-              if (clientIds.length !== uniqueClientIds.size) {
-                const duplicates = clientIds.filter((id, index) => clientIds.indexOf(id) !== index)
-                Logger.warn('Duplicate client IDs detected in Wolf config', 'PairingDialog', {
-                  duplicateIds: duplicates,
-                  totalClients: clientIds.length,
-                  uniqueClients: uniqueClientIds.size
+              // Create a Map to deduplicate while preserving the last occurrence of each client ID
+              const clientMap = new Map<string, { client_id: string; app_state_folder: string }>()
+              rawClientData.forEach(client => {
+                clientMap.set(client.client_id, client)
+              })
+              
+              // Convert back to array and get unique client IDs
+              const uniqueClientIds = Array.from(clientMap.keys())
+              
+              Logger.debug('Client IDs processing details', 'PairingDialog', {
+                rawClientData,
+                uniqueClientIds,
+                duplicatesRemoved: rawClientData.length - uniqueClientIds.length,
+                originalLength: rawClientData.length,
+                finalLength: uniqueClientIds.length
+              })
+              
+              // Process the client data
+              const config = ConfigService.getConfig()
+              const currentUser = config.currentUser
+              
+              if (currentUser) {
+                const userConfig = config.users[currentUser]
+                const existingClients = userConfig.clients || {}
+                
+                Logger.debug('Existing clients in config', 'PairingDialog', {
+                  existingClientIds: Object.keys(existingClients),
+                  existingClientsCount: Object.keys(existingClients).length
                 })
-                // Show warning but continue with pairing
-                setWarning('Duplicate client IDs detected in Wolf configuration. Please check your Wolf config file after pairing completes.')
+                
+                // Identify unknown client IDs using improved comparison
+                const unknownClientIds = uniqueClientIds.filter(
+                  wolfId => !(wolfId in existingClients)
+                )
+                
+                Logger.debug('Unknown client detection results', 'PairingDialog', {
+                  unknownClientIds,
+                  unknownCount: unknownClientIds.length,
+                  uniqueClientIds,
+                  existingClientIds: Object.keys(existingClients),
+                  rawDataLength: rawClientData.length,
+                  uniqueLength: uniqueClientIds.length
+                })
+                
+                if (unknownClientIds.length === 1) {
+                  const newClientId = unknownClientIds[0]
+                  Logger.debug('Single new client identified', 'PairingDialog', { 
+                    newClientId,
+                    friendlyName: friendlyName.trim()
+                  })
+                  
+                  // Add the new client to the config
+                  const updatedClients = {
+                    ...existingClients,
+                    [newClientId]: { 
+                      friendlyName: friendlyName.trim() 
+                    }
+                  }
+                  
+                  Logger.debug('Updating config with new client', 'PairingDialog', {
+                    newClientId,
+                    updatedClientsCount: Object.keys(updatedClients).length,
+                    previousClientsCount: Object.keys(existingClients).length
+                  })
+                  
+                  // Update the config with the new client
+                  await ConfigService.editUser(
+                    currentUser,
+                    undefined,  // Don't update steamId
+                    undefined,  // Don't update steamApiKey
+                    updatedClients
+                  )
+                  
+                  setSuccess(true)
+                  setTimeout(onClose, 2000)
+                } else if (unknownClientIds.length > 1) {
+                  Logger.error('Multiple unknown clients detected', 'PairingDialog', JSON.stringify({
+                    unknownClientIds,
+                    unknownCount: unknownClientIds.length,
+                    existingClientIds: Object.keys(existingClients)
+                  }))
+                  setError('Multiple unknown clients found - cannot determine which is the newly paired client')
+                } else {
+                  Logger.error('No new clients detected', 'PairingDialog', JSON.stringify({
+                    uniqueClientIds,
+                    existingClientIds: Object.keys(existingClients)
+                  }))
+                  setError('Could not find newly paired client')
+                }
+              } else {
+                Logger.error('No active user found', 'PairingDialog')
+                setError('No active user found')
               }
+              
               break
             }
             
             retryCount++
             if (retryCount < 3) {
-              Logger.debug('Retrying client list fetch', 'PairingDialog', { attempt: retryCount + 1 })
+              Logger.debug('Retrying client list fetch', 'PairingDialog', { 
+                attempt: retryCount + 1,
+                maxAttempts: 3
+              })
             }
           }
           
@@ -195,54 +281,6 @@ export function PairingDialog({ open, onClose }: PairingDialogProps) {
             Logger.error('Failed to get client list after retries', 'PairingDialog', JSON.stringify({ attempts: retryCount + 1 }))
             setError('Failed to get client list after multiple attempts')
             return
-          }
-          
-          // Get current config
-          const config = ConfigService.getConfig()
-          const currentUser = config.currentUser
-          
-          if (currentUser) {
-            const userConfig = config.users[currentUser]
-            const clients = userConfig.clients || {}
-            Logger.debug('Current client list', 'PairingDialog', clients)
-            
-            // Find the new client (the one not in our current list)
-            const newClient: PairedClient = clientsData.clients[clientsData.clients.length - 1]
-            Logger.debug('Using last client from list as new client', 'PairingDialog', { 
-              newClient,
-              totalClients: clientsData.clients.length
-            })
-            
-            if (newClient) {
-              const clientId = BigInt(newClient.client_id).toString()
-              const updatedClients = {
-                ...clients,
-                [clientId]: {
-                  friendlyName: friendlyName.trim()
-                }
-              }
-              Logger.debug('Updating config with new client', 'PairingDialog', updatedClients)
-              
-              // Update the config with the new client
-              await ConfigService.editUser(
-                currentUser,
-                undefined,  // Don't update steamId
-                undefined,  // Don't update steamApiKey
-                updatedClients
-              )
-              
-              setSuccess(true)
-              // Give time for the success message to be seen
-              setTimeout(() => {
-                onClose()
-              }, 2000)
-            } else {
-              Logger.error('Could not find newly paired client', 'PairingDialog')
-              setError('Could not find newly paired client')
-            }
-          } else {
-            Logger.error('No active user found', 'PairingDialog')
-            setError('No active user found')
           }
         } catch (err) {
           Logger.error('Error updating client config', err, 'PairingDialog')

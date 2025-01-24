@@ -44,7 +44,7 @@ const darkTheme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          background: 'linear-gradient(130deg, #0d1117 0%, #161b22 30%, #1a1f25 70%, #21262d 100%)',
+          background: 'radial-gradient(circle at 50% -20%, #1E83DB 0%, #1B3751 50%, #030712 80%)',          
           minHeight: '100vh',
           overflowX: 'hidden',
         },
