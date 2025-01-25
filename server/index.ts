@@ -11,6 +11,7 @@ import { Config, UserConfig, SteamGame } from '../src/types/config';
 import { GameManager } from './games/GameManager.js';
 import * as http from 'http';
 import * as net from 'net';
+import { PairedClient } from '../src/services/api/wolf';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -725,43 +726,48 @@ app.put('/api/users/:username', async (req, res) => {
     // Log raw response for debugging
     serverLog('debug', 'Raw response from Wolf API', 'Server', { responseText });
     
-    // Extract client_id directly from the raw response text to preserve exact value
-    const clientIdMatch = responseText.match(/"client_id":(\d+)/);
-    const exactClientId = clientIdMatch ? clientIdMatch[1] : null;
+    // Parse the response and get valid client IDs
+    const wolfData = JSON.parse(responseText) as { 
+      success: boolean; 
+      clients: PairedClient[] 
+    };
     
-    serverLog('debug', 'Extracted client ID', 'Server', { exactClientId });
+    // Create a set of valid client IDs preserving original values as BigInt strings
+    const validClientIds = new Set(
+      wolfData.clients.map(client => BigInt(client.client_id).toString())
+    );
     
-    // Create a set of valid client IDs using the exact value
-    const validClientIds = new Set(exactClientId ? [exactClientId] : []);
-    
-    // Log the valid client IDs
     serverLog('debug', 'Valid client IDs from Wolf API', 'Server', { 
-      validClientIds: Array.from(validClientIds)
+      validClientIds: Array.from(validClientIds),
+      rawClientIds: wolfData.clients.map(c => ({
+        original: c.client_id,
+        asBigInt: BigInt(c.client_id).toString()
+      }))
     });
     
     // Filter out any clients that aren't in the Wolf API response
     const validatedClients = clients ? Object.entries(clients).reduce((acc, [clientId, clientData]) => {
-      // Ensure clientData has the correct type
-      if (validClientIds.has(clientId) && 
+      // Convert the stored client ID to BigInt string for comparison
+      const normalizedClientId = BigInt(clientId).toString();
+      
+      // Ensure clientData has the correct type and client ID is valid
+      if (validClientIds.has(normalizedClientId) && 
           clientData && 
           typeof clientData === 'object' && 
           'friendlyName' in clientData && 
           typeof clientData.friendlyName === 'string') {
-        acc[clientId] = {
+        // Store using the original BigInt string format
+        acc[normalizedClientId] = {
           friendlyName: clientData.friendlyName
         };
       } else {
-        // If the client ID doesn't match, but it's a new pairing, use the exact ID
-        if (exactClientId && Object.keys(existingUserData.clients || {}).length === 0 &&
-            clientData && typeof clientData === 'object' && 
-            'friendlyName' in clientData && 
-            typeof clientData.friendlyName === 'string') {
-          acc[exactClientId] = {
-            friendlyName: clientData.friendlyName
-          };
-        } else {
-          serverLog('warn', 'Removing invalid client data from config', 'Server', { clientId, clientData });
-        }
+        serverLog('warn', 'Removing invalid client data from config', 'Server', { 
+          clientId,
+          normalizedClientId,
+          clientData,
+          isValidId: validClientIds.has(normalizedClientId),
+          validIds: Array.from(validClientIds)
+        });
       }
       return acc;
     }, {} as Record<string, { friendlyName: string }>) : existingUserData.clients;
@@ -771,6 +777,13 @@ app.put('/api/users/:username', async (req, res) => {
 
     // Save the updated config
     await configManager.saveConfig(config);
+
+    serverLog('debug', 'Updated client configuration', 'Server', {
+      username,
+      originalClientIds: clients ? Object.keys(clients).map(id => BigInt(id).toString()) : [],
+      validatedClientIds: Object.keys(validatedClients || {}).map(id => BigInt(id).toString()),
+      validWolfIds: Array.from(validClientIds)
+    });
 
     // Return sanitized config
     const sanitizedConfig = {
@@ -905,28 +918,33 @@ app.get('/api/wolf/clients', async (req, res) => {
     // Log raw response for debugging
     serverLog('debug', 'Raw response from Wolf API', 'Server', { responseText });
     
-    // Extract client_id directly from the raw response text to preserve exact value
-    const clientIdMatch = responseText.match(/"client_id":(\d+)/);
-    const exactClientId = clientIdMatch ? clientIdMatch[1] : null;
+    // Parse the response using PairedClient type
+    const data = JSON.parse(responseText) as { 
+      success: boolean; 
+      clients: PairedClient[] 
+    };
     
-    // Parse the rest of the response normally
-    const data = JSON.parse(responseText) as { success: boolean; clients: Array<{ client_id: number; app_state_folder: string }> };
-    
-    // Use the exact client ID in the response
+    // Create the client response, preserving the original client_ids as BigInt strings
     const clientResponse: ClientResponse = {
       success: data.success,
       clients: data.clients.map(client => ({
-        client_id: exactClientId || String(client.client_id),
+        client_id: BigInt(client.client_id).toString(),
         app_state_folder: client.app_state_folder
       }))
     };
     
     // Log the client IDs for debugging
     serverLog('debug', 'Client IDs', 'Server', {
-      clientIds: clientResponse.clients.map(c => c.client_id)
+      clientIds: clientResponse.clients.map(c => ({
+        asString: c.client_id,
+        original: data.clients.find(dc => BigInt(dc.client_id).toString() === c.client_id)?.client_id
+      }))
     });
     
-    serverLog('info', 'Successfully fetched client list', 'Server', { count: clientResponse.clients?.length || 0 });
+    serverLog('info', 'Successfully fetched client list', 'Server', { 
+      count: clientResponse.clients?.length || 0,
+      uniqueIds: [...new Set(clientResponse.clients.map(c => c.client_id))].length
+    });
     res.json(clientResponse);
   } catch (error) {
     serverLog('error', 'Failed to fetch client list', 'Server', { error });
