@@ -727,9 +727,13 @@ app.put('/api/users/:username', async (req, res) => {
     serverLog('debug', 'Raw response from Wolf API', 'Server', { responseText });
     
     // Parse the response and get valid client IDs
-    const wolfData = JSON.parse(responseText) as { 
-      success: boolean; 
-      clients: PairedClient[] 
+    const wolfData = JSON.parse(responseText, (key, value) => {
+      // Always convert 'id' fields to strings
+      if (key === 'id') return String(value)
+      return value
+    }) as {
+      success: boolean;
+      clients: PairedClient[]
     };
     
     // Create a set of valid client IDs preserving original values as BigInt strings
@@ -919,9 +923,13 @@ app.get('/api/wolf/clients', async (req, res) => {
     serverLog('debug', 'Raw response from Wolf API', 'Server', { responseText });
     
     // Parse the response using PairedClient type
-    const data = JSON.parse(responseText) as { 
-      success: boolean; 
-      clients: PairedClient[] 
+    const data = JSON.parse(responseText, (key, value) => {
+      // Always convert 'id' fields to strings
+      if (key === 'id') return String(value)
+      return value
+    }) as {
+      success: boolean;
+      clients: PairedClient[]
     };
     
     // Create the client response, preserving the original client_ids as BigInt strings
@@ -1019,6 +1027,45 @@ app.post('/api/wolf/pair/client', async (req, res) => {
   } catch (error) {
     serverLog('error', 'Error confirming pair', 'Server', { error });
     res.status(500).json({ error: 'Failed to confirm pairing' });
+  }
+});
+
+// User selection endpoint
+app.post('/api/users/:username/select', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const configManager = await ConfigManager.getInstance();
+    const config = configManager.getConfig();
+
+    if (!config.users[username]) {
+      serverLog('error', 'User not found for selection', 'Server', { username });
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update current user
+    config.currentUser = username;
+    await configManager.saveConfig(config);
+
+    // Return sanitized config
+    const sanitizedConfig = {
+      ...config,
+      users: Object.fromEntries(
+        Object.entries(config.users).map(([name, userData]) => [
+          name,
+          {
+            ...userData,
+            steamApiKey: '[REDACTED]'
+          }
+        ])
+      ),
+      steamGridDbApiKey: config.steamGridDbApiKey ? '[REDACTED]' : ''
+    };
+
+    serverLog('info', 'User selected successfully', 'Server', { username });
+    res.json(sanitizedConfig);
+  } catch (error) {
+    serverLog('error', 'Failed to select user', 'Server', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Failed to select user' });
   }
 });
 
