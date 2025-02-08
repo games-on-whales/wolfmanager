@@ -7,11 +7,14 @@
     "strict": true,
     "skipLibCheck": true,
     "outDir": "dist-server",
-    "rootDir": ".",
     "allowJs": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
-  "include": ["server/**/*"],
-  "exclude": ["node_modules", "dist", "dist-server"]
+  "include": ["server/**/*", "src/types/**/*"],
+  "exclude": ["node_modules"]
 } 

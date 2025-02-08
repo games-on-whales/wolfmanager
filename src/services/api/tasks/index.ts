@@ -1,6 +1,7 @@
 import { Task, TaskStatus, TaskSubscriber } from './types';
 import Logger from '../logs';
 import SteamService from '../steam';
+import WolfService from '../wolf';
 
 class TaskService {
   private tasks: Task[] = [];
@@ -8,12 +9,14 @@ class TaskService {
   private gamesListTaskId: string;
   private artworkTaskId: string;
   private clearCacheTaskId: string;
+  private validateClientsTaskId: string;
 
   constructor() {
     // Create the persistent tasks
     this.gamesListTaskId = crypto.randomUUID();
     this.artworkTaskId = crypto.randomUUID();
     this.clearCacheTaskId = crypto.randomUUID();
+    this.validateClientsTaskId = crypto.randomUUID();
 
     this.tasks = [
       {
@@ -37,6 +40,15 @@ class TaskService {
       {
         id: this.clearCacheTaskId,
         name: 'Clear Artwork Cache',
+        status: TaskStatus.COMPLETED,
+        progress: 0,
+        message: 'Idle',
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString()
+      },
+      {
+        id: this.validateClientsTaskId,
+        name: 'Validate Wolf Clients',
         status: TaskStatus.COMPLETED,
         progress: 0,
         message: 'Idle',
@@ -161,6 +173,31 @@ class TaskService {
         status: TaskStatus.FAILED,
         error: error instanceof Error ? error : new Error('Unknown error'),
         message: 'Failed to clear artwork cache'
+      });
+      throw error;
+    }
+  }
+
+  async validateClients(): Promise<void> {
+    try {
+      this.updateTask(this.validateClientsTaskId, {
+        status: TaskStatus.RUNNING,
+        message: 'Starting client validation...',
+        progress: 0
+      });
+
+      await WolfService.validateClients();
+      
+      this.updateTask(this.validateClientsTaskId, {
+        status: TaskStatus.COMPLETED,
+        message: 'Client validation completed',
+        progress: 100
+      });
+    } catch (error) {
+      this.updateTask(this.validateClientsTaskId, {
+        status: TaskStatus.FAILED,
+        error: error instanceof Error ? error : new Error('Unknown error'),
+        message: 'Failed to validate clients'
       });
       throw error;
     }

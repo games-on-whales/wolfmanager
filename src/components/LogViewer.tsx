@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
-  Paper,
   Typography,
   List,
   ListItem,
@@ -244,43 +243,35 @@ const LogViewer: React.FC = () => {
   });
 
   return (
-    <Paper 
+    <Box 
       ref={containerRef}
       sx={{ 
-        p: 3, 
-        maxWidth: 1200, 
-        mx: 'auto',
-        height: '100%',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        height: '100%'
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">
-          System Logs
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Tooltip title={isPaused ? "Resume log updates" : "Pause log updates"}>
-            <IconButton onClick={() => setIsPaused(!isPaused)} color={isPaused ? "warning" : "default"}>
-              {isPaused ? <PlayIcon /> : <PauseIcon />}
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Clear logs">
-            <IconButton onClick={handleClearLogs} disabled={isLoading}>
-              <DeleteIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Refresh logs">
-            <IconButton onClick={fetchLogs} disabled={isLoading}>
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Download log bundle">
-            <IconButton onClick={handleDownload} disabled={isLoading}>
-              <DownloadIcon />
-            </IconButton>
-          </Tooltip>
-        </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 3 }}>
+        <Tooltip title={isPaused ? "Resume log updates" : "Pause log updates"}>
+          <IconButton onClick={() => setIsPaused(!isPaused)} color={isPaused ? "warning" : "default"}>
+            {isPaused ? <PlayIcon /> : <PauseIcon />}
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Clear logs">
+          <IconButton onClick={handleClearLogs} disabled={isLoading}>
+            <DeleteIcon />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Refresh logs">
+          <IconButton onClick={fetchLogs} disabled={isLoading}>
+            <RefreshIcon />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Download log bundle">
+          <IconButton onClick={handleDownload} disabled={isLoading}>
+            <DownloadIcon />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
@@ -423,7 +414,7 @@ const LogViewer: React.FC = () => {
           </ListItem>
         ))}
       </List>
-    </Paper>
+    </Box>
   );
 };
 

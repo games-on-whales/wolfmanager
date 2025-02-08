@@ -7,6 +7,8 @@ services:
     volumes:
       - ./config:/config
       - ${STEAM_LIBRARY_PATH}:/games:ro
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - /var/run/wolf:/var/run/wolf:rw
     environment:
       - NODE_ENV=production
     logging:

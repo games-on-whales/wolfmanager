@@ -2,35 +2,51 @@
 /// <reference types="@mui/material" />
 /// <reference types="@mui/icons-material" />
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
-  Grid,
   Card,
-  CardContent,
-  Typography,
-  CircularProgress,
-  Alert,
-  CardMedia,
   CardActionArea,
-  IconButton
+  CardContent,
+  CardMedia,
+  CircularProgress,
+  Grid,
+  Typography,
+  Alert
 } from '@mui/material';
-import { Refresh as RefreshIcon, Schedule as ScheduleIcon } from '@mui/icons-material';
-import { SteamService, ConfigService, LogService, TaskService } from '../services';
-import { SteamGame } from '../services/api/steam/types';
+import { Schedule as ScheduleIcon } from '@mui/icons-material';
 import { debounce } from 'lodash';
+import { SteamGame } from '../types/steam';
+import { ConfigService, LogService, SteamService } from '../services';
+
+// Constants
+const CARD_HEIGHT = 300;
+const GRID_GAP = 16;
+const BATCH_SIZE = 20;
+const MIN_GAMES_PER_ROW = 5;
+const MAX_CARD_WIDTH = 200; // Current size from screenshot
+const CONTAINER_PADDING = 24;
+const ASPECT_RATIO = '2/3'; // 600x900 aspect ratio
 
 interface Props {
   searchQuery: string;
   libraryFilter: 'all' | 'steam';
 }
 
-const BATCH_SIZE = 48;
 const SCROLL_THRESHOLD = 100;
-const CARD_HEIGHT = 300; // Height of each game card in pixels
-const CARD_WIDTH = 200;  // Width of each game card in pixels
-const GRID_GAP = 16;    // Gap between cards in pixels
-const BUFFER_ROWS = 4;  // Number of rows to render above and below viewport
+const BUFFER_ROWS = 4;
+
+// Add memory management utilities
+const MEMORY_THRESHOLD = 50; // Maximum number of images to keep in memory
+const CLEANUP_INTERVAL = 60000; // Cleanup every minute
+
+interface GridLayout {
+  totalHeight: number;
+  cardsPerRow: number;
+  cardWidth: number;
+  rowHeight: number;
+  containerWidth: number;
+}
 
 export const GameLibrary: React.FC<Props> = ({ 
   searchQuery,
@@ -39,14 +55,15 @@ export const GameLibrary: React.FC<Props> = ({
   const [games, setGames] = useState<SteamGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [gameArtwork, setGameArtwork] = useState<Record<number, string | null>>({});
+  const [gameArtwork, setGameArtwork] = useState<Record<number, string>>({});
   const [loadingArtwork, setLoadingArtwork] = useState<Record<number, boolean>>({});
   const [displayedGames, setDisplayedGames] = useState<number>(BATCH_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [backgroundLoading, setBackgroundLoading] = useState(false);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: BATCH_SIZE });
   const containerRef = useRef<HTMLDivElement>(null);
   const urlCache = useRef<Set<string>>(new Set());
+  const [imageCache] = useState(() => new Map<number, string>());
+  const [preloadedImages] = useState(() => new Set<number>());
 
   // Cleanup function for URL objects
   const cleanupURLs = useCallback(() => {
@@ -73,18 +90,80 @@ export const GameLibrary: React.FC<Props> = ({
       .sort((a: SteamGame, b: SteamGame) => a.name.localeCompare(b.name));
   }, [games, searchQuery, libraryFilter]);
 
-  // Calculate total height and grid layout
-  const gridLayout = useMemo(() => {
-    if (!containerRef.current) return { totalHeight: 0, cardsPerRow: 0 };
+  // Add memory management utilities
+  const cleanupMemory = useCallback(() => {
+    if (imageCache.size > MEMORY_THRESHOLD) {
+      const keysToRemove = Array.from(imageCache.keys())
+        .slice(0, imageCache.size - MEMORY_THRESHOLD);
+      
+      keysToRemove.forEach(key => {
+        imageCache.delete(key);
+        preloadedImages.delete(key);
+      });
+      
+      LogService.debug('Cleaned up image cache', 'GameLibrary', {
+        removed: keysToRemove.length,
+        remaining: imageCache.size
+      });
+    }
+  }, [imageCache, preloadedImages]);
+
+  // Add cleanup interval
+  useEffect(() => {
+    const interval = setInterval(cleanupMemory, CLEANUP_INTERVAL);
+    return () => {
+      clearInterval(interval);
+      cleanupMemory();
+    };
+  }, [cleanupMemory]);
+
+  // Modify the grid layout calculation to ensure all properties are defined
+  const gridLayout = useMemo<GridLayout>(() => {
+    if (!containerRef.current) return {
+      totalHeight: 0,
+      cardsPerRow: 0,
+      cardWidth: 0,
+      rowHeight: CARD_HEIGHT + GRID_GAP,
+      containerWidth: 0
+    };
     
-    const containerWidth = containerRef.current.clientWidth - 48; // Account for padding
-    const cardsPerRow = Math.floor((containerWidth - GRID_GAP) / (CARD_WIDTH + GRID_GAP));
+    const containerWidth = containerRef.current.clientWidth - (CONTAINER_PADDING * 2);
+    const minCardWidth = Math.min(
+      MAX_CARD_WIDTH,
+      Math.floor((containerWidth - (GRID_GAP * (MIN_GAMES_PER_ROW - 1))) / MIN_GAMES_PER_ROW)
+    );
+    
+    const cardsPerRow = Math.max(
+      MIN_GAMES_PER_ROW,
+      Math.floor((containerWidth + GRID_GAP) / (minCardWidth + GRID_GAP))
+    );
+    
+    const cardWidth = Math.floor((containerWidth - (GRID_GAP * (cardsPerRow - 1))) / cardsPerRow);
     const totalRows = Math.ceil(filteredGames.length / cardsPerRow);
     const totalHeight = totalRows * (CARD_HEIGHT + GRID_GAP);
     
-    return { totalHeight, cardsPerRow };
+    return {
+      totalHeight,
+      cardsPerRow,
+      cardWidth,
+      rowHeight: CARD_HEIGHT + GRID_GAP,
+      containerWidth
+    };
   }, [filteredGames.length, containerRef.current?.clientWidth]);
 
+  // Add preload function
+  const preloadImage = useCallback((url: string, appId: number) => {
+    if (preloadedImages.has(appId)) return;
+    
+    const img = new Image();
+    img.onload = () => {
+      imageCache.set(appId, url);
+      preloadedImages.add(appId);
+    };
+    img.src = url;
+  }, [imageCache, preloadedImages]);
+
+  // Modify loadCachedArtworkBatch to use preloading
   const loadCachedArtworkBatch = useCallback(async (gamesToLoad: SteamGame[]) => {
     if (gamesToLoad.length === 0) return;
 
@@ -93,7 +172,6 @@ export const GameLibrary: React.FC<Props> = ({
       games: gamesToLoad.map(g => g.appid)
     });
 
-    // Mark batch as loading
     setLoadingArtwork((prev: Record<number, boolean>) => {
       const updates: Record<number, boolean> = {};
       gamesToLoad.forEach(game => {
@@ -103,56 +181,53 @@ export const GameLibrary: React.FC<Props> = ({
     });
 
     try {
-      // Split into chunks of 12 for parallel loading
       const chunks: SteamGame[][] = [];
       for (let i = 0; i < gamesToLoad.length; i += 12) {
         chunks.push(gamesToLoad.slice(i, i + 12));
       }
 
-      // Process chunks sequentially, but load each chunk in parallel
       for (const chunk of chunks) {
         const artworkPromises = chunk.map(async (game: SteamGame) => {
           try {
-            // First try to get from cache
-            const response = await fetch(`/api/cache/artwork/${game.appid}`);
+            const cachedImage = imageCache.get(game.appid);
+            if (cachedImage) {
+              return { appId: game.appid, url: cachedImage };
+            }
+
+            const response = await fetch(`/api/cache/artwork/${game.appid}`, {
+              cache: 'force-cache'
+            });
+            
             if (response.ok) {
               const blob = await response.blob();
               const url = URL.createObjectURL(blob);
-              urlCache.current.add(url); // Track URL for cleanup
-              LogService.debug('Loaded artwork from cache', 'GameLibrary', { 
-                appId: game.appid,
-                url
-              });
+              urlCache.current.add(url);
+              preloadImage(url, game.appid);
               return { appId: game.appid, url };
             }
             
-            // If not in cache, try to get from SteamGridDB
             const artwork = await SteamService.getGameArtwork(game.appid);
             if (artwork) {
-              LogService.debug('Loaded artwork from SteamGridDB', 'GameLibrary', { 
-                appId: game.appid,
-                url: artwork
-              });
+              preloadImage(artwork, game.appid);
+              return { appId: game.appid, url: artwork };
             }
-            return { appId: game.appid, url: artwork };
+            return { appId: game.appid, url: '' };
           } catch (error) {
             LogService.error('Failed to load artwork for game', error, 'GameLibrary');
-            return { appId: game.appid, url: null };
+            return { appId: game.appid, url: '' };
           }
         });
 
         const results = await Promise.all(artworkPromises);
 
-        // Update artwork for this chunk
-        setGameArtwork((prev: Record<number, string | null>) => {
-          const updates: Record<number, string | null> = {};
+        setGameArtwork((prev: Record<number, string>) => {
+          const updates: Record<number, string> = {};
           results.forEach(result => {
             updates[result.appId] = result.url;
           });
           return { ...prev, ...updates };
         });
 
-        // Update loading state for this chunk
         setLoadingArtwork((prev: Record<number, boolean>) => {
           const updates: Record<number, boolean> = {};
           chunk.forEach(game => {
@@ -161,12 +236,10 @@ export const GameLibrary: React.FC<Props> = ({
           return { ...prev, ...updates };
         });
 
-        // Add a small delay between chunks to avoid overwhelming the API
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     } catch (error) {
       LogService.error('Failed to load artwork batch', error, 'GameLibrary');
-      // Mark all as not loading on error
       setLoadingArtwork((prev: Record<number, boolean>) => {
         const updates: Record<number, boolean> = {};
         gamesToLoad.forEach(game => {
@@ -175,7 +248,7 @@ export const GameLibrary: React.FC<Props> = ({
         return { ...prev, ...updates };
       });
     }
-  }, []);
+  }, [imageCache, preloadImage]);
 
   // Handle scrolling and loading more games
   const handleScroll = useCallback(() => {
@@ -207,27 +280,23 @@ export const GameLibrary: React.FC<Props> = ({
     }
   }, [games.length, isLoadingMore, displayedGames, filteredGames, gameArtwork, loadCachedArtworkBatch]);
 
-  // Calculate visible range based on scroll position
+  // Optimize the visible range calculation
   const calculateVisibleRange = useCallback(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || gridLayout.cardsPerRow === 0) return;
 
     const container = containerRef.current;
     const scrollTop = container.scrollTop;
     const containerHeight = container.clientHeight;
-    const { cardsPerRow } = gridLayout;
-    
-    if (cardsPerRow === 0) return;
     
     // Calculate visible range with buffer
-    const rowHeight = CARD_HEIGHT + GRID_GAP;
-    const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - BUFFER_ROWS);
+    const startRow = Math.max(0, Math.floor(scrollTop / gridLayout.rowHeight) - BUFFER_ROWS);
     const endRow = Math.min(
-      Math.ceil(filteredGames.length / cardsPerRow),
-      Math.ceil((scrollTop + containerHeight) / rowHeight) + BUFFER_ROWS
+      Math.ceil(filteredGames.length / gridLayout.cardsPerRow),
+      Math.ceil((scrollTop + containerHeight) / gridLayout.rowHeight) + BUFFER_ROWS
     );
     
-    const start = Math.max(0, startRow * cardsPerRow);
-    const end = Math.min(filteredGames.length, (endRow + 1) * cardsPerRow);
+    const start = Math.max(0, startRow * gridLayout.cardsPerRow);
+    const end = Math.min(filteredGames.length, (endRow + 1) * gridLayout.cardsPerRow);
     
     setVisibleRange({ start, end });
   }, [filteredGames.length, gridLayout]);
@@ -266,36 +335,6 @@ export const GameLibrary: React.FC<Props> = ({
 
     loadGames();
   }, []);
-
-  const loadMissingArtwork = useCallback(async () => {
-    if (backgroundLoading) return;
-
-    setBackgroundLoading(true);
-    const gamesWithoutArtwork = games.filter((game: SteamGame) => gameArtwork[game.appid] === null);
-    
-    LogService.debug('Starting background artwork load', 'GameLibrary', {
-      gamesCount: gamesWithoutArtwork.length
-    });
-
-    for (const game of gamesWithoutArtwork) {
-      try {
-        const artwork = await SteamService.getGameArtwork(game.appid);
-        if (artwork) {
-          setGameArtwork((prev: Record<number, string | null>) => ({
-            ...prev,
-            [game.appid]: artwork
-          }));
-        }
-      } catch (error) {
-        LogService.error('Failed to load artwork from SteamGridDB', error, 'GameLibrary');
-      }
-      
-      // Add a delay between requests
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-
-    setBackgroundLoading(false);
-  }, [games, gameArtwork, backgroundLoading]);
 
   const displayedGamesList = useMemo(() => {
     const visibleGames = filteredGames.slice(visibleRange.start, visibleRange.end);
@@ -352,24 +391,6 @@ export const GameLibrary: React.FC<Props> = ({
     }
   }, [handleScroll]);
 
-  const handleRefreshArtwork = async (appId: number) => {
-    try {
-      setLoadingArtwork((prev: Record<number, boolean>) => ({ ...prev, [appId]: true }));
-      await TaskService.refreshGameArtwork();
-      const artwork = await SteamService.getGameArtwork(appId);
-      if (artwork) {
-        setGameArtwork((prev: Record<number, string | null>) => ({
-          ...prev,
-          [appId]: artwork
-        }));
-      }
-    } catch (error) {
-      LogService.error('Failed to refresh artwork', error, 'GameLibrary');
-    } finally {
-      setLoadingArtwork((prev: Record<number, boolean>) => ({ ...prev, [appId]: false }));
-    }
-  };
-
   useEffect(() => {
     LogService.debug('Games state updated', 'GameLibrary', {
       totalGames: games.length,
@@ -399,10 +420,9 @@ export const GameLibrary: React.FC<Props> = ({
       ref={containerRef} 
       sx={{ 
         flexGrow: 1, 
-        p: 3, 
         position: 'fixed',
         top: 64,
-        left: 240,
+        left: 0,
         right: 0,
         bottom: 0,
         overflowY: 'auto',
@@ -410,11 +430,16 @@ export const GameLibrary: React.FC<Props> = ({
         willChange: 'transform',
         overscrollBehavior: 'contain',
         WebkitOverflowScrolling: 'touch',
+        px: 3,
         '& .MuiCard-root': {
           willChange: 'transform',
           backfaceVisibility: 'hidden',
           transform: 'translateZ(0)',
-          contain: 'content layout style paint'
+          contain: 'content layout style paint',
+          maxWidth: MAX_CARD_WIDTH,
+          aspectRatio: ASPECT_RATIO,
+          display: 'flex',
+          flexDirection: 'column'
         }
       }}
     >
@@ -424,6 +449,9 @@ export const GameLibrary: React.FC<Props> = ({
           height: gridLayout.totalHeight,
           position: 'relative',
           contain: 'size layout',
+          maxWidth: '1600px',
+          width: '100%',
+          mx: 'auto'
         }}
       >
         <Box
@@ -440,25 +468,24 @@ export const GameLibrary: React.FC<Props> = ({
             spacing={2}
             sx={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 200px))',
-              gap: '16px',
+              gridTemplateColumns: `repeat(${gridLayout.cardsPerRow}, minmax(0, 1fr))`,
+              gap: `${GRID_GAP}px`,
               justifyContent: 'center',
               contain: 'layout style',
               '& > .MuiGrid-item': {
                 width: '100%',
-                maxWidth: '200px',
                 margin: 0,
                 padding: 0,
                 contain: 'layout style'
               }
             }}
           >
-            {displayedGamesList.map((game: SteamGame) => (
+            {displayedGamesList.map((game: SteamGame, index: number) => (
               <Grid item key={game.appid}>
                 <Card 
                   sx={{ 
-                    height: CARD_HEIGHT,
-                    maxWidth: CARD_WIDTH,
+                    height: '100%',
+                    width: '100%',
                     margin: '0 auto',
                     position: 'relative',
                     transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -471,32 +498,31 @@ export const GameLibrary: React.FC<Props> = ({
                     }
                   }}
                 >
-                  <CardActionArea>
+                  <CardActionArea sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                     {gameArtwork[game.appid] ? (
                       <CardMedia
                         component="img"
                         sx={{
-                          aspectRatio: '2/3',
-                          objectFit: 'cover',
                           width: '100%',
-                          height: 'auto',
-                          maxWidth: '200px',
-                          maxHeight: '300px',
-                          contain: 'content', // Prevent layout thrashing
-                          transform: 'translateZ(0)' // Force GPU acceleration
+                          height: '100%',
+                          objectFit: 'cover',
+                          aspectRatio: ASPECT_RATIO,
+                          contain: 'content',
+                          transform: 'translateZ(0)',
+                          willChange: 'transform',
+                          backfaceVisibility: 'hidden'
                         }}
-                        image={gameArtwork[game.appid] || undefined}
+                        image={imageCache.get(game.appid) || gameArtwork[game.appid] || ''}
                         alt={game.name}
                         loading="lazy"
                         decoding="async"
+                        fetchPriority={index < 12 ? "high" : "low"}
                       />
                     ) : (
                       <Box
                         sx={{
-                          aspectRatio: '2/3',
                           width: '100%',
-                          maxWidth: '200px',
-                          maxHeight: '300px',
+                          height: '100%',
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
@@ -505,8 +531,9 @@ export const GameLibrary: React.FC<Props> = ({
                           position: 'relative',
                           p: 2,
                           textAlign: 'center',
-                          contain: 'content', // Prevent layout thrashing
-                          transform: 'translateZ(0)' // Force GPU acceleration
+                          aspectRatio: ASPECT_RATIO,
+                          contain: 'content',
+                          transform: 'translateZ(0)'
                         }}
                       >
                         {loadingArtwork[game.appid] ? (
@@ -527,13 +554,13 @@ export const GameLibrary: React.FC<Props> = ({
                         background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
                         padding: '16px 8px 8px',
                         opacity: 0,
-                        transform: 'translate3d(0, 20px, 0)', // Use translate3d for better performance
+                        transform: 'translate3d(0, 20px, 0)',
                         transition: 'opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '4px',
                         willChange: 'opacity, transform',
-                        contain: 'content' // Prevent layout thrashing
+                        contain: 'content'
                       }}
                     >
                       {game.playtime_forever > 0 && (
