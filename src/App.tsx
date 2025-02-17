@@ -5,6 +5,7 @@ import Configuration from './components/Configuration';
 import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { Logs } from './components/Logs';
+import { UpdateChecker } from './components/UpdateChecker';
 import { TaskService, LogService } from './services';
 
 interface ThemeContextType {
@@ -648,6 +649,7 @@ export const App: React.FC = () => {
                 path="/logs" 
                 render={() => <Logs />}
               />
+              <Route path="/update" component={UpdateChecker} />
             </Switch>
           </Layout>
         </Router>

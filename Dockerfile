@@ -1,7 +1,9 @@
 FROM node:20-alpine
 
-# Install curl
-RUN apk add --no-cache curl
+# Install required packages
+RUN apk add --no-cache \
+    curl \
+    skopeo
 
 # Set working directory
 WORKDIR /app

@@ -49,7 +49,17 @@ export default function Configuration(): JSX.Element {
     steamGridDbApiKey: '',
     debugEnabled: false,
     users: {},
-    currentUser: ''
+    currentUser: '',
+    wolfRepositories: [
+      {
+        name: 'Wolf',
+        repository: 'ghcr.io/games-on-whales/wolf'
+      },
+      {
+        name: 'Sunshine',
+        repository: 'ghcr.io/games-on-whales/sunshine'
+      }
+    ]
   });
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
@@ -109,7 +119,7 @@ export default function Configuration(): JSX.Element {
   const handleAddUser = async (username: string, userConfig: NewUserConfig) => {
     try {
       LogService.debug('Adding new user', 'Configuration', { username });
-      await ConfigService.addUser(username, userConfig.steamId, userConfig.steamApiKey);
+      await ConfigService.addUser(username, userConfig.steamId || '', userConfig.steamApiKey || '');
       LogService.debug('User added, updating state', 'Configuration');
       await ConfigService.loadConfig();
       setConfig(ConfigService.getConfig());
@@ -166,7 +176,7 @@ export default function Configuration(): JSX.Element {
 
   const handleEditUser = async (username: string, userConfig: NewUserConfig) => {
     try {
-      await ConfigService.editUser(username, userConfig.steamId, userConfig.steamApiKey);
+      await ConfigService.editUser(username, userConfig.steamId || '', userConfig.steamApiKey || '');
       setEditUserDialogOpen(false);
       setEditingUsername('');
       setEditUserConfig({ steamId: '', steamApiKey: '' });
@@ -190,18 +200,22 @@ export default function Configuration(): JSX.Element {
     try {
       LogService.debug('Opening edit dialog for user', 'Configuration', { username });
       const user = config.users[username];
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
       // Fetch the unredacted Steam API key
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/steam-key`);
       if (!response.ok) {
         throw new Error('Failed to fetch Steam API key');
       }
-      const { key: steamApiKey } = await response.json();
+      const data: { key: string } = await response.json();
       
       LogService.debug('Setting edit dialog state', 'Configuration', { username, steamId: user.steamId });
       setEditingUsername(username);
       setEditUserConfig({
-        steamId: user.steamId,
-        steamApiKey
+        steamId: user.steamId || '',
+        steamApiKey: data.key
       });
       setEditUserDialogOpen(true);
     } catch (error) {

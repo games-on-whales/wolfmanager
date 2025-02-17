@@ -74,8 +74,8 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       }
 
       await onAddUser(userForm.username, {
-        steamId: userForm.steamId,
-        steamApiKey: userForm.steamApiKey
+        steamId: userForm.steamId || '',
+        steamApiKey: userForm.steamApiKey || ''
       });
 
       setShowAddDialog(false);
@@ -96,8 +96,8 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
       }
 
       await onUpdateUser(editingUser, {
-        steamId: userForm.steamId,
-        steamApiKey: userForm.steamApiKey
+        steamId: userForm.steamId || '',
+        steamApiKey: userForm.steamApiKey || ''
       });
 
       setShowEditDialog(false);
@@ -138,8 +138,8 @@ export const UserSettings: React.FC<UserSettingsProps> = ({
     setEditingUser(username);
     setUserForm({
       username,
-      steamId: user.steamId,
-      steamApiKey: user.steamApiKey
+      steamId: user.steamId || '',
+      steamApiKey: user.steamApiKey || ''
     });
     setShowEditDialog(true);
   };
