@@ -41,4 +41,30 @@ export async function handleApiError(error: unknown, component: string): Promise
   
   Logger.error('API request failed', error, component);
   throw new ApiError('API request failed');
+}
+
+export class BaseAPI {
+  protected async get<T>(url: string): Promise<T> {
+    try {
+      const response = await fetch(url);
+      return handleApiResponse<T>(response, this.constructor.name);
+    } catch (error) {
+      return handleApiError(error, this.constructor.name);
+    }
+  }
+
+  protected async post<T>(url: string, data?: unknown): Promise<T> {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: data ? JSON.stringify(data) : undefined,
+      });
+      return handleApiResponse<T>(response, this.constructor.name);
+    } catch (error) {
+      return handleApiError(error, this.constructor.name);
+    }
+  }
 } 

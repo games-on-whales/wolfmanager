@@ -12,6 +12,8 @@ import { GameManager } from './games/GameManager.js';
 import * as http from 'http';
 import * as net from 'net';
 import { PairedClient } from '../src/services/api/wolf';
+import dockerService from './docker/service.js'
+import dockerRouter from './docker/index.js'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -40,6 +42,9 @@ const port = process.env.PORT || 9971;
 
 app.use(cors());
 app.use(express.json());
+
+// Mount the Docker router
+app.use('/api/docker', dockerRouter)
 
 // Serve static files from the React app
 app.use(express.static(join(__dirname, '../../dist')));
@@ -1069,9 +1074,64 @@ app.post('/api/users/:username/select', async (req, res) => {
   }
 });
 
+// Add this with the other route definitions
+app.get('/api/docker/updates', async (_req, res) => {
+    try {
+        serverLog('debug', 'Starting Docker update check', 'Server')
+        
+        // Add detailed logging for debugging
+        serverLog('debug', 'Calling dockerService.checkUpdates()', 'Server')
+        const updates = await dockerService.checkUpdates()
+        
+        // Add detailed logging for debugging
+        serverLog('debug', 'Docker update check results', 'Server', {
+            imageCount: updates.length,
+            images: updates.map(img => ({
+                name: img.name,
+                current: img.currentVersion,
+                latest: img.latestVersion,
+                updateAvailable: img.updateAvailable,
+                error: img.error
+            }))
+        })
+
+        // If all images failed to check, return an error
+        if (updates.length > 0 && updates.every(img => img.error)) {
+            const errors = updates.map(img => img.error).filter(Boolean)
+            serverLog('error', 'Failed to check any Docker images', 'Server', { errors })
+            return res.status(500).json({ 
+                error: 'Failed to check Docker images',
+                details: errors.join('; ')
+            })
+        }
+
+        // Return successful response with image data
+        serverLog('debug', 'Sending successful response', 'Server')
+        res.json({ 
+            images: updates.map(img => ({
+                ...img,
+                // Convert dates to ISO strings for consistency
+                currentCreated: img.currentCreated ? new Date(img.currentCreated).toISOString() : undefined,
+                latestCreated: img.latestCreated ? new Date(img.latestCreated).toISOString() : undefined
+            }))
+        })
+    } catch (error) {
+        serverLog('error', 'Error checking for Docker updates', 'Server', error instanceof Error ? error.message : 'Unknown error')
+        res.status(500).json({ 
+            error: 'Failed to check for updates',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        })
+    }
+})
+
 // All remaining requests return the React app, so it can handle routing
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '../../dist/index.html'));
+});
+
+// Initialize cache on startup
+dockerService.checkUpdates(true).catch(error => {
+  console.error('Failed to initialize Docker update cache:', error);
 });
 
 app.listen(port, () => {

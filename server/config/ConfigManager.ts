@@ -32,13 +32,23 @@ export class ConfigManager {
 
   private constructor() {
     this.config = {
-      libraryPath: '',
+      libraryPath: '/config/library',
       usersPath: '/config/users',
-      cachePath: '/config/cache/artwork',
+      cachePath: '/config/cache',
       steamGridDbApiKey: '',
       debugEnabled: false,
       users: {},
-      currentUser: undefined
+      currentUser: '',
+      wolfRepositories: [
+        {
+          name: 'Wolf',
+          repository: 'ghcr.io/games-on-whales/wolf'
+        },
+        {
+          name: 'Sunshine',
+          repository: 'ghcr.io/games-on-whales/sunshine'
+        }
+      ]
     };
     writeLog('debug', 'ConfigManager initialized');
   }
@@ -59,11 +69,27 @@ export class ConfigManager {
     try {
       writeLog('debug', 'Loading config...');
       const configData = await fs.readFile(CONFIG_PATH, 'utf-8');
-      this.config = JSON.parse(configData);
+      const loadedConfig = JSON.parse(configData);
+      
+      // Ensure wolfRepositories exists with default values
+      const defaultConfig = this.getDefaultConfig();
+      this.config = {
+        ...defaultConfig,
+        ...loadedConfig,
+        wolfRepositories: loadedConfig.wolfRepositories || defaultConfig.wolfRepositories
+      };
+      
+      // Save back to ensure any new fields are persisted
+      await this.saveConfig(this.config);
+      
       writeLog('info', 'Config loaded successfully');
     } catch (error) {
       // If file doesn't exist, we'll use default config
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        this.config = this.getDefaultConfig();
+        // Save the default config
+        await this.saveConfig(this.config);
+      } else {
         writeLog('error', 'Error loading config', 'ConfigManager', error);
       }
     }
@@ -146,5 +172,27 @@ export class ConfigManager {
       writeLog('error', 'Error deleting user', 'ConfigManager', { username, error });
       throw new Error('Failed to delete user');
     }
+  }
+
+  private getDefaultConfig(): Config {
+    return {
+      libraryPath: '/config/library',
+      usersPath: '/config/users',
+      cachePath: '/config/cache',
+      steamGridDbApiKey: '',
+      debugEnabled: false,
+      users: {},
+      currentUser: '',
+      wolfRepositories: [
+        {
+          name: 'Wolf',
+          repository: 'ghcr.io/games-on-whales/wolf'
+        },
+        {
+          name: 'Sunshine',
+          repository: 'ghcr.io/games-on-whales/sunshine'
+        }
+      ]
+    };
   }
 } 
