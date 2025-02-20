@@ -4,4 +4,5 @@ dev
 .pnpm-store
 .shadcn-ui
 config/default.toml
+.env.local
 
