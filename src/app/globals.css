@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 201 100% 97%;
+    --foreground: 214 60% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 214 60% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 214 60% 15%;
+
+    --primary: 213 100% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 187 100% 42%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 213 20% 95%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 187 100% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 213 100% 35%;
+
+    --radius: 0.75rem;
+
+    --header-bg: 215 28% 17%;
+    --header-fg: 0 0% 100%;
+    --header-border: 215 28% 25%;
+  }
+
+  .dark {
+    --background: 213 70% 12%;
+    --foreground: 0 0% 100%;
+
+    --card: 213 60% 15%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 213 60% 15%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 213 100% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 187 100% 42%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 213 50% 20%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 187 100% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 213 50% 20%;
+    --input: 213 50% 20%;
+    --ring: 213 100% 35%;
+
+    --header-bg: 215 28% 17%;
+    --header-fg: 0 0% 100%;
+    --header-border: 215 28% 25%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  .content-container {
+    @apply bg-background/95 backdrop-blur-sm min-h-screen flex flex-col;
+  }
+}
+
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-secondary to-primary;
+}
+
+.app-header {
+  @apply bg-[hsl(var(--header-bg))] text-[hsl(var(--header-fg))] border-[hsl(var(--header-border))] sticky top-0 z-50;
+}
+
+/* Login page styles */
+.login-page {
+  @apply min-h-screen;
+}
+
+.login-page .content-container {
+  @apply bg-transparent;
+}
+
+/* Canvas container styles */
+.constellation-container {
+  @apply fixed inset-0 -z-10;
+  margin: -1px;
+}
+
+/* Page Transitions */
+.page-transition-enter {
+  opacity: 0;
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transition: opacity 300ms ease-in-out;
+}
+
+.page-transition-exit {
+  opacity: 1;
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transition: opacity 300ms ease-in-out;
+}
+
+/* Transition Overlay */
+.transition-overlay {
+  @apply fixed inset-0 bg-background z-[9999];
+  animation: fadeIn 150ms ease-in-out;
+  opacity: 1;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

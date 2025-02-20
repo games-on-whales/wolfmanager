@@ -4,7 +4,64 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "wolfbuild",
+            "label": "Next.js: Dev Server",
+            "type": "npm",
+            "script": "dev",
+            "problemMatcher": [
+                "$tsc-watch"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "Run Next.js development server",
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            }
+        },
+        {
+            "label": "Next.js: Build",
+            "type": "npm",
+            "script": "build",
+            "group": "build",
+            "problemMatcher": [
+                "$tsc"
+            ],
+            "detail": "Build Next.js application for production"
+        },
+        {
+            "label": "Next.js: Start Production",
+            "type": "npm",
+            "script": "start",
+            "problemMatcher": [],
+            "detail": "Run Next.js production server",
+            "dependsOn": [
+                "Next.js: Build"
+            ]
+        },
+        {
+            "label": "TypeScript: Watch",
+            "type": "typescript",
+            "tsconfig": "tsconfig.json",
+            "option": "watch",
+            "problemMatcher": [
+                "$tsc-watch"
+            ],
+            "group": "build",
+            "detail": "Watch TypeScript files for changes"
+        },
+        {
+            "label": "Install Dependencies",
+            "type": "shell",
+            "command": "pnpm install",
+            "problemMatcher": [],
+            "detail": "Install project dependencies"
+        },
+        {
+            "label": "Container - Build",
             "type": "shell",
             "command": "docker buildx build --platform linux/amd64 -t wolf-manager .",
             "group": {
@@ -18,9 +75,9 @@
             "problemMatcher": []
         },
         {
-            "label": "wolfrun",
+            "label": "Container - Run",
             "type": "shell",
-            "command": "docker run --rm --name wolf-manager -p 9971:9971 -v /home/mbrine/dev/wolfmanger/config:/config -v /var/run/docker.sock:/var/run/docker.sock:rw -v /var/run/wolf:/var/run/wolf:rw -e NODE_ENV=production --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 --log-opt labels=wolf-manager wolf-manager:latest",
+            "command": "docker run --rm --name wolf-manager -p 9971:9971 -v ./dev/wolfmanger/config:/config -v /var/run/docker.sock:/var/run/docker.sock:rw -v /var/run/wolf:/var/run/wolf:rw -e NODE_ENV=production --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 --log-opt labels=wolf-manager wolf-manager:latest",
             "presentation": {
                 "reveal": "always",
                 "panel": "new"
@@ -28,9 +85,12 @@
             "problemMatcher": []
         },
         {
-            "label": "wolfbuild-and-run",
+            "label": "Container - Build and Run",
             "dependsOrder": "sequence",
-            "dependsOn": ["wolfbuild", "wolfrun"],
+            "dependsOn": [
+                "Container - Build",
+                "wolfrun"
+            ],
             "presentation": {
                 "reveal": "always",
                 "panel": "new"

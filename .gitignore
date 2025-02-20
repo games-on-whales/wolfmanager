@@ -1,1 +1,7 @@
-.cursorrules
+node_modules
+dev
+.next
+.pnpm-store
+.shadcn-ui
+config/default.toml
+
