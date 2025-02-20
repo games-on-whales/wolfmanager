@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Key, LogOut, Search, Users } from "lucide-react";
+import { Key, LogOut, Search, Users, Webhook } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 
@@ -85,6 +85,22 @@ export default function SettingsPage() {
                       <h3 className="font-semibold">User Management</h3>
                       <p className="text-sm text-muted-foreground">
                         Manage system users and permissions
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+
+              <Link href="/settings/api-test" className="block">
+                <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer h-[100px]">
+                  <div className="flex items-start space-x-4">
+                    <div className="bg-accent/10 p-3 rounded-lg">
+                      <Webhook className="h-5 w-5 text-accent" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">API Test</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Test and verify API endpoints
                       </p>
                     </div>
                   </div>

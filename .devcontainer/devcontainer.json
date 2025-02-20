@@ -1,54 +1,58 @@
 // See https://containers.dev/implementors/json_reference/ for configuration reference
 {
-    "name": "Wolf Admin Development",
-    "dockerFile": "Dockerfile",
-    "forwardPorts": [3000],
-    "appPort": ["3000:3000"],
-    "customizations": {
-      "vscode": {
-        "extensions": [
-          "dbaeumer.vscode-eslint",
-          "esbenp.prettier-vscode",
-          "bradlc.vscode-tailwindcss",
-          "ms-vscode.vscode-typescript-next",
-          "formulahendry.auto-rename-tag",
-          "streetsidesoftware.code-spell-checker",
-          "naumovs.color-highlight",
-          "mikestead.dotenv",
-          "dsznajder.es7-react-js-snippets",
-          "wix.vscode-import-cost",
-          "yoavbls.pretty-ts-errors",
-          "csstools.postcss",
-          "christian-kohler.path-intellisense",
-          "rangav.vscode-thunder-client"
-        ],
-        "settings": {
-          "editor.formatOnSave": true,
-          "editor.defaultFormatter": "esbenp.prettier-vscode",
-          "editor.codeActionsOnSave": {
-            "source.fixAll.eslint": true,
-            "source.organizeImports": true
-          },
-          "editor.quickSuggestions": {
-            "strings": true
-          },
-          "tailwindCSS.includeLanguages": {
-            "typescript": "javascript",
-            "typescriptreact": "javascript"
-          }
+  "name": "Wolf Admin Development",
+  "dockerFile": "Dockerfile",
+  "forwardPorts": [3000],
+  "appPort": ["3000:3000"],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode.vscode-typescript-next",
+        "formulahendry.auto-rename-tag",
+        "streetsidesoftware.code-spell-checker",
+        "naumovs.color-highlight",
+        "mikestead.dotenv",
+        "dsznajder.es7-react-js-snippets",
+        "wix.vscode-import-cost",
+        "yoavbls.pretty-ts-errors",
+        "csstools.postcss",
+        "christian-kohler.path-intellisense",
+        "rangav.vscode-thunder-client"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": true,
+          "source.organizeImports": true
+        },
+        "editor.quickSuggestions": {
+          "strings": true
+        },
+        "tailwindCSS.includeLanguages": {
+          "typescript": "javascript",
+          "typescriptreact": "javascript"
         }
       }
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
     },
-    "features": {
-      "ghcr.io/devcontainers/features/node:1": {
-        "version": "lts"
-      },
-      "ghcr.io/devcontainers/features/git:1": {}
-    },
-    "remoteUser": "node",
-    "updateRemoteUserUID": true,
-    "postCreateCommand": "pnpm install && npm rebuild bcrypt && npm rebuild sharp",
-    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/WolfUI,type=bind,consistency=cached",
-    "workspaceFolder": "/workspaces/WolfUI",
-    "runArgs": ["--privileged"]
-  }
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "remoteUser": "node",
+  "updateRemoteUserUID": true,
+  "postStartCommand": "sudo chmod 666 /var/run/wolf/wolf.sock || true && sudo chown root:node /var/run/wolf/wolf.sock && sudo chmod 660 /var/run/wolf/wolf.sock && pnpm install && npm rebuild bcrypt && npm rebuild sharp",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/WolfUI,type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/WolfUI",
+  "runArgs": [
+    "--privileged",
+    "--volume=/var/run/docker.sock:/var/run/docker.sock:rw",
+    "--volume=/var/run/wolf:/var/run/wolf:rw"
+  ]
+}
