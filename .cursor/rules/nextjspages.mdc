@@ -1,0 +1,316 @@
+---
+description: Used for correctly setting up page following nextJS principles for server side before client
+globs: 
+---
+# Next.js Page Structure Guide
+
+When building or modifying Next.js pages, follow these guidelines to implement server components with client-side interactivity in a consistent and error-resistant manner.
+
+---
+
+## 1. Core Principles
+
+### A. Server Component Setup
+
+- **Primary Component as Server:**  
+  - The main page (e.g., `page.tsx`) must be a server component.  
+  - **Do not** include the `"use client"` directive in this file.
+
+- **Authentication:**  
+  - Handle authentication at the page level using `getServerSession(authOptions)`.
+  - Import `authOptions` from `@/lib/auth`.
+  - Redirect unauthenticated users (e.g., using `redirect("/auth/signin")`).
+
+- **Data Fetching:**  
+  - Use direct function calls (from service/database layers) to fetch data.
+  - **Avoid** using API routes or `fetch()` for data retrieval within server components.
+
+### B. Client Component Organization
+
+- **Separation of Concerns:**  
+  - Create dedicated files for interactive (client-side) components inside a `components` folder.
+  - These files should always include the `"use client"` directive at the top.
+
+- **Interactivity & Data Mutations:**  
+  - Place interactive elements (forms, buttons, stateful UI) in client components.
+  - Use API routes for data mutations.
+  - Pass only the necessary data from server to client components as props.
+
+### C. Data Flow Best Practices
+
+- **Server Components:**  
+  - Use direct function calls for data fetching.
+  - Pass initial data as props to client components.
+
+- **Client Components:**  
+  - Use API routes for data mutations.
+  - Implement proper handling for loading, error, and fallback states.
+
+---
+
+## 2. Implementation Steps
+
+### A. Building the Server Component (`page.tsx`)
+
+```typescript
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { loadData } from "@/lib/data"; // Direct data fetching
+
+export default async function Page() {
+  // 1. Authentication
+  const session = await getServerSession(authOptions);
+  if (!session?.user) redirect("/auth/signin");
+
+  // 2. Data Fetching
+  const data = await loadData();
+
+  // 3. Rendering: Pass data to client component
+  return (
+    <Layout>
+      <ClientComponent 
+        username={session.user.name || ""} 
+        initialData={data} 
+      />
+    </Layout>
+  );
+}
+```
+
+### B. Creating Client Components
+
+```typescript
+// components/client-component.tsx
+"use client";
+
+interface Props {
+  username: string;
+  initialData: Data; // Replace `Data` with your proper type
+}
+
+export function ClientComponent({ username, initialData }: Props) {
+  // Handle interactive features and state management here
+  return (
+    <div>
+      {/* Interactive UI elements */}
+      <p>Welcome, {username}!</p>
+      {/* Render initialData appropriately */}
+    </div>
+  );
+}
+```
+
+---
+
+## 3. Common Issues and Their Solutions
+
+### A. Data Fetching
+
+- **Issue:** Fetching data via API routes in server components.  
+  **Solution:**  
+  - **❌ Avoid:**  
+    ```typescript
+    const data = await fetch("/api/data");
+    ```
+  - **✅ Use:**  
+    ```typescript
+    import { getData } from "@/lib/data";
+    const data = await getData();
+    ```
+
+### B. Authentication
+
+- **Issue:** Handling authentication in multiple places.  
+  **Solution:**  
+  - **❌ Avoid:** Redundant auth checks in both server and client components.
+  - **✅ Use:**  
+    ```typescript
+    const session = await getServerSession(authOptions);
+    if (!session?.user) redirect("/auth/signin");
+    ```
+
+### C. Mixing Component Types
+
+- **Issue:** Combining server and client code in one file.  
+  **Solution:**  
+  - **❌ Avoid:** Adding `"use client"` in server component files (e.g., `page.tsx`).
+  - **✅ Use:** Keep server and client code separate.
+
+---
+
+## 4. File Structure
+
+Organize your files for clarity and separation of concerns:
+
+```
+app/
+  └── settings/
+      └── account/
+          ├── page.tsx                    # Server component
+          └── components/
+              ├── profile-form.tsx        # Client component
+              ├── security-settings.tsx   # Client component
+              └── types.ts                # Shared types
+```
+
+---
+
+## 5. Error Boundaries and Loading States
+
+### A. Error Boundaries
+
+- **Creation:**  
+  - Implement error boundaries as client components with `"use client"`.
+  - Use a class component extending `React.Component`.
+  - Ensure implementation of `getDerivedStateFromError` and `componentDidCatch`.
+  - Use a consistent error UI (e.g., via shadcn/ui Alert).
+
+```typescript
+"use client";
+import React from "react";
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+export class ErrorBoundary extends React.Component<{}, ErrorBoundaryState> {
+  constructor(props: {}) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div role="alert">Something went wrong.</div>;
+    }
+    return this.props.children;
+  }
+}
+```
+
+- **Usage:**  
+  Wrap each major section (not the entire page) in its own error boundary:
+
+```typescript
+<ErrorBoundary>
+  <section>
+    <FeatureComponent />
+  </section>
+</ErrorBoundary>
+```
+
+### B. Loading States
+
+- **Skeleton UI:**  
+  - Create a loading component that matches the layout of the eventual content.
+  - Use consistent UI components (e.g., shadcn/ui) for skeletons.
+
+```typescript
+import { Card, CardContent, Skeleton } from "shadcn/ui";
+
+export function LoadingState() {
+  return (
+    <Card>
+      <CardContent>
+        <Skeleton className="h-4 w-[250px]" />
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+- **Suspense Integration:**  
+  - Wrap dynamic content in React's `Suspense` and provide a fallback loading component.
+  - Nest within an error boundary for robust handling.
+
+```typescript
+import { Suspense } from "react";
+
+<ErrorBoundary>
+  <Suspense fallback={<LoadingState />}>
+    <DynamicContent />
+  </Suspense>
+</ErrorBoundary>
+```
+
+---
+
+## 6. Server Component Error Handling
+
+### A. Error Propagation
+
+- **Principle:**  
+  - Always throw errors after logging them; do not silently fail.
+  
+```typescript
+try {
+  const data = await fetchData();
+  return data;
+} catch (error) {
+  console.error("[DATA_FETCH_ERROR]", error);
+  throw error;
+}
+```
+
+- **Guidelines:**  
+  - Use `try/catch` blocks.
+  - Log errors with context.
+  - Propagate errors to be handled by error boundaries.
+
+---
+
+## 7. Best Practices
+
+- **Error Handling:**  
+  - Implement error boundaries for critical UI sections.
+  - Provide fallback UIs and safe default values.
+
+- **Type Safety:**  
+  - Define clear interfaces for component props.
+  - Use appropriate types for session data (from next-auth) and other shared types.
+
+- **Performance:**  
+  - Keep client components lean and focused on interactivity.
+  - Avoid prop drilling by only passing necessary data.
+
+- **Security:**  
+  - Validate all data on the server side.
+  - Never expose sensitive information in client props.
+  - Ensure CSRF protection on forms.
+
+---
+
+## 8. Implementation Checklist
+
+- **Server Components:**  
+  - [ ] No `"use client"` directive.  
+  - [ ] Handles authentication and data fetching directly.  
+  - [ ] Proper error logging and propagation.
+
+- **Client Components:**  
+  - [ ] Begin with `"use client"`.  
+  - [ ] Handle interactivity and state changes.  
+  - [ ] Use API routes for data mutations.
+
+- **Error Boundaries:**  
+  - [ ] Implemented as client components with consistent UI.  
+  - [ ] Wrap major sections independently.
+
+- **Loading States:**  
+  - [ ] Skeleton UIs mirror content layout.  
+  - [ ] Proper use of Suspense with fallback UIs.
+
+- **Data Flow:**  
+  - [ ] Direct function calls in server components.  
+  - [ ] API routes in client components only when necessary.
+
+By adhering to these guidelines, your Next.js project will maintain a clear separation between server and client responsibilities, reduce potential errors, and improve the overall maintainability of your codebase.

@@ -1,34 +1,36 @@
+import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
-import { callWolfApi } from "../lib/wolf-socket";
+import { isValidWolfEndpoint } from "../lib/schema.server";
+import { callWolfApi } from "../lib/wolf-socket.server";
 
 // This is a dynamic route that will handle all requests to /api/wolf/*
 export async function GET(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const path = `/${params.path.join("/")}`;
+  if (!(await isValidWolfEndpoint(path, "GET"))) {
+    return NextResponse.json(
+      { error: "Invalid endpoint or method" },
+      { status: 400 }
+    );
+  }
+
   try {
-    const session = await getServerSession();
-    if (!session?.user?.name) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Convert path array to string and remove any empty segments
-    const endpoint = `/${params.path.filter(Boolean).join("/")}`;
-
-    // Get query parameters
-    const searchParams = Object.fromEntries(request.nextUrl.searchParams);
-
-    // Forward the request to Wolf
-    const response = await callWolfApi(endpoint, {
-      method: "GET",
-      ...(Object.keys(searchParams).length > 0 ? { body: searchParams } : {}),
-    });
-
+    const response = await callWolfApi(path, { method: "GET" });
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[WOLF_API_PROXY_GET]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("[WOLF_API] Error:", error);
+    return NextResponse.json(
+      { error: "Failed to call Wolf API" },
+      { status: 500 }
+    );
   }
 }
 
@@ -36,28 +38,32 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const path = `/${params.path.join("/")}`;
+  if (!(await isValidWolfEndpoint(path, "POST"))) {
+    return NextResponse.json(
+      { error: "Invalid endpoint or method" },
+      { status: 400 }
+    );
+  }
+
   try {
-    const session = await getServerSession();
-    if (!session?.user?.name) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Convert path array to string and remove any empty segments
-    const endpoint = `/${params.path.filter(Boolean).join("/")}`;
-
-    // Get request body
-    const body = await request.json().catch(() => ({}));
-
-    // Forward the request to Wolf
-    const response = await callWolfApi(endpoint, {
+    const body = await request.json();
+    const response = await callWolfApi(path, {
       method: "POST",
       body,
     });
-
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[WOLF_API_PROXY_POST]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("[WOLF_API] Error:", error);
+    return NextResponse.json(
+      { error: "Failed to call Wolf API" },
+      { status: 500 }
+    );
   }
 }
 
@@ -66,24 +72,32 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const path = `/${params.path.join("/")}`;
+  if (!(await isValidWolfEndpoint(path, "PUT"))) {
+    return NextResponse.json(
+      { error: "Invalid endpoint or method" },
+      { status: 400 }
+    );
+  }
+
   try {
-    const session = await getServerSession();
-    if (!session?.user?.name) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const endpoint = `/${params.path.filter(Boolean).join("/")}`;
-    const body = await request.json().catch(() => ({}));
-
-    const response = await callWolfApi(endpoint, {
+    const body = await request.json();
+    const response = await callWolfApi(path, {
       method: "PUT",
       body,
     });
-
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[WOLF_API_PROXY_PUT]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("[WOLF_API] Error:", error);
+    return NextResponse.json(
+      { error: "Failed to call Wolf API" },
+      { status: 500 }
+    );
   }
 }
 
@@ -92,23 +106,27 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const path = `/${params.path.join("/")}`;
+  if (!(await isValidWolfEndpoint(path, "DELETE"))) {
+    return NextResponse.json(
+      { error: "Invalid endpoint or method" },
+      { status: 400 }
+    );
+  }
+
   try {
-    const session = await getServerSession();
-    if (!session?.user?.name) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const endpoint = `/${params.path.filter(Boolean).join("/")}`;
-    const body = await request.json().catch(() => ({}));
-
-    const response = await callWolfApi(endpoint, {
-      method: "DELETE",
-      body,
-    });
-
+    const response = await callWolfApi(path, { method: "DELETE" });
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[WOLF_API_PROXY_DELETE]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("[WOLF_API] Error:", error);
+    return NextResponse.json(
+      { error: "Failed to call Wolf API" },
+      { status: 500 }
+    );
   }
 }
