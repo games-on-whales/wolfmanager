@@ -1,6 +1,8 @@
 import path from "path";
 import { LoggerConfig } from "./types";
 
+const isClient = typeof window !== "undefined";
+
 // Default configuration for development
 const devConfig: LoggerConfig = {
   level: "debug",
@@ -11,7 +13,7 @@ const devConfig: LoggerConfig = {
     useJson: true,
   },
   file: {
-    enabled: true,
+    enabled: !isClient, // Disable file transport in client
     path: path.join(process.cwd(), "logs", "wolf-ui.log"),
     maxSize: 5 * 1024 * 1024, // 5MB
     maxFiles: 5,
@@ -34,7 +36,7 @@ const containerConfig: LoggerConfig = {
     useJson: true,
   },
   file: {
-    enabled: false,
+    enabled: !isClient, // Disable file transport in client
     path: "/var/log/wolf-ui/wolf-ui.log",
     maxSize: 10 * 1024 * 1024,
     maxFiles: 5,
@@ -57,7 +59,7 @@ const prodConfig: LoggerConfig = {
     useJson: true,
   },
   file: {
-    enabled: true,
+    enabled: !isClient, // Disable file transport in client
     path: "/var/log/wolf-ui/wolf-ui.log",
     maxSize: 10 * 1024 * 1024, // 10MB
     maxFiles: 10,
@@ -96,7 +98,8 @@ export function getLoggerConfig(): LoggerConfig {
     file: {
       ...baseConfig.file,
       enabled:
-        process.env.LOG_FILE_ENABLED === "true" || baseConfig.file.enabled,
+        !isClient &&
+        (process.env.LOG_FILE_ENABLED === "true" || baseConfig.file.enabled),
       path: process.env.LOG_FILE_PATH || baseConfig.file.path,
       maxSize:
         parseInt(process.env.LOG_MAX_FILE_SIZE || "") ||

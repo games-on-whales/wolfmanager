@@ -1,104 +1,96 @@
-import { promises as fs } from "fs";
+// Only import fs in server context
+let fs: typeof import("fs").promises | null = null;
+if (typeof window === "undefined") {
+  // Server-side only
+  fs = require("fs").promises;
+}
+
 import path from "path";
 import { LogEntry, LogTransport } from "../types";
 
 export class FileTransport implements LogTransport {
-  private filePath: string;
-  private maxFileSize: number;
-  private maxFiles: number;
-  private writeQueue: Promise<void> = Promise.resolve();
-  private currentFileSize = 0;
+  private readonly filePath: string;
+  private readonly maxSize: number;
+  private readonly maxFiles: number;
+  private readonly format: "json" | "text";
 
   constructor(
     filePath: string,
-    maxFileSize: number = 5 * 1024 * 1024, // 5MB
-    maxFiles: number = 5
+    maxSize: number = 5 * 1024 * 1024,
+    maxFiles: number = 5,
+    format: "json" | "text" = "json"
   ) {
     this.filePath = filePath;
-    this.maxFileSize = maxFileSize;
+    this.maxSize = maxSize;
     this.maxFiles = maxFiles;
-    this.initializeTransport();
+    this.format = format;
   }
 
-  private async initializeTransport() {
-    try {
-      // Ensure directory exists
-      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+  async log(entry: LogEntry): Promise<void> {
+    // Skip if running in client or fs is not available
+    if (!fs) {
+      return;
+    }
 
-      // Get current file size if exists
-      try {
-        const stats = await fs.stat(this.filePath);
-        this.currentFileSize = stats.size;
-      } catch {
-        // File doesn't exist yet, size is 0
-        this.currentFileSize = 0;
-      }
+    try {
+      // Ensure log directory exists
+      const logDir = path.dirname(this.filePath);
+      await fs.mkdir(logDir, { recursive: true });
+
+      // Format log entry
+      const logLine =
+        this.format === "json"
+          ? JSON.stringify(entry) + "\n"
+          : `${entry.timestamp} [${entry.level}] ${entry.component}: ${
+              entry.message
+            } ${JSON.stringify(entry.metadata)}\n`;
+
+      // Append to log file
+      await fs.appendFile(this.filePath, logLine, "utf8");
+
+      // Check file size and rotate if needed
+      await this.rotateLogsIfNeeded();
     } catch (error) {
-      console.error("Failed to initialize file transport:", error);
-      throw error;
+      console.error("Failed to write to log file:", error);
     }
   }
 
-  private async rotateLog() {
+  private async rotateLogsIfNeeded(): Promise<void> {
+    if (!fs) return;
+
     try {
-      // Check if we need to rotate
-      if (this.currentFileSize < this.maxFileSize) {
-        return;
+      const stats = await fs.stat(this.filePath);
+      if (stats.size >= this.maxSize) {
+        await this.rotateLogs();
       }
+    } catch (error) {
+      console.error("Failed to check log file size:", error);
+    }
+  }
 
-      // Rotate existing files
-      for (let i = this.maxFiles - 1; i >= 0; i--) {
-        const source = i === 0 ? this.filePath : `${this.filePath}.${i}`;
-        const target = `${this.filePath}.${i + 1}`;
+  private async rotateLogs(): Promise<void> {
+    if (!fs) return;
 
+    try {
+      // Rotate existing log files
+      for (let i = this.maxFiles - 1; i > 0; i--) {
+        const oldPath = `${this.filePath}.${i}`;
+        const newPath = `${this.filePath}.${i + 1}`;
         try {
-          await fs.access(source);
-          if (i === this.maxFiles - 1) {
-            await fs.unlink(source);
-          } else {
-            await fs.rename(source, target);
-          }
+          await fs.access(oldPath);
+          await fs.rename(oldPath, newPath);
         } catch (error) {
           // File doesn't exist, skip
         }
       }
 
-      // Reset current file size
-      this.currentFileSize = 0;
+      // Rename current log file
+      await fs.rename(this.filePath, `${this.filePath}.1`);
+
+      // Create new empty log file
+      await fs.writeFile(this.filePath, "", "utf8");
     } catch (error) {
       console.error("Failed to rotate log files:", error);
-      throw error;
     }
-  }
-
-  private formatEntry(entry: LogEntry): string {
-    return (
-      JSON.stringify({
-        ...entry,
-        timestamp: entry.timestamp.toISOString(),
-      }) + "\n"
-    );
-  }
-
-  async log(entry: LogEntry): Promise<void> {
-    const formattedEntry = this.formatEntry(entry);
-
-    // Queue the write operation
-    this.writeQueue = this.writeQueue.then(async () => {
-      try {
-        await this.rotateLog();
-        await fs.appendFile(this.filePath, formattedEntry, "utf8");
-        this.currentFileSize += Buffer.byteLength(formattedEntry);
-      } catch (error) {
-        console.error("Failed to write to log file:", error);
-        throw error;
-      }
-    });
-
-    return this.writeQueue;
-  }
-
-  async flush(): Promise<void> {
-    return this.writeQueue;
   }
 }
