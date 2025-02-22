@@ -1,6 +1,5 @@
 "use client";
 
-import { FirstTimeWizard } from "@/app/first-time-setup/components/first-time-wizard";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ConstellationBackground } from "@/components/ui/constellation-bg";
@@ -9,6 +8,7 @@ import { SpaceInvaders } from "@/components/ui/space-invaders";
 import { StarfieldBackground } from "@/components/ui/starfield-bg";
 import { cn } from "@/lib/utils";
 import { Session } from "next-auth";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 interface LoginClientProps {
@@ -20,18 +20,15 @@ export function LoginClient({
   isFirstTimeSetup,
   initialSession,
 }: LoginClientProps) {
-  const [showFirstTimeWizard, setShowFirstTimeWizard] =
-    useState(isFirstTimeSetup);
   const [showEasterEgg, setShowEasterEgg] = useState(false);
+  const router = useRouter();
 
   const handleLoginSuccess = (isFirstLogin: boolean) => {
     if (isFirstLogin) {
-      setShowFirstTimeWizard(true);
+      router.push("/first-time-setup");
+    } else {
+      router.push("/dashboard");
     }
-  };
-
-  const handleFirstTimeSetupComplete = () => {
-    setShowFirstTimeWizard(false);
   };
 
   const handleLogoClick = () => {
@@ -109,10 +106,6 @@ export function LoginClient({
             </div>
           </div>
         )}
-        <FirstTimeWizard
-          isOpen={showFirstTimeWizard}
-          onComplete={handleFirstTimeSetupComplete}
-        />
       </div>
     </>
   );
