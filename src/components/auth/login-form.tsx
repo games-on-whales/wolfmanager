@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { clientLogger, LogComponent } from "@/lib/logger";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

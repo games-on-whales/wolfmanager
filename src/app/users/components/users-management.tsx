@@ -29,11 +29,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/components/ui/use-toast";
 import { clientLogger, LogComponent } from "@/lib/logger";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import * as z from "zod";
 
 const formSchema = z.object({
@@ -54,10 +54,21 @@ interface UsersManagementProps {
   initialUsers: User[];
 }
 
+interface CreateUserFormData {
+  username: string;
+  password: string;
+  isAdmin: boolean;
+}
+
+interface UpdateUserFormData {
+  username?: string;
+  password?: string;
+  isAdmin?: boolean;
+}
+
 export function UsersManagement({ initialUsers }: UsersManagementProps) {
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [isOpen, setIsOpen] = useState(false);
-  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -97,10 +108,7 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
         isAdmin: newUser.isAdmin,
       });
 
-      toast({
-        title: "Success",
-        description: "User added successfully",
-      });
+      toast.success("User added successfully");
       setIsOpen(false);
       form.reset();
     } catch (error) {
@@ -108,12 +116,9 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
         formData: values,
       });
 
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to add user",
-      });
+      toast.error(
+        error instanceof Error ? error.message : "Failed to add user"
+      );
     }
   };
 
@@ -140,30 +145,22 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
         username,
       });
 
-      toast({
-        title: "Success",
-        description: "User removed successfully",
-      });
+      toast.success("User removed successfully");
     } catch (error) {
       clientLogger.error(LogComponent.WOLF_UI, "Failed to remove user", error, {
         userId,
         username,
       });
 
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to remove user",
-      });
+      toast.error(
+        error instanceof Error ? error.message : "Failed to remove user"
+      );
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
     try {
-      clientLogger.info(LogComponent.USER_MANAGEMENT, "Deleting user", {
-        userId,
-      });
+      clientLogger.info(LogComponent.WOLF_UI, "Deleting user", { userId });
       const response = await fetch(`/api/users/${userId}`, {
         method: "DELETE",
       });
@@ -175,24 +172,18 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
       // Remove user from the list
       setUsers((prev) => prev.filter((user) => user.id !== userId));
       toast.success("User deleted successfully");
-      clientLogger.info(
-        LogComponent.USER_MANAGEMENT,
-        "User deleted successfully",
-        { userId }
-      );
+      clientLogger.info(LogComponent.WOLF_UI, "User deleted successfully", {
+        userId,
+      });
     } catch (error) {
-      clientLogger.error(
-        LogComponent.USER_MANAGEMENT,
-        "Failed to delete user",
-        error
-      );
+      clientLogger.error(LogComponent.WOLF_UI, "Failed to delete user", error);
       toast.error("Failed to delete user");
     }
   };
 
   const handleCreateUser = async (data: CreateUserFormData) => {
     try {
-      clientLogger.info(LogComponent.USER_MANAGEMENT, "Creating new user", {
+      clientLogger.info(LogComponent.WOLF_UI, "Creating new user", {
         username: data.username,
       });
       const response = await fetch("/api/users", {
@@ -210,26 +201,18 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
       const newUser = await response.json();
       setUsers((prev) => [...prev, newUser]);
       toast.success("User created successfully");
-      clientLogger.info(
-        LogComponent.USER_MANAGEMENT,
-        "User created successfully",
-        { userId: newUser.id }
-      );
+      clientLogger.info(LogComponent.WOLF_UI, "User created successfully", {
+        userId: newUser.id,
+      });
     } catch (error) {
-      clientLogger.error(
-        LogComponent.USER_MANAGEMENT,
-        "Failed to create user",
-        error
-      );
+      clientLogger.error(LogComponent.WOLF_UI, "Failed to create user", error);
       toast.error("Failed to create user");
     }
   };
 
   const handleUpdateUser = async (userId: string, data: UpdateUserFormData) => {
     try {
-      clientLogger.info(LogComponent.USER_MANAGEMENT, "Updating user", {
-        userId,
-      });
+      clientLogger.info(LogComponent.WOLF_UI, "Updating user", { userId });
       const response = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
         headers: {
@@ -247,17 +230,11 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
         prev.map((user) => (user.id === userId ? updatedUser : user))
       );
       toast.success("User updated successfully");
-      clientLogger.info(
-        LogComponent.USER_MANAGEMENT,
-        "User updated successfully",
-        { userId }
-      );
+      clientLogger.info(LogComponent.WOLF_UI, "User updated successfully", {
+        userId,
+      });
     } catch (error) {
-      clientLogger.error(
-        LogComponent.USER_MANAGEMENT,
-        "Failed to update user",
-        error
-      );
+      clientLogger.error(LogComponent.WOLF_UI, "Failed to update user", error);
       toast.error("Failed to update user");
     }
   };

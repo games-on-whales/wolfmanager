@@ -141,7 +141,7 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
 
   const handleTest = async () => {
     try {
-      clientLogger.info(LogComponent.API_TEST, "Testing API endpoint", {
+      clientLogger.info(LogComponent.WOLF_UI, "Testing API endpoint", {
         method,
         endpoint,
       });
@@ -165,20 +165,20 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
 
       if (response.ok) {
         toast.success("API request successful");
-        clientLogger.info(LogComponent.API_TEST, "API request successful", {
+        clientLogger.info(LogComponent.WOLF_UI, "API request successful", {
           status: response.status,
           endpoint,
         });
       } else {
         toast.error(`API request failed: ${response.statusText}`);
-        clientLogger.error(LogComponent.API_TEST, "API request failed", {
+        clientLogger.error(LogComponent.WOLF_UI, "API request failed", {
           status: response.status,
           statusText: response.statusText,
           endpoint,
         });
       }
     } catch (error) {
-      clientLogger.error(LogComponent.API_TEST, "API request error", error);
+      clientLogger.error(LogComponent.WOLF_UI, "API request error", error);
       toast.error("Failed to make API request");
       setResponse(error instanceof Error ? error.message : "Unknown error");
     } finally {

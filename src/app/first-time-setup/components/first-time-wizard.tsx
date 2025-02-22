@@ -19,13 +19,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
 import { clientLogger, LogComponent } from "@/lib/logger";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import * as z from "zod";
 
 const steps = [
@@ -43,6 +43,7 @@ const steps = [
 
 const passwordSchema = z
   .object({
+    currentPassword: z.string().min(1, "Current password is required"),
     newPassword: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
   })
@@ -60,14 +61,16 @@ type PasswordForm = z.infer<typeof passwordSchema>;
 type SteamForm = z.infer<typeof steamSchema>;
 
 export function FirstTimeWizard() {
-  const [currentStep, setCurrentStep] = useState(0);
-  const { toast } = useToast();
+  const [currentStep, setCurrentStep] = useState<"password" | "steam">(
+    "password"
+  );
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
     defaultValues: {
+      currentPassword: "",
       newPassword: "",
       confirmPassword: "",
     },
@@ -156,16 +159,35 @@ export function FirstTimeWizard() {
   return (
     <Card className="w-full max-w-lg mx-auto">
       <CardHeader>
-        <CardTitle>{steps[currentStep].title}</CardTitle>
-        <CardDescription>{steps[currentStep].description}</CardDescription>
+        <CardTitle>
+          {currentStep === "password" ? steps[0].title : steps[1].title}
+        </CardTitle>
+        <CardDescription>
+          {currentStep === "password"
+            ? steps[0].description
+            : steps[1].description}
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        {currentStep === 0 && (
+        {currentStep === "password" && (
           <Form {...passwordForm}>
             <form
               onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)}
               className="space-y-4"
             >
+              <FormField
+                control={passwordForm.control}
+                name="currentPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Current Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={passwordForm.control}
                 name="newPassword"
@@ -201,7 +223,7 @@ export function FirstTimeWizard() {
           </Form>
         )}
 
-        {currentStep === 1 && (
+        {currentStep === "steam" && (
           <Form {...steamForm}>
             <form
               onSubmit={steamForm.handleSubmit(handleSteamSubmit)}
