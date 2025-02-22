@@ -5,4 +5,5 @@ dev
 .shadcn-ui
 config/default.toml
 .env.local
+logs/*
 

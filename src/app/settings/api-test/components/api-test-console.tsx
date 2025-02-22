@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  getAvailableEndpoints,
-  isValidWolfEndpoint,
-  validateRequestBody,
-} from "@/app/api/wolf/lib/schema";
+import { getAvailableEndpoints } from "@/app/api/wolf/lib/schema";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,11 +11,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
+import { clientLogger, LogComponent } from "@/lib/logger";
 import { Check, ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { toast } from "sonner";
 import { MethodChip } from "./method-chip";
 
 interface ApiResponse {
@@ -40,8 +37,11 @@ interface Endpoint {
   };
 }
 
-export function ApiTestConsole() {
-  const { toast } = useToast();
+interface ApiTestConsoleProps {
+  apiKey: string;
+}
+
+export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [endpoint, setEndpoint] = useState("");
   const [method, setMethod] = useState("GET");
@@ -60,6 +60,7 @@ export function ApiTestConsole() {
     null
   );
   const [isCopied, setIsCopied] = useState(false);
+  const [response, setResponse] = useState("");
 
   useEffect(() => {
     async function loadEndpoints() {
@@ -103,17 +104,13 @@ export function ApiTestConsole() {
           errorMessage = String((error as any).error);
         }
 
-        toast({
-          variant: "destructive",
-          title: "Error Loading Endpoints",
-          description: errorMessage,
-        });
+        toast.error(errorMessage);
       } finally {
         setIsLoadingSchema(false);
       }
     }
     loadEndpoints();
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     const found = endpoints.find(
@@ -144,78 +141,46 @@ export function ApiTestConsole() {
 
   const handleTest = async () => {
     try {
-      const isValid = await isValidWolfEndpoint(endpoint, method);
-      if (!isValid) {
-        toast({
-          variant: "destructive",
-          title: "Invalid Endpoint",
-          description: "This endpoint is not available in the Wolf API",
-        });
-        return;
-      }
+      clientLogger.info(LogComponent.API_TEST, "Testing API endpoint", {
+        method,
+        endpoint,
+      });
 
       setIsLoading(true);
-      const options: RequestInit = {
+      setResponse("");
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
+      };
+
+      const response = await fetch(endpoint, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      };
-
-      if (method !== "GET" && body) {
-        try {
-          const bodyObj = JSON.parse(body);
-          const validation = await validateRequestBody(
-            endpoint,
-            method,
-            bodyObj
-          );
-
-          if (!validation.success) {
-            toast({
-              variant: "destructive",
-              title: "Invalid Request Body",
-              description: "The request body does not match the API schema",
-            });
-            console.error("Validation errors:", validation.error.format());
-            return;
-          }
-
-          options.body = JSON.stringify(validation.data);
-        } catch (e) {
-          toast({
-            variant: "destructive",
-            title: "Invalid JSON",
-            description: "Please check your request body format",
-          });
-          return;
-        }
-      }
-
-      const response = await fetch(`/api/wolf${endpoint}`, options);
-      let data;
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        data = await response.json();
-      } else {
-        data = await response.text();
-      }
-
-      const newResponse: ApiResponse = {
-        status: response.status,
-        statusText: response.statusText,
-        data,
-      };
-
-      setLatestResponse(newResponse);
-    } catch (error) {
-      console.error("[API_TEST] Request failed:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to test API",
+        headers,
+        body: method !== "GET" ? body : undefined,
       });
+
+      const data = await response.json();
+      setResponse(JSON.stringify(data, null, 2));
+
+      if (response.ok) {
+        toast.success("API request successful");
+        clientLogger.info(LogComponent.API_TEST, "API request successful", {
+          status: response.status,
+          endpoint,
+        });
+      } else {
+        toast.error(`API request failed: ${response.statusText}`);
+        clientLogger.error(LogComponent.API_TEST, "API request failed", {
+          status: response.status,
+          statusText: response.statusText,
+          endpoint,
+        });
+      }
+    } catch (error) {
+      clientLogger.error(LogComponent.API_TEST, "API request error", error);
+      toast.error("Failed to make API request");
+      setResponse(error instanceof Error ? error.message : "Unknown error");
     } finally {
       setIsLoading(false);
     }
@@ -232,11 +197,7 @@ export function ApiTestConsole() {
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to copy to clipboard",
-      });
+      toast.error("Failed to copy to clipboard");
     }
   };
 

@@ -10,12 +10,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { clientLogger, LogComponent } from "@/lib/logger";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import * as z from "zod";
 
 const formSchema = z.object({
@@ -31,7 +31,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { data: session, update: updateSession } = useSession();
   const router = useRouter();
-  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -41,39 +40,36 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (isLoading) return;
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoading(true);
+
+    const formData = new FormData(event.currentTarget);
+    const username = formData.get("username") as string;
+    const password = formData.get("password") as string;
 
     try {
-      setIsLoading(true);
+      clientLogger.info(LogComponent.AUTH, "Attempting login", {
+        username,
+      });
 
       const result = await signIn("credentials", {
-        username: values.username,
-        password: values.password,
+        username,
+        password,
         redirect: false,
       });
 
-      console.log("Sign-in result:", result);
-
-      if (result?.error) {
-        console.log("Sign-in error:", result.error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Invalid credentials",
-        });
-        setIsLoading(false);
-        return;
+      if (!result?.ok) {
+        throw new Error(result?.error || "Failed to sign in");
       }
 
-      // Reset form
-      form.reset();
-
-      // Show success toast
-      toast({
-        title: "Success",
-        description: "Logged in successfully",
+      clientLogger.info(LogComponent.AUTH, "Login successful", {
+        username,
       });
+
+      toast.success("Logged in successfully");
+      router.push("/dashboard");
+      router.refresh();
 
       try {
         // Get the session data directly from the API
@@ -107,26 +103,19 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       } catch (error) {
         console.error("Error checking session:", error);
         setIsLoading(false);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to check login status. Please try again.",
-        });
+        toast.error("Failed to check login status. Please try again.");
       }
     } catch (error) {
-      console.error("Login error:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "An error occurred during login",
-      });
+      clientLogger.error(LogComponent.AUTH, "Login failed", error);
+      toast.error("Invalid username or password");
+    } finally {
       setIsLoading(false);
     }
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={onSubmit} className="space-y-6">
         <FormField
           control={form.control}
           name="username"

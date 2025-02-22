@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { clientLogger, LogComponent } from "@/lib/logger";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -62,6 +63,7 @@ export function FirstTimeWizard() {
   const [currentStep, setCurrentStep] = useState(0);
   const { toast } = useToast();
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
 
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
@@ -79,88 +81,75 @@ export function FirstTimeWizard() {
     },
   });
 
-  const onPasswordSubmit = async (values: PasswordForm) => {
+  const handlePasswordSubmit = async (data: z.infer<typeof passwordSchema>) => {
     try {
-      console.log("Starting password change submission");
-      const response = await fetch("/api/auth/change-password", {
+      clientLogger.info(
+        LogComponent.AUTH,
+        "Updating password in first-time setup"
+      );
+      setIsLoading(true);
+
+      const response = await fetch("/api/auth/password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ newPassword: values.newPassword }),
+        body: JSON.stringify({
+          currentPassword: data.currentPassword,
+          newPassword: data.newPassword,
+        }),
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(
-          data.error || `Failed to change password: ${response.statusText}`
-        );
+        throw new Error("Failed to update password");
       }
 
-      toast({
-        title: "Password Changed",
-        description: "Your password has been updated successfully.",
-      });
-
-      // Move to next step
-      setCurrentStep((prev) => prev + 1);
+      toast.success("Password updated successfully");
+      clientLogger.info(LogComponent.AUTH, "Password updated successfully");
+      setCurrentStep("steam");
     } catch (error) {
-      console.error("Password change error:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to change password",
-      });
+      clientLogger.error(LogComponent.AUTH, "Failed to update password", error);
+      toast.error("Failed to update password");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const onSteamSubmit = async (values: SteamForm) => {
+  const handleSteamSubmit = async (data: z.infer<typeof steamSchema>) => {
     try {
-      // Only update Steam settings if both fields are provided
-      if (values.steamId && values.steamApiKey) {
-        const response = await fetch("/api/user/steam", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            steamId: values.steamId,
-            steamApiKey: values.steamApiKey,
-          }),
-        });
+      clientLogger.info(LogComponent.AUTH, "Setting up Steam credentials");
+      setIsLoading(true);
 
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.message || "Failed to update Steam settings");
-        }
-
-        toast({
-          title: "Steam Settings Updated",
-          description: "Your Steam account has been connected successfully.",
-        });
-      }
-
-      // Complete setup and sign out
-      console.log("Completing first-time setup");
-      try {
-        await signOut({ redirect: false });
-        console.log("Sign out successful");
-        router.push("/login");
-      } catch (error) {
-        console.error("Error during sign out:", error);
-        router.push("/login");
-      }
-    } catch (error) {
-      console.error("Steam settings error:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to update Steam settings",
+      const response = await fetch("/api/settings/steam", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          steamId: data.steamId,
+          apiKey: data.steamApiKey,
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error("Failed to save Steam settings");
+      }
+
+      toast.success("Steam settings saved successfully");
+      clientLogger.info(LogComponent.AUTH, "Steam settings saved successfully");
+
+      // Sign out after completing setup
+      await signOut({ redirect: false });
+      router.push("/login");
+    } catch (error) {
+      clientLogger.error(
+        LogComponent.AUTH,
+        "Failed to save Steam settings",
+        error
+      );
+      toast.error("Failed to save Steam settings");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -174,7 +163,7 @@ export function FirstTimeWizard() {
         {currentStep === 0 && (
           <Form {...passwordForm}>
             <form
-              onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
+              onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)}
               className="space-y-4"
             >
               <FormField
@@ -204,7 +193,7 @@ export function FirstTimeWizard() {
                 )}
               />
               <CardFooter className="px-0">
-                <Button type="submit" className="ml-auto">
+                <Button type="submit" className="ml-auto" disabled={isLoading}>
                   Next
                 </Button>
               </CardFooter>
@@ -215,7 +204,7 @@ export function FirstTimeWizard() {
         {currentStep === 1 && (
           <Form {...steamForm}>
             <form
-              onSubmit={steamForm.handleSubmit(onSteamSubmit)}
+              onSubmit={steamForm.handleSubmit(handleSteamSubmit)}
               className="space-y-4"
             >
               <Alert>
@@ -259,8 +248,9 @@ export function FirstTimeWizard() {
                   variant="outline"
                   onClick={() => {
                     // Skip Steam setup
-                    onSteamSubmit({});
+                    handleSteamSubmit({});
                   }}
+                  disabled={isLoading}
                 >
                   Skip
                 </Button>
@@ -268,7 +258,8 @@ export function FirstTimeWizard() {
                   type="submit"
                   disabled={
                     !steamForm.watch("steamId") ||
-                    !steamForm.watch("steamApiKey")
+                    !steamForm.watch("steamApiKey") ||
+                    isLoading
                   }
                 >
                   Complete Setup

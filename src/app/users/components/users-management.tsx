@@ -159,6 +159,109 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
     }
   };
 
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      clientLogger.info(LogComponent.USER_MANAGEMENT, "Deleting user", {
+        userId,
+      });
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete user");
+      }
+
+      // Remove user from the list
+      setUsers((prev) => prev.filter((user) => user.id !== userId));
+      toast.success("User deleted successfully");
+      clientLogger.info(
+        LogComponent.USER_MANAGEMENT,
+        "User deleted successfully",
+        { userId }
+      );
+    } catch (error) {
+      clientLogger.error(
+        LogComponent.USER_MANAGEMENT,
+        "Failed to delete user",
+        error
+      );
+      toast.error("Failed to delete user");
+    }
+  };
+
+  const handleCreateUser = async (data: CreateUserFormData) => {
+    try {
+      clientLogger.info(LogComponent.USER_MANAGEMENT, "Creating new user", {
+        username: data.username,
+      });
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create user");
+      }
+
+      const newUser = await response.json();
+      setUsers((prev) => [...prev, newUser]);
+      toast.success("User created successfully");
+      clientLogger.info(
+        LogComponent.USER_MANAGEMENT,
+        "User created successfully",
+        { userId: newUser.id }
+      );
+    } catch (error) {
+      clientLogger.error(
+        LogComponent.USER_MANAGEMENT,
+        "Failed to create user",
+        error
+      );
+      toast.error("Failed to create user");
+    }
+  };
+
+  const handleUpdateUser = async (userId: string, data: UpdateUserFormData) => {
+    try {
+      clientLogger.info(LogComponent.USER_MANAGEMENT, "Updating user", {
+        userId,
+      });
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update user");
+      }
+
+      const updatedUser = await response.json();
+      setUsers((prev) =>
+        prev.map((user) => (user.id === userId ? updatedUser : user))
+      );
+      toast.success("User updated successfully");
+      clientLogger.info(
+        LogComponent.USER_MANAGEMENT,
+        "User updated successfully",
+        { userId }
+      );
+    } catch (error) {
+      clientLogger.error(
+        LogComponent.USER_MANAGEMENT,
+        "Failed to update user",
+        error
+      );
+      toast.error("Failed to update user");
+    }
+  };
+
   return (
     <div className="container mx-auto py-10">
       <div className="flex justify-between items-center mb-8">

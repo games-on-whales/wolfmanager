@@ -1,128 +1,96 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
+import { clientLogger, LogComponent } from "@/lib/logger";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
-interface SecurityFormProps {
-  username: string;
-}
+export function SecurityForm() {
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
-export function SecurityForm({ username }: SecurityFormProps) {
-  const { toast } = useToast();
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoading(true);
 
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "New passwords do not match.",
-      });
-      return;
-    }
-
-    setIsChangingPassword(true);
     try {
-      const response = await fetch("/api/user/password", {
-        method: "PUT",
+      const formData = new FormData(event.currentTarget);
+      const currentPassword = formData.get("currentPassword") as string;
+      const newPassword = formData.get("newPassword") as string;
+      const confirmPassword = formData.get("confirmPassword") as string;
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        toast.error("Please fill in all password fields");
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        toast.error("New passwords do not match");
+        return;
+      }
+
+      clientLogger.info(LogComponent.AUTH, "Updating password");
+
+      const response = await fetch("/api/auth/password", {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username,
           currentPassword,
           newPassword,
         }),
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Failed to change password");
+        throw new Error("Failed to update password");
       }
 
-      toast({
-        title: "Password Updated",
-        description: "Your password has been changed successfully.",
-      });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      toast.success("Password updated successfully");
+      clientLogger.info(LogComponent.AUTH, "Password updated successfully");
+
+      // Sign out after password change
+      await signOut({ redirect: false });
+      router.push("/login");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to change password. Please verify your current password.",
-      });
+      clientLogger.error(LogComponent.AUTH, "Failed to update password", error);
+      toast.error("Failed to update password");
     } finally {
-      setIsChangingPassword(false);
+      setIsLoading(false);
     }
-  };
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Security</CardTitle>
-        <CardDescription>Change your password</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="current-password">Current Password</Label>
-          <Input
-            id="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="new-password">New Password</Label>
-          <Input
-            id="new-password"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="confirm-password">Confirm New Password</Label>
-          <Input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-        </div>
-      </CardContent>
-      <CardFooter>
-        <Button
-          onClick={handleChangePassword}
-          disabled={
-            isChangingPassword ||
-            !currentPassword ||
-            !newPassword ||
-            !confirmPassword
-          }
-        >
-          {isChangingPassword ? "Changing Password..." : "Change Password"}
-        </Button>
-      </CardFooter>
-    </Card>
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="currentPassword">Current Password</Label>
+        <Input
+          id="currentPassword"
+          name="currentPassword"
+          type="password"
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="newPassword">New Password</Label>
+        <Input id="newPassword" name="newPassword" type="password" required />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="confirmPassword">Confirm New Password</Label>
+        <Input
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          required
+        />
+      </div>
+      <Button type="submit" disabled={isLoading}>
+        {isLoading ? "Updating..." : "Update Password"}
+      </Button>
+    </form>
   );
 }

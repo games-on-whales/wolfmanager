@@ -1,48 +1,31 @@
 "use client";
 
-import { useToast } from "@/components/ui/use-toast";
+import { clientLogger, LogComponent } from "@/lib/logger";
 import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { toast } from "sonner";
 
-interface LogoutHandlerProps {
-  children: React.ReactNode;
-}
+export function LogoutHandler() {
+  const router = useRouter();
 
-export function LogoutHandler({ children }: LogoutHandlerProps) {
-  const { toast } = useToast();
-
-  const handleLogout = async (e: React.MouseEvent) => {
-    e.preventDefault();
-
-    try {
-      // First clear any client-side storage
-      localStorage.clear();
-      sessionStorage.clear();
-
-      // Sign out without redirect
-      await signOut({ redirect: false });
-
-      toast({
-        title: "Success",
-        description: "Logged out successfully",
-      });
-
-      // Force a full page reload to clear all state
-      window.location.href = "/login";
-    } catch (error) {
-      console.error("Logout error:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to logout. Please try again.",
-      });
-      // Even on error, force a reload to ensure clean state
-      window.location.href = "/login";
+  useEffect(() => {
+    async function handleLogout() {
+      try {
+        clientLogger.info(LogComponent.AUTH, "Logging out user");
+        await signOut({ redirect: false });
+        toast.success("Logged out successfully");
+        router.push("/login");
+        router.refresh();
+      } catch (error) {
+        clientLogger.error(LogComponent.AUTH, "Logout failed", error);
+        toast.error("Failed to log out");
+        router.push("/dashboard");
+      }
     }
-  };
 
-  return (
-    <div onClick={handleLogout} role="button" tabIndex={0}>
-      {children}
-    </div>
-  );
+    handleLogout();
+  }, [router]);
+
+  return null;
 }

@@ -1,0 +1,179 @@
+---
+description: Comprehensive logging standards for all new features and modifications. See docs/logging-standards.md for detailed guidelines.
+globs: src/app/**/*.tsx", "src/app/**/*.ts", "src/lib/**/*.ts
+---
+## Logging Standards
+
+When implementing new features or modifying existing ones, ensure comprehensive logging following these guidelines:
+
+### Server Components
+
+1. Authentication & Authorization:
+   - Log all access attempts with user context
+   - Log authorization failures with detailed context
+   - Use LogComponent.AUTH for auth-related logs
+   ```typescript
+   await logger.info(LogComponent.AUTH, "Access attempt", {
+     userId: session?.user?.id,
+     path: request.url
+   });
+   ```
+
+2. Data Operations:
+   - Log data fetching with counts/statistics
+   - Log all mutations (create/update/delete)
+   - Include relevant IDs and metadata
+   ```typescript
+   await logger.info(LogComponent.WOLF_UI, "Data fetched", {
+     count: items.length,
+     filters: queryParams
+   });
+   ```
+
+3. Error Handling:
+   - Wrap operations in try/catch blocks
+   - Log errors with full context and stack traces
+   ```typescript
+   try {
+     // operation
+   } catch (error) {
+     await logger.error(
+       LogComponent.WOLF_UI,
+       "Operation failed",
+       error,
+       { context: relevantData }
+     );
+     throw error;
+   }
+   ```
+
+### Client Components
+
+1. User Actions:
+   - Log all significant user interactions
+   - Include relevant form data (excluding sensitive info)
+   ```typescript
+   clientLogger.info(LogComponent.WOLF_UI, "User action", {
+     action: "submit",
+     formId: "user-settings"
+   });
+   ```
+
+2. API Interactions:
+   - Log before API calls with request details
+   - Log successful responses with relevant data
+   - Log failures with error context
+   ```typescript
+   try {
+     clientLogger.info(LogComponent.WOLF_UI, "API request initiated", {
+       endpoint: "/api/resource",
+       method: "POST"
+     });
+     // API call
+     clientLogger.info(LogComponent.WOLF_UI, "API request successful", {
+       responseData: sanitizedResponse
+     });
+   } catch (error) {
+     clientLogger.error(LogComponent.WOLF_UI, "API request failed", error);
+   }
+   ```
+
+3. State Changes:
+   - Log significant state updates
+   - Include before/after values when relevant
+   ```typescript
+   clientLogger.info(LogComponent.WOLF_UI, "State updated", {
+     component: "UserPreferences",
+     changes: { before, after }
+   });
+   ```
+
+### Best Practices
+
+1. Log Levels:
+   - DEBUG: Detailed information for debugging
+   - INFO: General operational events
+   - WARN: Unexpected but handled situations
+   - ERROR: Errors requiring attention
+
+2. Metadata:
+   - Always include relevant IDs (userId, resourceId)
+   - Add timestamps for time-sensitive operations
+   - Include operation-specific context
+
+3. Security:
+   - Never log sensitive data (passwords, tokens)
+   - Mask partial sensitive identifiers when needed
+   - Include IP/session info for security events
+
+4. Performance:
+   - Log timing for long-running operations
+   - Include resource usage when relevant
+   - Track rate-limited operations
+
+### Component-Specific Guidelines
+
+1. Authentication:
+   ```typescript
+   // Login attempts
+   logger.info(LogComponent.AUTH, "Login attempt", {
+     username,
+     success: true,
+     method: "credentials"
+   });
+
+   // Session changes
+   logger.info(LogComponent.AUTH, "Session updated", {
+     userId,
+     action: "refresh"
+   });
+   ```
+
+2. Data Management:
+   ```typescript
+   // Resource creation
+   logger.info(LogComponent.WOLF_UI, "Resource created", {
+     resourceType: "user",
+     resourceId: newId
+   });
+
+   // Batch operations
+   logger.info(LogComponent.WOLF_UI, "Batch operation completed", {
+     operation: "update",
+     affected: ids.length,
+     success: successCount
+   });
+   ```
+
+3. API Routes:
+   ```typescript
+   // Request handling
+   logger.debug(LogComponent.WOLF_UI, "API request received", {
+     method: req.method,
+     path: req.url,
+     query: req.query
+   });
+
+   // Response sending
+   logger.debug(LogComponent.WOLF_UI, "API response sent", {
+     status: response.status,
+     duration: requestDuration
+   });
+   ```
+
+### Testing & Monitoring
+
+1. Ensure logs are testable:
+   - Add log assertions in tests
+   - Verify log levels and content
+   - Mock logging in unit tests
+
+2. Monitor log patterns:
+   - Track error rates
+   - Monitor authentication failures
+   - Watch for unusual patterns
+
+3. Log rotation and management:
+   - Implement size-based rotation
+   - Set appropriate retention periods
+   - Configure backup storage

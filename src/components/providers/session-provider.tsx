@@ -1,12 +1,39 @@
 "use client";
 
-import { SessionProvider as NextAuthSessionProvider } from "next-auth/react";
-import { ReactNode } from "react";
+import { clientLogger, LogComponent } from "@/lib/logger";
+import {
+  SessionProvider as NextAuthSessionProvider,
+  useSession,
+} from "next-auth/react";
+import { useEffect } from "react";
 
 interface SessionProviderProps {
-  children: ReactNode;
+  children: React.ReactNode;
+}
+
+function SessionLogger() {
+  const { data: session } = useSession();
+
+  useEffect(() => {
+    if (session) {
+      clientLogger.info(LogComponent.AUTH, "Session updated", {
+        userId: session.user.id,
+        username: session.user.name,
+        requiresSetup: session.requiresFirstTimeSetup,
+      });
+    } else {
+      clientLogger.info(LogComponent.AUTH, "Session ended");
+    }
+  }, [session]);
+
+  return null;
 }
 
 export function SessionProvider({ children }: SessionProviderProps) {
-  return <NextAuthSessionProvider>{children}</NextAuthSessionProvider>;
+  return (
+    <NextAuthSessionProvider>
+      <SessionLogger />
+      {children}
+    </NextAuthSessionProvider>
+  );
 }
