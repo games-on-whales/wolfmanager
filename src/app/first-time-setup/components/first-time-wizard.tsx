@@ -128,8 +128,8 @@ export function FirstTimeWizard() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          steamId: data.steamId,
-          apiKey: data.steamApiKey,
+          steamId: data.steamId || "",
+          apiKey: data.steamApiKey || "",
         }),
       });
 
@@ -138,8 +138,8 @@ export function FirstTimeWizard() {
         throw new Error(errorData.message || "Failed to save Steam settings");
       }
 
-      toast.success("Steam settings saved successfully");
-      clientLogger.info(LogComponent.AUTH, "Steam settings saved successfully");
+      toast.success("Setup completed successfully");
+      clientLogger.info(LogComponent.AUTH, "First-time setup completed");
 
       // Sign out after completing setup
       await signOut({ redirect: false });
@@ -153,6 +153,23 @@ export function FirstTimeWizard() {
       toast.error(
         error instanceof Error ? error.message : "Failed to save Steam settings"
       );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    try {
+      setIsLoading(true);
+      clientLogger.info(LogComponent.AUTH, "Skipping Steam setup");
+
+      // Just sign out and redirect, no Steam settings to save
+      await signOut({ redirect: false });
+      toast.success("Setup completed successfully");
+      router.push("/login");
+    } catch (error) {
+      clientLogger.error(LogComponent.AUTH, "Failed to complete setup", error);
+      toast.error("Failed to complete setup");
     } finally {
       setIsLoading(false);
     }
@@ -257,10 +274,8 @@ export function FirstTimeWizard() {
               <CardFooter className="px-0 flex justify-between">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    // Skip Steam setup
-                    handleSteamSubmit({});
-                  }}
+                  type="button"
+                  onClick={handleSkip}
                   disabled={isLoading}
                 >
                   Skip
@@ -268,9 +283,9 @@ export function FirstTimeWizard() {
                 <Button
                   type="submit"
                   disabled={
+                    isLoading ||
                     !steamForm.watch("steamId") ||
-                    !steamForm.watch("steamApiKey") ||
-                    isLoading
+                    !steamForm.watch("steamApiKey")
                   }
                 >
                   Complete Setup
