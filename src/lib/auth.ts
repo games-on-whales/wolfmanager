@@ -1,5 +1,5 @@
 import { validateUser } from "@/lib/config";
-import { AuthOptions, DefaultSession } from "next-auth";
+import { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
 if (!process.env.NEXTAUTH_SECRET) {
@@ -20,7 +20,7 @@ declare module "next-auth" {
       id: string;
       name: string;
       role?: string;
-    } & DefaultSession["user"];
+    };
     requiresFirstTimeSetup: boolean;
   }
 }
