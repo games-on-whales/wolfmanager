@@ -1,4 +1,5 @@
 import { ConsoleTransport } from "./transports/console";
+import { ContainerTransport } from "./transports/container";
 import { FileTransport } from "./transports/file";
 import {
   LogComponent,
@@ -22,18 +23,25 @@ export class Logger {
   }
 
   private initializeTransports() {
-    // Always add console transport if enabled
-    if (this.config.consoleOutput) {
+    // Add container transport if enabled
+    if (this.config.container.enabled) {
+      this.transports.push(
+        new ContainerTransport(this.config.container.serviceName)
+      );
+    }
+
+    // Add console transport if enabled
+    if (this.config.console.enabled) {
       this.transports.push(new ConsoleTransport());
     }
 
-    // Add file transport if path is specified
-    if (this.config.filePath) {
+    // Add file transport if enabled and path is specified
+    if (this.config.file.enabled && this.config.file.path) {
       this.transports.push(
         new FileTransport(
-          this.config.filePath,
-          this.config.maxFileSize,
-          this.config.maxFiles
+          this.config.file.path,
+          this.config.file.maxSize,
+          this.config.file.maxFiles
         )
       );
     }

@@ -32,16 +32,41 @@ export interface LogEntry {
   metadata?: Record<string, unknown>;
 }
 
-// Configuration schema for the logger
-export const loggerConfigSchema = z.object({
-  level: z.enum(["debug", "info", "warn", "error"]).default("info"),
-  filePath: z.string().optional(),
-  consoleOutput: z.boolean().default(true),
-  maxFileSize: z.number().default(5 * 1024 * 1024), // 5MB default
+// Container-specific configuration
+export const containerConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  serviceName: z.string().default("wolf-ui"),
+  includeMetadata: z.boolean().default(true),
+  useJson: z.boolean().default(true),
+});
+
+// File output configuration
+export const fileConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  path: z.string().optional(),
+  maxSize: z.number().default(5 * 1024 * 1024), // 5MB default
   maxFiles: z.number().default(5),
   format: z.enum(["json", "text"]).default("json"),
 });
 
+// Console output configuration
+export const consoleConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  colorize: z.boolean().default(true),
+  includeMetadata: z.boolean().default(true),
+});
+
+// Configuration schema for the logger
+export const loggerConfigSchema = z.object({
+  level: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  container: containerConfigSchema.default({}),
+  file: fileConfigSchema.default({}),
+  console: consoleConfigSchema.default({}),
+});
+
+export type ContainerConfig = z.infer<typeof containerConfigSchema>;
+export type FileConfig = z.infer<typeof fileConfigSchema>;
+export type ConsoleConfig = z.infer<typeof consoleConfigSchema>;
 export type LoggerConfig = z.infer<typeof loggerConfigSchema>;
 
 // Plugin interface for external loggers

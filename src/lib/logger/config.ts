@@ -4,41 +4,113 @@ import { LoggerConfig } from "./types";
 // Default configuration for development
 const devConfig: LoggerConfig = {
   level: "debug",
-  consoleOutput: true,
-  filePath: path.join(process.cwd(), "logs", "wolf-ui.log"),
-  maxFileSize: 5 * 1024 * 1024, // 5MB
-  maxFiles: 5,
-  format: "json",
+  container: {
+    enabled: false,
+    serviceName: "wolf-ui-dev",
+    includeMetadata: true,
+    useJson: true,
+  },
+  file: {
+    enabled: true,
+    path: path.join(process.cwd(), "logs", "wolf-ui.log"),
+    maxSize: 5 * 1024 * 1024, // 5MB
+    maxFiles: 5,
+    format: "json",
+  },
+  console: {
+    enabled: true,
+    colorize: true,
+    includeMetadata: true,
+  },
 };
 
-// Configuration for production
+// Configuration for production container environment
+const containerConfig: LoggerConfig = {
+  level: "info",
+  container: {
+    enabled: true,
+    serviceName: "wolf-ui",
+    includeMetadata: true,
+    useJson: true,
+  },
+  file: {
+    enabled: false,
+    path: "/var/log/wolf-ui/wolf-ui.log",
+    maxSize: 10 * 1024 * 1024,
+    maxFiles: 5,
+    format: "json",
+  },
+  console: {
+    enabled: false,
+    colorize: false,
+    includeMetadata: true,
+  },
+};
+
+// Configuration for production non-container environment
 const prodConfig: LoggerConfig = {
   level: "info",
-  consoleOutput: true,
-  filePath: "/var/log/wolf-ui/wolf-ui.log",
-  maxFileSize: 10 * 1024 * 1024, // 10MB
-  maxFiles: 10,
-  format: "json",
+  container: {
+    enabled: false,
+    serviceName: "wolf-ui",
+    includeMetadata: true,
+    useJson: true,
+  },
+  file: {
+    enabled: true,
+    path: "/var/log/wolf-ui/wolf-ui.log",
+    maxSize: 10 * 1024 * 1024, // 10MB
+    maxFiles: 10,
+    format: "json",
+  },
+  console: {
+    enabled: true,
+    colorize: false,
+    includeMetadata: true,
+  },
 };
 
 // Get configuration based on environment
 export function getLoggerConfig(): LoggerConfig {
   const isDevelopment = process.env.NODE_ENV !== "production";
-  const baseConfig = isDevelopment ? devConfig : prodConfig;
+  const isContainer = process.env.CONTAINER === "true";
+
+  // Select base configuration
+  const baseConfig = isDevelopment
+    ? devConfig
+    : isContainer
+    ? containerConfig
+    : prodConfig;
 
   return {
     ...baseConfig,
-    // Override with environment variables if provided
     level: (process.env.LOG_LEVEL as LoggerConfig["level"]) || baseConfig.level,
-    filePath: process.env.LOG_FILE_PATH || baseConfig.filePath,
-    consoleOutput:
-      process.env.LOG_CONSOLE_OUTPUT === undefined
-        ? baseConfig.consoleOutput
-        : process.env.LOG_CONSOLE_OUTPUT === "true",
-    maxFileSize:
-      parseInt(process.env.LOG_MAX_FILE_SIZE || "") || baseConfig.maxFileSize,
-    maxFiles: parseInt(process.env.LOG_MAX_FILES || "") || baseConfig.maxFiles,
-    format:
-      (process.env.LOG_FORMAT as LoggerConfig["format"]) || baseConfig.format,
+    container: {
+      ...baseConfig.container,
+      enabled:
+        process.env.LOG_CONTAINER_ENABLED === "true" ||
+        baseConfig.container.enabled,
+      serviceName:
+        process.env.LOG_SERVICE_NAME || baseConfig.container.serviceName,
+    },
+    file: {
+      ...baseConfig.file,
+      enabled:
+        process.env.LOG_FILE_ENABLED === "true" || baseConfig.file.enabled,
+      path: process.env.LOG_FILE_PATH || baseConfig.file.path,
+      maxSize:
+        parseInt(process.env.LOG_MAX_FILE_SIZE || "") ||
+        baseConfig.file.maxSize,
+      maxFiles:
+        parseInt(process.env.LOG_MAX_FILES || "") || baseConfig.file.maxFiles,
+    },
+    console: {
+      ...baseConfig.console,
+      enabled:
+        process.env.LOG_CONSOLE_ENABLED === "true" ||
+        baseConfig.console.enabled,
+      colorize:
+        process.env.LOG_CONSOLE_COLOR === "true" || baseConfig.console.colorize,
+    },
   };
 }
