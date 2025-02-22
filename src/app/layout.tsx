@@ -54,7 +54,7 @@ export default async function RootLayout({
                 theme="system"
                 richColors
                 closeButton
-                position="top-right"
+                position="bottom-right"
                 toastOptions={{
                   classNames: {
                     toast: "font-sans border border-border",
