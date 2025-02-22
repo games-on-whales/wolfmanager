@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
+import { clientLogger, LogComponent } from "@/lib/logger";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -69,6 +70,11 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      clientLogger.info(LogComponent.WOLF_UI, "Creating new user", {
+        username: values.username,
+        isAdmin: values.isAdmin,
+      });
+
       const response = await fetch("/api/users", {
         method: "POST",
         headers: {
@@ -84,6 +90,13 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
 
       const newUser = await response.json();
       setUsers((prev) => [...prev, newUser]);
+
+      clientLogger.info(LogComponent.WOLF_UI, "User created successfully", {
+        userId: newUser.id,
+        username: newUser.username,
+        isAdmin: newUser.isAdmin,
+      });
+
       toast({
         title: "Success",
         description: "User added successfully",
@@ -91,6 +104,10 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
       setIsOpen(false);
       form.reset();
     } catch (error) {
+      clientLogger.error(LogComponent.WOLF_UI, "Failed to create user", error, {
+        formData: values,
+      });
+
       toast({
         variant: "destructive",
         title: "Error",
@@ -100,8 +117,13 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
     }
   };
 
-  const handleRemoveUser = async (userId: string) => {
+  const handleRemoveUser = async (userId: string, username: string) => {
     try {
+      clientLogger.info(LogComponent.WOLF_UI, "Attempting to remove user", {
+        userId,
+        username,
+      });
+
       const response = await fetch(`/api/users?userId=${userId}`, {
         method: "DELETE",
       });
@@ -112,11 +134,22 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
       }
 
       setUsers((prev) => prev.filter((user) => user.id !== userId));
+
+      clientLogger.info(LogComponent.WOLF_UI, "User removed successfully", {
+        userId,
+        username,
+      });
+
       toast({
         title: "Success",
         description: "User removed successfully",
       });
     } catch (error) {
+      clientLogger.error(LogComponent.WOLF_UI, "Failed to remove user", error, {
+        userId,
+        username,
+      });
+
       toast({
         variant: "destructive",
         title: "Error",
@@ -225,7 +258,7 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
                 {user.username !== "admin" && (
                   <Button
                     variant="destructive"
-                    onClick={() => handleRemoveUser(user.id)}
+                    onClick={() => handleRemoveUser(user.id, user.username)}
                   >
                     Remove User
                   </Button>
