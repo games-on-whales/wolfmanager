@@ -1,14 +1,15 @@
 "use client";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -32,13 +33,12 @@ const steps = [
     title: "Change Password",
     description: "Please change your password to continue",
   },
-  // Add more steps here as needed
-  // {
-  //   id: "profile",
-  //   title: "Complete Profile",
-  //   description: "Fill in your profile information",
-  // },
-];
+  {
+    id: "steam",
+    title: "Steam Integration",
+    description: "Connect your Steam account (optional)",
+  },
+] as const;
 
 const passwordSchema = z
   .object({
@@ -50,17 +50,20 @@ const passwordSchema = z
     path: ["confirmPassword"],
   });
 
-interface FirstTimeWizardProps {
-  isOpen: boolean;
-  onComplete: () => void;
-}
+const steamSchema = z.object({
+  steamId: z.string().optional(),
+  steamApiKey: z.string().optional(),
+});
 
-export function FirstTimeWizard({ isOpen, onComplete }: FirstTimeWizardProps) {
+type PasswordForm = z.infer<typeof passwordSchema>;
+type SteamForm = z.infer<typeof steamSchema>;
+
+export function FirstTimeWizard() {
   const [currentStep, setCurrentStep] = useState(0);
   const { toast } = useToast();
   const router = useRouter();
 
-  const form = useForm<z.infer<typeof passwordSchema>>({
+  const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
     defaultValues: {
       newPassword: "",
@@ -68,7 +71,15 @@ export function FirstTimeWizard({ isOpen, onComplete }: FirstTimeWizardProps) {
     },
   });
 
-  const onSubmit = async (values: z.infer<typeof passwordSchema>) => {
+  const steamForm = useForm<SteamForm>({
+    resolver: zodResolver(steamSchema),
+    defaultValues: {
+      steamId: "",
+      steamApiKey: "",
+    },
+  });
+
+  const onPasswordSubmit = async (values: PasswordForm) => {
     try {
       console.log("Starting password change submission");
       const response = await fetch("/api/auth/change-password", {
@@ -81,46 +92,18 @@ export function FirstTimeWizard({ isOpen, onComplete }: FirstTimeWizardProps) {
 
       if (!response.ok) {
         const data = await response.json();
-        console.error("Password change failed:", {
-          status: response.status,
-          data,
-        });
         throw new Error(
           data.error || `Failed to change password: ${response.statusText}`
         );
       }
 
-      const data = await response.json();
-      console.log("Password change successful:", data);
-
       toast({
-        title: "Success",
-        description:
-          "Password changed successfully. Please log in again with your new password.",
+        title: "Password Changed",
+        description: "Your password has been updated successfully.",
       });
 
-      if (currentStep < steps.length - 1) {
-        setCurrentStep(currentStep + 1);
-      } else {
-        console.log("Completing first-time setup");
-        // First call onComplete to update parent state
-        onComplete();
-
-        // Then sign out
-        console.log("Signing out...");
-        try {
-          await signOut({ redirect: false });
-          console.log("Sign out successful");
-
-          // Finally redirect
-          console.log("Redirecting to login page");
-          window.location.href = "/login";
-        } catch (error) {
-          console.error("Error during sign out:", error);
-          // Even if sign out fails, force a redirect
-          window.location.href = "/login";
-        }
-      }
+      // Move to next step
+      setCurrentStep((prev) => prev + 1);
     } catch (error) {
       console.error("Password change error:", error);
       toast({
@@ -132,26 +115,70 @@ export function FirstTimeWizard({ isOpen, onComplete }: FirstTimeWizardProps) {
     }
   };
 
-  // Prevent closing the dialog by clicking outside or pressing escape
-  const onOpenChange = () => {
-    // Do nothing - dialog cannot be closed
+  const onSteamSubmit = async (values: SteamForm) => {
+    try {
+      // Only update Steam settings if both fields are provided
+      if (values.steamId && values.steamApiKey) {
+        const response = await fetch("/api/user/steam", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            steamId: values.steamId,
+            steamApiKey: values.steamApiKey,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || "Failed to update Steam settings");
+        }
+
+        toast({
+          title: "Steam Settings Updated",
+          description: "Your Steam account has been connected successfully.",
+        });
+      }
+
+      // Complete setup and sign out
+      console.log("Completing first-time setup");
+      try {
+        await signOut({ redirect: false });
+        console.log("Sign out successful");
+        router.push("/login");
+      } catch (error) {
+        console.error("Error during sign out:", error);
+        router.push("/login");
+      }
+    } catch (error) {
+      console.error("Steam settings error:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to update Steam settings",
+      });
+    }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{steps[currentStep].title}</DialogTitle>
-          <DialogDescription>
-            {steps[currentStep].description}
-          </DialogDescription>
-        </DialogHeader>
-
-        {steps[currentStep].id === "password" && (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <Card className="w-full max-w-lg mx-auto">
+      <CardHeader>
+        <CardTitle>{steps[currentStep].title}</CardTitle>
+        <CardDescription>{steps[currentStep].description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {currentStep === 0 && (
+          <Form {...passwordForm}>
+            <form
+              onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
+              className="space-y-4"
+            >
               <FormField
-                control={form.control}
+                control={passwordForm.control}
                 name="newPassword"
                 render={({ field }) => (
                   <FormItem>
@@ -164,7 +191,7 @@ export function FirstTimeWizard({ isOpen, onComplete }: FirstTimeWizardProps) {
                 )}
               />
               <FormField
-                control={form.control}
+                control={passwordForm.control}
                 name="confirmPassword"
                 render={({ field }) => (
                   <FormItem>
@@ -176,17 +203,81 @@ export function FirstTimeWizard({ isOpen, onComplete }: FirstTimeWizardProps) {
                   </FormItem>
                 )}
               />
-              <DialogFooter>
-                <Button type="submit">
-                  {currentStep === steps.length - 1 ? "Complete" : "Next"}
+              <CardFooter className="px-0">
+                <Button type="submit" className="ml-auto">
+                  Next
                 </Button>
-              </DialogFooter>
+              </CardFooter>
             </form>
           </Form>
         )}
 
-        {/* Add more step content here as needed */}
-      </DialogContent>
-    </Dialog>
+        {currentStep === 1 && (
+          <Form {...steamForm}>
+            <form
+              onSubmit={steamForm.handleSubmit(onSteamSubmit)}
+              className="space-y-4"
+            >
+              <Alert>
+                <AlertDescription>
+                  Steam integration is optional. You can skip this step and set
+                  it up later in your account settings.
+                </AlertDescription>
+              </Alert>
+              <FormField
+                control={steamForm.control}
+                name="steamId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Steam ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter your Steam ID" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={steamForm.control}
+                name="steamApiKey"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Steam API Key</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="Enter your Steam API Key"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <CardFooter className="px-0 flex justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Skip Steam setup
+                    onSteamSubmit({});
+                  }}
+                >
+                  Skip
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    !steamForm.watch("steamId") ||
+                    !steamForm.watch("steamApiKey")
+                  }
+                >
+                  Complete Setup
+                </Button>
+              </CardFooter>
+            </form>
+          </Form>
+        )}
+      </CardContent>
+    </Card>
   );
 }
