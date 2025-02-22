@@ -24,6 +24,7 @@ export interface UserConfig {
   created_at: string;
   updated_at: string;
   has_changed_password: boolean;
+  requiresFirstTimeSetup: boolean;
   steam_id?: string;
   steam_api_key?: string;
   clients: ClientDevice[];
@@ -143,6 +144,7 @@ export function loadConfig(decryptSensitiveData: boolean = false): Config {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             has_changed_password: false,
+            requiresFirstTimeSetup: true,
             clients: [],
             steam_id: "",
             steam_api_key: "",
@@ -304,6 +306,7 @@ export function addUser(
     created_at: now,
     updated_at: now,
     has_changed_password: false,
+    requiresFirstTimeSetup: true,
     clients: [],
     steam_id: "",
     steam_api_key: "",

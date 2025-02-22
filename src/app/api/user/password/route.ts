@@ -11,11 +11,12 @@ export async function PUT(req: Request) {
     }
 
     const data = await req.json();
-    const { username, currentPassword, newPassword } = data;
+    const { currentPassword, newPassword } = data;
+    const username = session.user.name;
 
-    if (!username || !currentPassword || !newPassword) {
+    if (!username || !newPassword) {
       return NextResponse.json(
-        { message: "All fields are required" },
+        { message: "Required fields are missing" },
         { status: 400 }
       );
     }
@@ -28,16 +29,18 @@ export async function PUT(req: Request) {
       return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
-    // Verify current password
-    const isValidPassword = await bcrypt.compare(
-      currentPassword,
-      user.password_hash
-    );
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { message: "Current password is incorrect" },
-        { status: 401 }
+    // If it's not first-time setup, verify current password
+    if (!user.requiresFirstTimeSetup && currentPassword) {
+      const isValidPassword = await bcrypt.compare(
+        currentPassword,
+        user.password_hash
       );
+      if (!isValidPassword) {
+        return NextResponse.json(
+          { message: "Current password is incorrect" },
+          { status: 401 }
+        );
+      }
     }
 
     // Change password using the config utility

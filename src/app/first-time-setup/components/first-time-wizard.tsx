@@ -27,12 +27,13 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
+import { updatePassword } from "../actions";
 
 const steps = [
   {
     id: "password",
     title: "Change Password",
-    description: "Please change your password to continue",
+    description: "Please set a new password to continue",
   },
   {
     id: "steam",
@@ -43,7 +44,6 @@ const steps = [
 
 const passwordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Current password is required"),
     newPassword: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
   })
@@ -70,7 +70,6 @@ export function FirstTimeWizard() {
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
     defaultValues: {
-      currentPassword: "",
       newPassword: "",
       confirmPassword: "",
     },
@@ -92,27 +91,27 @@ export function FirstTimeWizard() {
       );
       setIsLoading(true);
 
-      const response = await fetch("/api/auth/password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          currentPassword: data.currentPassword,
-          newPassword: data.newPassword,
-        }),
-      });
+      const result = await updatePassword(data.newPassword);
 
-      if (!response.ok) {
-        throw new Error("Failed to update password");
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
       toast.success("Password updated successfully");
-      clientLogger.info(LogComponent.AUTH, "Password updated successfully");
+      clientLogger.info(
+        LogComponent.AUTH,
+        "Password updated successfully in first-time setup"
+      );
       setCurrentStep("steam");
     } catch (error) {
-      clientLogger.error(LogComponent.AUTH, "Failed to update password", error);
-      toast.error("Failed to update password");
+      clientLogger.error(
+        LogComponent.AUTH,
+        "Failed to update password in first-time setup",
+        error
+      );
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update password"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -135,7 +134,8 @@ export function FirstTimeWizard() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to save Steam settings");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to save Steam settings");
       }
 
       toast.success("Steam settings saved successfully");
@@ -150,7 +150,9 @@ export function FirstTimeWizard() {
         "Failed to save Steam settings",
         error
       );
-      toast.error("Failed to save Steam settings");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save Steam settings"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -175,19 +177,6 @@ export function FirstTimeWizard() {
               onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)}
               className="space-y-4"
             >
-              <FormField
-                control={passwordForm.control}
-                name="currentPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Current Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               <FormField
                 control={passwordForm.control}
                 name="newPassword"
@@ -216,7 +205,7 @@ export function FirstTimeWizard() {
               />
               <CardFooter className="px-0">
                 <Button type="submit" className="ml-auto" disabled={isLoading}>
-                  Next
+                  {isLoading ? "Updating..." : "Next"}
                 </Button>
               </CardFooter>
             </form>
