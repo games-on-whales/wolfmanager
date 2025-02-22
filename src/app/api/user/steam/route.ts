@@ -18,27 +18,26 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.name) {
-      return new NextResponse("Unauthorized", { status: 401 });
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     const config = loadConfig(true); // Load with decryption
     const user = config.users[session.user.name];
 
     if (!user) {
-      return new NextResponse("User not found", { status: 404 });
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
     return NextResponse.json({
       hasSteamId: !!user.steam_id,
       hasSteamApiKey: !!user.steam_api_key,
-      maskedSteamId: user.steam_id ? maskString(user.steam_id) : "",
-      maskedSteamApiKey: user.steam_api_key
-        ? maskString(user.steam_api_key)
-        : "",
     });
   } catch (error) {
     console.error("[STEAM_GET]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    return NextResponse.json(
+      { message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -46,25 +45,47 @@ export async function PUT(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.name) {
-      return new NextResponse("Unauthorized", { status: 401 });
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     const data = await req.json();
-    const { username, steamId, steamApiKey } = data;
+    const { username, steamId, apiKey } = data;
 
-    if (!username || !steamId || !steamApiKey) {
-      return new NextResponse("All fields are required", { status: 400 });
+    if (!username || !steamId || !apiKey) {
+      return NextResponse.json(
+        { message: "All fields are required" },
+        { status: 400 }
+      );
     }
 
-    // Update the user's Steam information
-    updateUserSteamInfo(username, steamId, steamApiKey);
+    // Verify the username matches the session user
+    if (username !== session.user.name) {
+      return NextResponse.json(
+        { message: "Invalid user credentials" },
+        { status: 403 }
+      );
+    }
 
-    return NextResponse.json({
-      message: "Steam settings updated successfully",
-    });
+    try {
+      // Update the user's Steam information in TOML
+      updateUserSteamInfo(username, steamId, apiKey);
+
+      return NextResponse.json({
+        message: "Steam settings updated successfully",
+      });
+    } catch (error) {
+      console.error("[STEAM_UPDATE] TOML update error:", error);
+      return NextResponse.json(
+        { message: "Failed to update Steam settings" },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error("[STEAM_UPDATE]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("[STEAM_UPDATE] Request error:", error);
+    return NextResponse.json(
+      { message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 

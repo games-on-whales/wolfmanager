@@ -6,9 +6,9 @@ import { loadConfig } from "@/lib/config";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { LibrarySettings } from "./components/library-settings";
 import { ProfileInfo } from "./components/profile-info";
 import { SecurityForm } from "./components/security-form";
-import { SteamSettingsForm } from "./components/steam-settings-form";
 
 const navigation = [
   {
@@ -32,32 +32,6 @@ function maskString(str: string): string {
   return `${firstFour}${"*".repeat(Math.max(0, str.length - 8))}${lastFour}`;
 }
 
-async function getSteamSettings(username: string) {
-  try {
-    const config = loadConfig(true); // Load with decryption
-    const user = config.users[username];
-
-    if (!user) {
-      return {
-        hasSteamCredentials: false,
-        maskedSteamId: "",
-        maskedSteamApiKey: "",
-      };
-    }
-
-    return {
-      hasSteamCredentials: Boolean(user.steam_id && user.steam_api_key),
-      maskedSteamId: user.steam_id ? maskString(user.steam_id) : "",
-      maskedSteamApiKey: user.steam_api_key
-        ? maskString(user.steam_api_key)
-        : "",
-    };
-  } catch (error) {
-    console.error("Error loading Steam settings:", error);
-    throw error; // Let the error boundary handle it
-  }
-}
-
 export default async function AccountSettingsPage() {
   // Handle authentication at the page level
   const session = await getServerSession(authOptions);
@@ -67,8 +41,16 @@ export default async function AccountSettingsPage() {
     redirect("/auth/signin");
   }
 
-  // Get Steam settings with actual username
-  const steamSettings = await getSteamSettings(session.user.name || "");
+  // Get Steam settings directly from TOML config
+  const config = loadConfig(true); // Load with decryption
+  const user = config.users[session.user.name || ""];
+
+  const steamSettings = {
+    maskedSteamId: user?.steam_id ? maskString(user.steam_id) : null,
+    maskedSteamApiKey: user?.steam_api_key
+      ? maskString(user.steam_api_key)
+      : null,
+  };
 
   return (
     <SettingsLayout
@@ -87,7 +69,7 @@ export default async function AccountSettingsPage() {
       <ErrorBoundary>
         <section id="security" className="mt-8">
           <Suspense fallback={<LoadingState />}>
-            <SecurityForm username={session.user.name || ""} />
+            <SecurityForm />
           </Suspense>
         </section>
       </ErrorBoundary>
@@ -95,11 +77,9 @@ export default async function AccountSettingsPage() {
       <ErrorBoundary>
         <section id="libraries" className="mt-8">
           <Suspense fallback={<LoadingState />}>
-            <SteamSettingsForm
-              username={session.user.name || ""}
-              initialSteamId={steamSettings.maskedSteamId}
-              initialSteamApiKey={steamSettings.maskedSteamApiKey}
-              initialHasSteamCredentials={steamSettings.hasSteamCredentials}
+            <LibrarySettings
+              steamId={steamSettings.maskedSteamId}
+              apiKey={steamSettings.maskedSteamApiKey}
             />
           </Suspense>
         </section>

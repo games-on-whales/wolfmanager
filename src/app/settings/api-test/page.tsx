@@ -13,6 +13,9 @@ export default async function ApiTestPage() {
   if (!session?.user) redirect("/auth/signin");
   if (session.user.role !== "admin") redirect("/dashboard");
 
+  // Get API key from session
+  const apiKey = session.user.id;
+
   // 2. Render with page layout
   return (
     <PageLayout
@@ -21,7 +24,7 @@ export default async function ApiTestPage() {
     >
       <ErrorBoundary>
         <Suspense fallback={<LoadingState />}>
-          <ApiTestConsole />
+          <ApiTestConsole apiKey={apiKey} />
         </Suspense>
       </ErrorBoundary>
     </PageLayout>

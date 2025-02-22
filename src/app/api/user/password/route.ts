@@ -30,7 +30,7 @@ export async function PUT(req: Request) {
     }
 
     // If it's not first-time setup, verify current password
-    if (!user.requiresFirstTimeSetup && currentPassword) {
+    if (user.has_changed_password && currentPassword) {
       const isValidPassword = await bcrypt.compare(
         currentPassword,
         user.password_hash

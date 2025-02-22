@@ -38,6 +38,7 @@ interface Endpoint {
 }
 
 interface ApiTestConsoleProps {
+  /** The API key to use for requests, obtained from the user's session */
   apiKey: string;
 }
 
@@ -68,7 +69,14 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
         setIsLoadingSchema(true);
         const availableEndpoints = await getAvailableEndpoints();
 
-        // Transform endpoints to include full schema information
+        clientLogger.debug(LogComponent.WOLF_UI, "Loading API endpoints", {
+          rawEndpoints: availableEndpoints.map((e) => ({
+            path: e.path,
+            method: e.method,
+          })),
+        });
+
+        // Transform endpoints to include full schema information and proper prefix
         const transformedEndpoints = availableEndpoints.map((endpoint) => {
           let requestSchema = endpoint.requestSchema;
 
@@ -82,10 +90,24 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
             };
           }
 
+          // Ensure path has the correct prefix
+          const path = endpoint.path.startsWith("/api/wolf/")
+            ? endpoint.path
+            : `/api/wolf${endpoint.path}`;
+
           return {
             ...endpoint,
+            path,
             requestSchema,
           };
+        });
+
+        clientLogger.info(LogComponent.WOLF_UI, "API endpoints loaded", {
+          endpointCount: transformedEndpoints.length,
+          endpoints: transformedEndpoints.map((e) => ({
+            path: e.path,
+            method: e.method,
+          })),
         });
 
         setEndpoints(transformedEndpoints);
@@ -141,26 +163,84 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
 
   const handleTest = async () => {
     try {
+      // Validate if the endpoint starts with /api/wolf
+      if (!endpoint.startsWith("/api/wolf/")) {
+        clientLogger.warn(LogComponent.WOLF_UI, "Invalid API endpoint format", {
+          endpoint,
+          message: "API endpoints should start with /api/wolf/",
+        });
+        toast.error("API endpoints should start with /api/wolf/");
+        return;
+      }
+
+      // Enhanced logging for API request
       clientLogger.info(LogComponent.WOLF_UI, "Testing API endpoint", {
         method,
         endpoint,
+        hasBody: method !== "GET" && !!body,
+        availableEndpoints: endpoints.map((e) => ({
+          path: e.path,
+          method: e.method,
+        })),
       });
 
       setIsLoading(true);
       setResponse("");
+      setLatestResponse(null);
+
+      // Construct the full URL
+      const baseUrl = window.location.origin;
+      const fullUrl = `${baseUrl}${endpoint}`;
+
+      clientLogger.debug(LogComponent.WOLF_UI, "Making API request", {
+        fullUrl,
+        method,
+        bodySize: body ? body.length : 0,
+      });
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "X-API-Key": apiKey,
       };
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(fullUrl, {
         method,
         headers,
         body: method !== "GET" ? body : undefined,
+        // Add credentials to ensure cookies (including auth) are sent
+        credentials: "include",
       });
 
-      const data = await response.json();
+      let data;
+      const responseText = await response.text();
+
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        clientLogger.error(
+          LogComponent.WOLF_UI,
+          "Failed to parse API response",
+          {
+            error: parseError,
+            responseText: responseText.substring(0, 200) + "...", // Log only first 200 chars to avoid huge logs
+            status: response.status,
+            statusText: response.statusText,
+            contentType: response.headers.get("content-type"),
+            endpoint: fullUrl,
+          }
+        );
+        throw new Error(
+          `Invalid JSON response: ${responseText.substring(0, 100)}...`
+        );
+      }
+
+      const newResponse = {
+        status: response.status,
+        statusText: response.statusText,
+        data,
+      };
+
+      setLatestResponse(newResponse);
       setResponse(JSON.stringify(data, null, 2));
 
       if (response.ok) {
@@ -168,6 +248,7 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
         clientLogger.info(LogComponent.WOLF_UI, "API request successful", {
           status: response.status,
           endpoint,
+          responseSize: responseText.length,
         });
       } else {
         toast.error(`API request failed: ${response.statusText}`);
@@ -175,12 +256,35 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
           status: response.status,
           statusText: response.statusText,
           endpoint,
+          errorData: data,
         });
       }
     } catch (error) {
-      clientLogger.error(LogComponent.WOLF_UI, "API request error", error);
-      toast.error("Failed to make API request");
-      setResponse(error instanceof Error ? error.message : "Unknown error");
+      // Enhanced error logging with full context
+      clientLogger.error(LogComponent.WOLF_UI, "API request error", {
+        error:
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+              }
+            : error,
+        endpoint,
+        method,
+        requestBody: method !== "GET" ? body : undefined,
+      });
+
+      // Set a more informative error response
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      setLatestResponse({
+        status: 0,
+        statusText: "Request Failed",
+        data: { error: errorMessage },
+      });
+      setResponse(JSON.stringify({ error: errorMessage }, null, 2));
+      toast.error(`Failed to make API request: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -294,10 +398,21 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
         e.method.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    // Log filtered endpoints for debugging
+    clientLogger.debug(LogComponent.WOLF_UI, "Filtering endpoints", {
+      searchQuery,
+      totalEndpoints: endpoints.length,
+      filteredCount: filtered.length,
+      filtered: filtered.map((e) => ({ path: e.path, method: e.method })),
+    });
+
     // If we have a search query, automatically expand groups with matches
     if (searchQuery) {
       const groupsWithMatches = filtered.reduce((groups, endpoint) => {
-        const group = endpoint.path.split("/")[1] || "root";
+        // Get the first segment after /api/wolf/
+        const segments = endpoint.path.split("/");
+        const groupIndex = segments.findIndex((s) => s === "wolf") + 1;
+        const group = segments[groupIndex] || "root";
         groups.add(group);
         return groups;
       }, new Set<string>());
@@ -311,12 +426,27 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
       });
     }
 
-    return filtered.reduce((acc, endpoint) => {
-      const group = endpoint.path.split("/")[1] || "root";
+    const grouped = filtered.reduce((acc, endpoint) => {
+      // Get the first segment after /api/wolf/
+      const segments = endpoint.path.split("/");
+      const groupIndex = segments.findIndex((s) => s === "wolf") + 1;
+      const group = segments[groupIndex] || "root";
+
       if (!acc[group]) acc[group] = [];
       acc[group].push(endpoint);
       return acc;
     }, {} as Record<string, Endpoint[]>);
+
+    // Log grouped endpoints for debugging
+    clientLogger.debug(LogComponent.WOLF_UI, "Grouped endpoints", {
+      groups: Object.entries(grouped).map(([group, endpoints]) => ({
+        group,
+        count: endpoints.length,
+        endpoints: endpoints.map((e) => ({ path: e.path, method: e.method })),
+      })),
+    });
+
+    return grouped;
   }, [endpoints, searchQuery]);
 
   // Debounce search to avoid too many re-renders

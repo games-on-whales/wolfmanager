@@ -54,6 +54,7 @@ const config = {
     startY: 50, // Starting Y position for new waves
     shootInterval: 2000, // Time between shots
     shootChance: 0.02, // Chance to shoot per enemy per frame
+    dropDistance: 20,
   },
   barrier: {
     count: 4,
@@ -178,6 +179,7 @@ export function SpaceInvaders() {
       scale: number,
       color: string
     ) {
+      if (!ctx) return;
       const pixelSize = scale / shape[0].length;
       ctx.fillStyle = color;
 
@@ -282,20 +284,21 @@ export function SpaceInvaders() {
     }
 
     function updateEnemies() {
+      if (!canvas) return;
+      const enemies = enemiesRef.current;
       let shouldChangeDirection = false;
 
-      enemiesRef.current.forEach((enemy) => {
-        enemy.x += config.enemy.speed * enemy.direction;
-
+      enemies.forEach((enemy) => {
+        enemy.x += enemy.direction * config.enemy.speed;
         if (enemy.x <= 0 || enemy.x + config.enemy.width >= canvas.width) {
           shouldChangeDirection = true;
         }
       });
 
       if (shouldChangeDirection) {
-        enemiesRef.current.forEach((enemy) => {
+        enemies.forEach((enemy) => {
           enemy.direction *= -1;
-          enemy.y += 20;
+          enemy.y += config.enemy.dropDistance;
         });
       }
     }
