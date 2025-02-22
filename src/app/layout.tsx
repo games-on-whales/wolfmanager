@@ -50,7 +50,23 @@ export default async function RootLayout({
                 <Header />
                 {children}
               </div>
-              <Toaster richColors closeButton position="top-right" />
+              <Toaster
+                theme="system"
+                richColors
+                closeButton
+                position="top-right"
+                toastOptions={{
+                  classNames: {
+                    toast: "font-sans border border-border",
+                    title: "text-foreground",
+                    description: "text-muted-foreground",
+                    actionButton: "bg-primary text-primary-foreground",
+                    cancelButton: "bg-muted text-muted-foreground",
+                    error: "bg-destructive text-destructive-foreground",
+                    success: "bg-primary text-primary-foreground",
+                  },
+                }}
+              />
             </ThemeProvider>
           </SessionProvider>
         </body>

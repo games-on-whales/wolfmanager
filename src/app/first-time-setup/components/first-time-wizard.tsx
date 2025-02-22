@@ -128,8 +128,8 @@ export function FirstTimeWizard() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          steamId: data.steamId || "",
-          apiKey: data.steamApiKey || "",
+          steamId: data.steamId,
+          apiKey: data.steamApiKey,
         }),
       });
 
@@ -138,8 +138,8 @@ export function FirstTimeWizard() {
         throw new Error(errorData.message || "Failed to save Steam settings");
       }
 
-      toast.success("Setup completed successfully");
-      clientLogger.info(LogComponent.AUTH, "First-time setup completed");
+      toast.success("Steam settings saved successfully");
+      clientLogger.info(LogComponent.AUTH, "Steam settings saved successfully");
 
       // Sign out after completing setup
       await signOut({ redirect: false });
