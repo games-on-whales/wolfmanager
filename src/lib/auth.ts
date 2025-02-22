@@ -111,13 +111,19 @@ export const authOptions: AuthOptions = {
         currentSession: session,
       });
 
-      if (session?.user) {
-        session.user.role = token.role;
-        session.user.id = token.id as string;
-        session.requiresFirstTimeSetup = token.requiresFirstTimeSetup;
-        console.log("Updated session:", session);
-      }
-      return session;
+      // Explicitly construct the session with only the fields we want
+      const updatedSession = {
+        ...session,
+        user: {
+          id: token.id as string,
+          name: token.name as string,
+          role: token.role,
+        },
+        requiresFirstTimeSetup: token.requiresFirstTimeSetup,
+      };
+
+      console.log("Updated session:", updatedSession);
+      return updatedSession;
     },
   },
   pages: {
