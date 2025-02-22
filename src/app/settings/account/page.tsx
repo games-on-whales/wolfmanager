@@ -1,5 +1,5 @@
+import { SettingsLayout } from "@/app/settings/components/settings-layout";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { SettingsLayout } from "@/components/layout/settings-layout";
 import { LoadingState } from "@/components/loading-state";
 import { authOptions } from "@/lib/auth";
 import { loadConfig } from "@/lib/config";

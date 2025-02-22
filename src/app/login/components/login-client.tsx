@@ -1,6 +1,6 @@
 "use client";
 
-import { FirstTimeWizard } from "@/components/auth/first-time-wizard";
+import { FirstTimeWizard } from "@/app/first-time-setup/components/first-time-wizard";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ConstellationBackground } from "@/components/ui/constellation-bg";
