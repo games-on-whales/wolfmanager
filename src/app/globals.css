@@ -72,6 +72,134 @@
     --header-fg: 0 0% 100%;
     --header-border: 215 28% 25%;
   }
+
+  /* Wolf Manager Theme Colors - Applied globally but with light/dark variants */
+  /* For the light theme (default) */
+  .wolf-theme {
+    /* Light theme colors - applied when no .dark class is present */
+    --background: 210 30% 98%;
+    --foreground: 220 25% 15%;
+
+    --card: 210 25% 100%;
+    --card-foreground: 220 25% 15%;
+
+    --popover: 210 25% 98%;
+    --popover-foreground: 220 25% 15%;
+
+    --primary: 214 90% 48%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 187 90% 38%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 15% 94%;
+
+    --dialog-bg: 210 25% 98%;
+    --dialog-border: 220 20% 90%;
+    --dialog-header-bg: 215 30% 95%;
+
+    --form-bg: 220 15% 96%;
+    --dialog-form-bg: 220 15% 94%;
+    --game-edit-input-bg: 214 15% 92%;
+    --dropdown-bg: 210 25% 98%;
+    --dropdown-item-hover: 214 90% 48%;
+    --dropdown-item-hover-fg: 0 0% 100%;
+
+    --muted-foreground: 215 20% 45%;
+
+    --accent: 214 90% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 90% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 85%;
+    --input: 220 20% 90%;
+    --ring: 214 90% 48%;
+
+    --header-bg: 214 100% 98%;
+    --header-fg: 220 25% 15%;
+    --header-border: 214 30% 90%;
+
+    --tab-active: 214 90% 48%;
+    --tab-inactive: 214 15% 92%;
+
+    --notif-bg: 210 15% 95%;
+    --notif-info-bg: 214 60% 90%;
+    --notif-success-bg: 142 60% 90%;
+    --notif-warning-bg: 32 60% 90%;
+    --notif-error-bg: 0 60% 90%;
+  }
+
+  /* Dark theme styles - applied when the .dark class is present on HTML */
+  .dark .wolf-theme {
+    --background: 220 30% 10%;
+    --foreground: 0 0% 100%;
+
+    --card: 220 25% 13%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 220 25% 15%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 214 100% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 187 100% 30%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 15% 18%;
+
+    --dialog-bg: 220 25% 15%;
+    --dialog-border: 220 20% 25%;
+    --dialog-header-bg: 215 30% 20%;
+
+    --form-bg: 220 15% 20%;
+    --dialog-form-bg: 220 15% 28%;
+    --game-edit-input-bg: 220 30% 35%;
+    --dropdown-bg: 220 25% 18%;
+    --dropdown-item-hover: 214 100% 38%;
+    --dropdown-item-hover-fg: 0 0% 100%;
+
+    --muted-foreground: 215 20% 75%;
+
+    --accent: 214 100% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 90% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 32%;
+    --input: 220 20% 30%;
+    --ring: 214 100% 45%;
+
+    --header-bg: 220 15% 20%;
+    --header-fg: 0 0% 100%;
+    --header-border: 222 16% 28%;
+
+    --tab-active: 214 100% 38%;
+    --tab-inactive: 220 15% 22%;
+
+    --notif-bg: 220 15% 18%;
+    --notif-info-bg: 214 40% 25%;
+    --notif-success-bg: 142 40% 22%;
+    --notif-warning-bg: 32 40% 22%;
+    --notif-error-bg: 0 40% 22%;
+  }
+
+  /* Global styles for dropdowns to overcome portal isolation */
+  .wolf-theme-light-active [data-radix-popper-content-wrapper] {
+    --dropdown-bg: 210 25% 98%;
+    --dropdown-item-hover: 214 90% 48%;
+    --dropdown-item-hover-fg: 0 0% 100%;
+  }
+
+  /* Dark theme dropdown styles */
+  .wolf-theme-active [data-radix-popper-content-wrapper] {
+    --dropdown-bg: 220 25% 23%;
+    --dropdown-item-hover: 214 100% 38%;
+    --dropdown-item-hover-fg: 0 0% 100%;
+  }
 }
 
 @layer base {
@@ -86,8 +214,36 @@
   }
 }
 
+/* WolfManager gradient background - Light theme (default) */
+.wolf-gradient-bg {
+  background: radial-gradient(
+    circle at center,
+    hsl(187 90% 75%) 0%,
+    hsl(214 40% 92%) 80%
+  );
+  background-attachment: fixed;
+}
+
+/* Dark theme gradient background */
+.dark .wolf-gradient-bg {
+  background: radial-gradient(
+    circle at center,
+    hsl(187 100% 26%) 0%,
+    hsl(222 40% 15%) 80%
+  );
+  background-attachment: fixed;
+}
+
+/* Light theme gradient text (default) */
 .gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-secondary to-primary;
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-600;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+/* Dark theme gradient text */
+.dark .gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-300 to-teal-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)];
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .app-header {
@@ -144,13 +300,150 @@
   }
 }
 
-
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+/* Custom Input Styling */
+.wolf-input {
+  @apply bg-[hsl(var(--form-bg))] border-muted-foreground/20 focus:border-primary/50 focus:ring-primary/20 rounded-md;
 }
+
+/* Light mode specific input styles */
+:root .wolf-input {
+  background-color: hsl(var(--form-bg)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Dark mode specific input styles */
+.dark .wolf-input {
+  background-color: hsl(var(--form-bg)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Custom Dropdown Styling - Default for all selects */
+.wolf-dropdown {
+  @apply bg-[hsl(var(--form-bg))] border-muted-foreground/20 rounded-md text-foreground;
+}
+
+/* Light mode dropdown styles */
+:root .wolf-dropdown {
+  background-color: hsl(var(--form-bg)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Dark mode dropdown styles */
+.dark .wolf-dropdown {
+  background-color: hsl(var(--form-bg)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Custom Tab Styling */
+.wolf-tabs {
+  @apply bg-[hsl(var(--muted))];
+}
+
+.wolf-tab {
+  @apply bg-[hsl(var(--tab-inactive))] text-foreground/80;
+}
+
+.wolf-tab-active {
+  @apply bg-[hsl(var(--primary))] text-foreground font-medium;
+}
+
+/* Custom Notification Styling */
+.wolf-notification {
+  @apply rounded-md border;
+  background-color: hsl(var(--notif-bg));
+  border-color: hsl(var(--border));
+}
+.wolf-notification-info {
+  border-left: 4px solid hsl(214, 90%, 52%);
+  background-color: hsl(var(--notif-info-bg));
+}
+.wolf-notification-success {
+  border-left: 4px solid hsl(142, 76%, 36%);
+  background-color: hsl(var(--notif-success-bg));
+}
+.wolf-notification-warning {
+  border-left: 4px solid hsl(32, 95%, 44%);
+  background-color: hsl(var(--notif-warning-bg));
+}
+.wolf-notification-error {
+  border-left: 4px solid hsl(0, 84%, 60%);
+  background-color: hsl(var(--notif-error-bg));
+}
+
+/* Add text color for notification in light theme */
+.wolf-notification h4 {
+  @apply text-foreground;
+}
+
+/* Custom notification styling - Dark theme override */
+.dark .wolf-notification h4 {
+  @apply text-foreground;
+}
+
+/* Custom Expandable Menu Styling */
+.wolf-expandable-menu {
+  @apply bg-[hsl(var(--muted))] rounded-md overflow-hidden;
+}
+.wolf-expandable-header {
+  @apply flex items-center justify-between p-3 cursor-pointer hover:bg-muted-foreground/10;
+}
+.wolf-expandable-content {
+  @apply p-3 border-t border-border;
+}
+
+/* CORE DIALOG AND DROPDOWN STYLING - AGGRESSIVE APPROACH */
+
+/* Remove all the complex dialog styling and replace with a cleaner approach */
+
+/* Dialog styling - Clean approach */
+[role="dialog"] {
+  @apply bg-card text-card-foreground border-border;
+}
+
+/* Dialog content styling */
+.radix-dialog-content {
+  @apply bg-card text-card-foreground border-border;
+}
+
+/* Dialog header styling */
+[role="dialog"] [class*="DialogHeader"],
+[role="dialog"] div:first-child:not([role]) {
+  @apply border-b border-border pb-4 mb-4;
+}
+
+/* Dialog footer styling */
+[role="dialog"] div:last-child:has(button) {
+  @apply border-t border-border pt-4 mt-4 flex justify-end gap-2;
+}
+
+/* Dialog input styling */
+[role="dialog"] input:not([type="checkbox"]):not([type="radio"]) {
+  @apply bg-[hsl(var(--form-bg))] border-border text-foreground;
+}
+
+/* Dialog select styling */
+[role="dialog"] [role="combobox"] {
+  @apply bg-[hsl(var(--form-bg))] border-border text-foreground;
+}
+
+/* Dialog dropdown content styling */
+[data-radix-popper-content-wrapper] [role="listbox"] {
+  @apply bg-popover text-popover-foreground border-border rounded-md shadow-md;
+}
+
+/* Dialog dropdown item styling */
+[data-radix-popper-content-wrapper] [role="option"] {
+  @apply px-2 py-1.5 text-sm cursor-pointer;
+}
+
+/* Dialog dropdown item hover styling */
+[data-radix-popper-content-wrapper] [role="option"]:hover,
+[data-radix-popper-content-wrapper] [role="option"][data-highlighted="true"] {
+  @apply bg-primary text-primary-foreground;
+}
+
+/* Remove all the other complex dialog styling */
