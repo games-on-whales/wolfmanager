@@ -74,7 +74,7 @@ export default function ThemeShowcase() {
   const isLightTheme = mounted && resolvedTheme === "light";
 
   return (
-    <div className="min-h-screen wolf-gradient-bg p-4 wolf-theme">
+    <div className="min-h-screen bg-background p-4 wolf-theme">
       <div className="container mx-auto py-8 space-y-12">
         <header className="text-center mb-8 relative">
           <div className="absolute right-0 top-0 z-10">
