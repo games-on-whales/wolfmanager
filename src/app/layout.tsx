@@ -1,11 +1,11 @@
 import { Header } from "@/components/layout/header";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { Toaster } from "@/components/ui/themed-toaster";
 import { ensureSecureKeys } from "@/lib/env";
 import { LogComponent, logger } from "@/lib/logger";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Toaster } from "sonner";
 import "./globals.css";
 
 // Ensure secure keys are generated
@@ -46,27 +46,11 @@ export default async function RootLayout({
               enableSystem
               disableTransitionOnChange
             >
-              <div className="content-container">
+              <div className="content-container wolf-theme">
                 <Header />
                 {children}
               </div>
-              <Toaster
-                theme="system"
-                richColors
-                closeButton
-                position="bottom-right"
-                toastOptions={{
-                  classNames: {
-                    toast: "font-sans border border-border",
-                    title: "text-foreground",
-                    description: "text-muted-foreground",
-                    actionButton: "bg-primary text-primary-foreground",
-                    cancelButton: "bg-muted text-muted-foreground",
-                    error: "bg-destructive text-destructive-foreground",
-                    success: "bg-primary text-primary-foreground",
-                  },
-                }}
-              />
+              <Toaster closeButton position="bottom-right" />
             </ThemeProvider>
           </SessionProvider>
         </body>

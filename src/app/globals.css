@@ -125,10 +125,10 @@
     --tab-inactive: 214 15% 92%;
 
     --notif-bg: 210 15% 95%;
-    --notif-info-bg: 214 60% 90%;
-    --notif-success-bg: 142 60% 90%;
-    --notif-warning-bg: 32 60% 90%;
-    --notif-error-bg: 0 60% 90%;
+    --notif-info-bg: 214 95% 95%;
+    --notif-success-bg: 142 84% 95%;
+    --notif-warning-bg: 32 95% 95%;
+    --notif-error-bg: 0 95% 95%;
   }
 
   /* Dark theme styles - applied when the .dark class is present on HTML */
@@ -181,10 +181,10 @@
     --tab-inactive: 220 15% 22%;
 
     --notif-bg: 220 15% 18%;
-    --notif-info-bg: 214 40% 25%;
-    --notif-success-bg: 142 40% 22%;
-    --notif-warning-bg: 32 40% 22%;
-    --notif-error-bg: 0 40% 22%;
+    --notif-info-bg: 214 60% 20%;
+    --notif-success-bg: 142 60% 20%;
+    --notif-warning-bg: 32 60% 20%;
+    --notif-error-bg: 0 60% 20%;
   }
 
   /* Global styles for dropdowns to overcome portal isolation */
@@ -456,4 +456,56 @@
 /* If you want to ensure these styles take precedence, you can be more specific */
 .wolf-tabs .wolf-tab[data-state="active"] {
   @apply bg-accent text-accent-foreground !important;
+}
+
+/* Toast styles */
+[data-sonner-toaster] {
+  position: fixed !important;
+  top: 1rem !important;
+  right: 1rem !important;
+  width: auto !important;
+  max-width: 420px !important;
+  gap: 0.5rem !important;
+}
+
+[data-sonner-toast] {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  margin-bottom: 0.5rem !important;
+  border: none !important;
+  padding: 0.75rem 1rem !important;
+  border-radius: 0.375rem !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+[data-sonner-toast] [data-title] {
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+  margin-bottom: 0.125rem !important;
+}
+
+[data-sonner-toast] [data-description] {
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+  opacity: 0.9 !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  position: absolute !important;
+  top: 0.5rem !important;
+  right: 0.5rem !important;
+  padding: 0.25rem !important;
+  opacity: 0.5 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  opacity: 1 !important;
 }
