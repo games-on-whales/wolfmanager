@@ -467,7 +467,7 @@ export default function ThemeShowcase() {
             <CardContent>
               <Tabs defaultValue="games" className="w-full">
                 <TabsList className="grid w-full grid-cols-4 p-1 wolf-tabs">
-                  <TabsTrigger value="games" className="wolf-tab-active">
+                  <TabsTrigger value="games" className="wolf-tab">
                     Games
                   </TabsTrigger>
                   <TabsTrigger value="users" className="wolf-tab">

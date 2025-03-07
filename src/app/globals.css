@@ -307,14 +307,14 @@
 
 /* Light mode specific input styles */
 :root .wolf-input {
-  background-color: hsl(var(--form-bg)) !important;
-  border: 1px solid hsl(var(--border)) !important;
+  background-color: hsl(var(--muted)) !important;
+  border: 2px solid hsl(var(--border)) !important;
   color: hsl(var(--foreground)) !important;
 }
 
 /* Dark mode specific input styles */
 .dark .wolf-input {
-  background-color: hsl(var(--form-bg)) !important;
+  background-color: hsl(var(--muted)) !important;
   border: 1px solid hsl(var(--border)) !important;
   color: hsl(var(--foreground)) !important;
 }
@@ -447,3 +447,13 @@
 }
 
 /* Remove all the other complex dialog styling */
+
+/* Add this to your existing styles */
+.wolf-tab[data-state="active"] {
+  @apply bg-accent text-accent-foreground; /* Or your specific color preferences */
+}
+
+/* If you want to ensure these styles take precedence, you can be more specific */
+.wolf-tabs .wolf-tab[data-state="active"] {
+  @apply bg-accent text-accent-foreground !important;
+}
