@@ -1,75 +1,137 @@
+import { loadConfig } from "@/lib/config";
+import { logger } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger/types";
 import * as TOML from "@iarna/toml";
 import fs from "fs";
 import path from "path";
 import { SteamUserCredentials } from "./types";
 
-interface SteamConfig {
-  users: Record<
-    string,
-    {
-      steam_id: string;
-      steam_api_key: string;
-    }
-  >;
+interface UserConfig {
+  steamId: string;
+  steamApiKey: string;
+  // ... other user config fields
 }
 
-const STEAM_CONFIG_PATH = path.join(process.cwd(), "config", "steam.toml");
+interface DefaultConfig {
+  users: Record<string, UserConfig>;
+}
 
-export function getSteamConfig(): SteamConfig {
+const CONFIG_PATH = path.join(process.cwd(), "config", "default.toml");
+
+function getDefaultConfig(): DefaultConfig {
   try {
-    if (!fs.existsSync(STEAM_CONFIG_PATH)) {
-      // Create default config if it doesn't exist
-      const defaultConfig = { users: {} };
-      fs.writeFileSync(
-        STEAM_CONFIG_PATH,
-        TOML.stringify(defaultConfig as TOML.JsonMap)
-      );
-      return defaultConfig as SteamConfig;
+    if (!fs.existsSync(CONFIG_PATH)) {
+      logger.error(LogComponent.SYSTEM, "Default config not found", undefined, {
+        path: CONFIG_PATH,
+      });
+      return { users: {} };
     }
 
-    const configFile = fs.readFileSync(STEAM_CONFIG_PATH, "utf-8");
-    const parsed = TOML.parse(configFile);
-    return parsed as unknown as SteamConfig;
+    const configFile = fs.readFileSync(CONFIG_PATH, "utf-8");
+    const parsed = TOML.parse(configFile) as unknown as DefaultConfig;
+
+    // Validate the parsed config has the expected structure
+    if (!parsed.users || typeof parsed.users !== "object") {
+      logger.error(LogComponent.SYSTEM, "Invalid config structure", undefined, {
+        hasUsers: !!parsed.users,
+        usersType: typeof parsed.users,
+      });
+      return { users: {} };
+    }
+
+    return parsed;
   } catch (error) {
-    console.error("[STEAM_CONFIG] Failed to load config:", error);
+    logger.error(LogComponent.SYSTEM, "Failed to load default config", error);
     return { users: {} };
   }
 }
 
 export function getUserSteamCredentials(
-  userId: string
+  username: string
 ): SteamUserCredentials | null {
-  const config = getSteamConfig();
-  const userConfig = config.users[userId];
+  try {
+    // Load config with decryption enabled
+    const config = loadConfig(true);
+    const user = config.users[username];
 
-  if (!userConfig?.steam_id || !userConfig?.steam_api_key) {
+    if (!user?.steam_id || !user?.steam_api_key) {
+      logger.warn(
+        LogComponent.SYSTEM,
+        "Steam credentials not found for user",
+        undefined,
+        {
+          username,
+          hasConfig: !!user,
+          hasSteamId: !!user?.steam_id,
+          hasSteamApiKey: !!user?.steam_api_key,
+        }
+      );
+      return null;
+    }
+
+    logger.debug(
+      LogComponent.SYSTEM,
+      "Found Steam credentials for user",
+      undefined,
+      {
+        username,
+        steamId: user.steam_id,
+      }
+    );
+
+    return {
+      steamId: user.steam_id,
+      steamApiKey: user.steam_api_key,
+    };
+  } catch (error) {
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to load Steam credentials",
+      error
+    );
     return null;
   }
-
-  return {
-    steamId: userConfig.steam_id,
-    steamApiKey: userConfig.steam_api_key,
-  };
 }
 
 export function updateUserSteamCredentials(
   userId: string,
   credentials: SteamUserCredentials
 ): void {
-  const config = getSteamConfig();
+  const config = getDefaultConfig();
 
   config.users[userId] = {
-    steam_id: credentials.steamId,
-    steam_api_key: credentials.steamApiKey,
+    steamId: credentials.steamId,
+    steamApiKey: credentials.steamApiKey,
   };
 
   try {
     fs.writeFileSync(
-      STEAM_CONFIG_PATH,
+      CONFIG_PATH,
       TOML.stringify(config as unknown as TOML.JsonMap)
     );
+    logger.info(
+      LogComponent.SYSTEM,
+      "Updated Steam credentials for user",
+      undefined,
+      {
+        userId,
+        steamId: credentials.steamId,
+      }
+    );
   } catch (error) {
-    console.error("[STEAM_CONFIG] Failed to save config:", error);
+    logger.error(LogComponent.SYSTEM, "Failed to save default config", error);
     throw new Error("Failed to save Steam configuration");
   }
+}
+
+export function initializeSteamConfig(
+  userId: string,
+  steamId: string,
+  steamApiKey: string
+): void {
+  const credentials: SteamUserCredentials = {
+    steamId,
+    steamApiKey,
+  };
+  updateUserSteamCredentials(userId, credentials);
 }

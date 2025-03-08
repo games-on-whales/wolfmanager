@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const appId = parseInt(params.appId);
-    if (!validateAppId(appId)) {
+    if (isNaN(appId) || appId <= 0) {
       return NextResponse.json(
         {
           success: false,

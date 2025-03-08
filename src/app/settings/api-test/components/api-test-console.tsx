@@ -1,5 +1,6 @@
 "use client";
 
+import { getAvailableSteamEndpoints } from "@/app/api/libraries/steam/lib/schema";
 import { getAvailableEndpoints } from "@/app/api/wolf/lib/schema";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,7 @@ interface Endpoint {
   components?: {
     schemas: Record<string, any>;
   };
+  group: string;
 }
 
 interface ApiTestConsoleProps {
@@ -67,54 +69,52 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
     async function loadEndpoints() {
       try {
         setIsLoadingSchema(true);
-        const availableEndpoints = await getAvailableEndpoints();
+        const [wolfEndpoints, steamEndpoints] = await Promise.all([
+          getAvailableEndpoints(),
+          getAvailableSteamEndpoints(),
+        ]);
 
         clientLogger.debug(LogComponent.WOLF_UI, "Loading API endpoints", {
-          rawEndpoints: availableEndpoints.map((e) => ({
+          wolfEndpoints: wolfEndpoints.map((e) => ({
+            path: e.path,
+            method: e.method,
+          })),
+          steamEndpoints: steamEndpoints.map((e) => ({
             path: e.path,
             method: e.method,
           })),
         });
 
         // Transform endpoints to include full schema information and proper prefix
-        const transformedEndpoints = availableEndpoints.map((endpoint) => {
-          let requestSchema = endpoint.requestSchema;
-
-          // If the schema is a reference, include the components section
-          if (requestSchema?.$ref) {
-            requestSchema = {
-              ...requestSchema,
-              components: {
-                schemas: endpoint.components?.schemas || {},
-              },
-            };
-          }
-
-          // Ensure path has the correct prefix
-          const path = endpoint.path.startsWith("/api/wolf/")
+        const transformedWolfEndpoints = wolfEndpoints.map((endpoint) => ({
+          ...endpoint,
+          path: endpoint.path.startsWith("/api/wolf/")
             ? endpoint.path
-            : `/api/wolf${endpoint.path}`;
+            : `/api/wolf${endpoint.path}`,
+          group: "Wolf API",
+        }));
 
-          return {
-            ...endpoint,
-            path,
-            requestSchema,
-          };
-        });
+        const transformedSteamEndpoints = steamEndpoints.map((endpoint) => ({
+          ...endpoint,
+          group: "Steam API",
+        }));
+
+        const allEndpoints = [
+          ...transformedWolfEndpoints,
+          ...transformedSteamEndpoints,
+        ];
 
         clientLogger.info(LogComponent.WOLF_UI, "API endpoints loaded", {
-          endpointCount: transformedEndpoints.length,
-          endpoints: transformedEndpoints.map((e) => ({
-            path: e.path,
-            method: e.method,
-          })),
+          totalEndpoints: allEndpoints.length,
+          wolfEndpoints: transformedWolfEndpoints.length,
+          steamEndpoints: transformedSteamEndpoints.length,
         });
 
-        setEndpoints(transformedEndpoints);
-        if (transformedEndpoints.length > 0) {
-          setEndpoint(transformedEndpoints[0].path);
-          setMethod(transformedEndpoints[0].method);
-          setSelectedEndpoint(transformedEndpoints[0]);
+        setEndpoints(allEndpoints);
+        if (allEndpoints.length > 0) {
+          setEndpoint(allEndpoints[0].path);
+          setMethod(allEndpoints[0].method);
+          setSelectedEndpoint(allEndpoints[0]);
         }
       } catch (error) {
         console.error("[API_TEST] Failed to load endpoints:", error);
@@ -163,25 +163,41 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
 
   const handleTest = async () => {
     try {
-      // Validate if the endpoint starts with /api/wolf
-      if (!endpoint.startsWith("/api/wolf/")) {
+      // Validate if the endpoint is valid
+      if (!endpoint.startsWith("/api/")) {
         clientLogger.warn(LogComponent.WOLF_UI, "Invalid API endpoint format", {
           endpoint,
-          message: "API endpoints should start with /api/wolf/",
+          message: "API endpoints should start with /api/",
         });
-        toast.error("API endpoints should start with /api/wolf/");
+        toast.error("Invalid API endpoint format");
         return;
+      }
+
+      // Parse any path parameters from the body
+      let finalEndpoint = endpoint;
+      let finalBody = body;
+
+      if (body) {
+        try {
+          const bodyData = JSON.parse(body);
+          Object.entries(bodyData).forEach(([key, value]) => {
+            if (finalEndpoint.includes(`{${key}}`)) {
+              finalEndpoint = finalEndpoint.replace(`{${key}}`, String(value));
+              const { [key]: _, ...rest } = bodyData;
+              finalBody = JSON.stringify(rest, null, 2);
+            }
+          });
+        } catch (error) {
+          console.error("[API_TEST] Failed to parse body:", error);
+        }
       }
 
       // Enhanced logging for API request
       clientLogger.info(LogComponent.WOLF_UI, "Testing API endpoint", {
         method,
-        endpoint,
-        hasBody: method !== "GET" && !!body,
-        availableEndpoints: endpoints.map((e) => ({
-          path: e.path,
-          method: e.method,
-        })),
+        originalEndpoint: endpoint,
+        finalEndpoint,
+        hasBody: method !== "GET" && !!finalBody,
       });
 
       setIsLoading(true);
@@ -190,25 +206,30 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
 
       // Construct the full URL
       const baseUrl = window.location.origin;
-      const fullUrl = `${baseUrl}${endpoint}`;
+      const fullUrl = `${baseUrl}${finalEndpoint}`;
 
       clientLogger.debug(LogComponent.WOLF_UI, "Making API request", {
         fullUrl,
         method,
-        bodySize: body ? body.length : 0,
+        bodySize: finalBody ? finalBody.length : 0,
       });
 
+      // Set up headers based on the endpoint type
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "X-API-Key": apiKey,
       };
 
+      // Add X-API-Key only for Wolf API endpoints
+      if (endpoint.startsWith("/api/wolf/")) {
+        headers["X-API-Key"] = apiKey;
+      }
+
+      // Add session cookie for authenticated endpoints (Steam, etc.)
       const response = await fetch(fullUrl, {
         method,
         headers,
-        body: method !== "GET" ? body : undefined,
-        // Add credentials to ensure cookies (including auth) are sent
-        credentials: "include",
+        body: method !== "GET" ? finalBody : undefined,
+        credentials: "include", // Always include credentials for session handling
       });
 
       let data;
@@ -222,7 +243,7 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
           "Failed to parse API response",
           {
             error: parseError,
-            responseText: responseText.substring(0, 200) + "...", // Log only first 200 chars to avoid huge logs
+            responseText: responseText.substring(0, 200) + "...",
             status: response.status,
             statusText: response.statusText,
             contentType: response.headers.get("content-type"),
@@ -251,7 +272,12 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
           responseSize: responseText.length,
         });
       } else {
-        toast.error(`API request failed: ${response.statusText}`);
+        // Add more context to error messages
+        let errorMessage = `API request failed: ${response.statusText}`;
+        if (data?.error?.message) {
+          errorMessage += ` - ${data.error.message}`;
+        }
+        toast.error(errorMessage);
         clientLogger.error(LogComponent.WOLF_UI, "API request failed", {
           status: response.status,
           statusText: response.statusText,
@@ -389,82 +415,35 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
     }
   }
 
-  // Group endpoints by their first path segment and filter by search
+  // Group endpoints by their group property
   const groupedEndpoints = useMemo(() => {
-    const filtered = endpoints.filter(
-      (e) =>
-        e.path.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        e.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        e.method.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    // Log filtered endpoints for debugging
-    clientLogger.debug(LogComponent.WOLF_UI, "Filtering endpoints", {
-      searchQuery,
-      totalEndpoints: endpoints.length,
-      filteredCount: filtered.length,
-      filtered: filtered.map((e) => ({ path: e.path, method: e.method })),
-    });
-
-    // If we have a search query, automatically expand groups with matches
-    if (searchQuery) {
-      const groupsWithMatches = filtered.reduce((groups, endpoint) => {
-        // Get the first segment after /api/wolf/
-        const segments = endpoint.path.split("/");
-        const groupIndex = segments.findIndex((s) => s === "wolf") + 1;
-        const group = segments[groupIndex] || "root";
-        groups.add(group);
-        return groups;
-      }, new Set<string>());
-
-      setExpandedGroups((prev) => {
-        const newState = { ...prev };
-        groupsWithMatches.forEach((group) => {
-          newState[group] = true;
-        });
-        return newState;
-      });
-    }
-
-    const grouped = filtered.reduce((acc, endpoint) => {
-      // Get the first segment after /api/wolf/
-      const segments = endpoint.path.split("/");
-      const groupIndex = segments.findIndex((s) => s === "wolf") + 1;
-      const group = segments[groupIndex] || "root";
-
-      if (!acc[group]) acc[group] = [];
-      acc[group].push(endpoint);
-      return acc;
-    }, {} as Record<string, Endpoint[]>);
-
-    // Log grouped endpoints for debugging
-    clientLogger.debug(LogComponent.WOLF_UI, "Grouped endpoints", {
-      groups: Object.entries(grouped).map(([group, endpoints]) => ({
-        group,
-        count: endpoints.length,
-        endpoints: endpoints.map((e) => ({ path: e.path, method: e.method })),
-      })),
-    });
-
-    return grouped;
-  }, [endpoints, searchQuery]);
-
-  // Debounce search to avoid too many re-renders
-  const debouncedSearch = useMemo(() => {
-    const handler = (value: string) => {
-      setSearchQuery(value);
-      // If search is cleared, collapse all groups
-      if (!value) {
-        setExpandedGroups({});
+    const groups: Record<string, Endpoint[]> = {};
+    endpoints.forEach((endpoint) => {
+      const group = endpoint.group || "Other";
+      if (!groups[group]) {
+        groups[group] = [];
       }
-    };
+      groups[group].push(endpoint);
+    });
+    return groups;
+  }, [endpoints]);
 
-    let timeoutId: NodeJS.Timeout;
-    return (value: string) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => handler(value), 150);
-    };
-  }, []);
+  // Filter endpoints based on search query
+  const filteredEndpoints = useMemo(() => {
+    const groups: Record<string, Endpoint[]> = {};
+    Object.entries(groupedEndpoints).forEach(([group, endpoints]) => {
+      const filtered = endpoints.filter(
+        (e) =>
+          e.path.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          e.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          e.description.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      if (filtered.length > 0) {
+        groups[group] = filtered;
+      }
+    });
+    return groups;
+  }, [groupedEndpoints, searchQuery]);
 
   const toggleGroup = (group: string) => {
     setExpandedGroups((prev) => ({
@@ -498,7 +477,7 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search endpoints..."
-              onChange={(e) => debouncedSearch(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8"
             />
           </div>
@@ -513,53 +492,46 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
               </div>
             ) : (
               <div className="space-y-2">
-                {Object.entries(groupedEndpoints).map(
-                  ([group, groupEndpoints]) => (
-                    <div key={group} className="rounded-lg border">
-                      <button
-                        onClick={() => toggleGroup(group)}
-                        className="w-full flex items-center justify-between p-2 hover:bg-accent hover:text-accent-foreground rounded-t-lg"
-                      >
-                        <span className="font-medium capitalize">{group}</span>
-                        {expandedGroups[group] ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </button>
-                      {expandedGroups[group] && (
-                        <div className="p-2 space-y-1">
-                          {groupEndpoints.map((e) => (
-                            <button
-                              key={`${e.method}:${e.path}`}
-                              className={`w-full text-left px-2 py-1.5 rounded-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2 ${
-                                endpoint === e.path && method === e.method
-                                  ? "bg-accent text-accent-foreground"
-                                  : ""
-                              }`}
-                              onClick={() => {
-                                setMethod(e.method);
-                                setEndpoint(e.path);
-                              }}
-                            >
-                              <MethodChip method={e.method} />
-                              <div className="flex flex-col">
-                                <span className="font-mono text-sm">
-                                  {e.path}
-                                </span>
-                                {e.summary && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {e.summary}
-                                  </span>
-                                )}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                {Object.entries(filteredEndpoints).map(([group, endpoints]) => (
+                  <div key={group} className="space-y-1">
+                    <div
+                      className="flex items-center space-x-2 cursor-pointer hover:text-primary"
+                      onClick={() => toggleGroup(group)}
+                    >
+                      {expandedGroups[group] ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
                       )}
+                      <span className="font-medium">{group}</span>
+                      <span className="text-muted-foreground text-sm">
+                        ({endpoints.length})
+                      </span>
                     </div>
-                  )
-                )}
+                    {expandedGroups[group] && (
+                      <div className="ml-6 space-y-1">
+                        {endpoints.map((e) => (
+                          <div
+                            key={`${e.method}-${e.path}`}
+                            className={`flex items-center space-x-2 p-2 rounded cursor-pointer hover:bg-muted ${
+                              endpoint === e.path && method === e.method
+                                ? "bg-muted"
+                                : ""
+                            }`}
+                            onClick={() => {
+                              setEndpoint(e.path);
+                              setMethod(e.method);
+                              setSelectedEndpoint(e);
+                            }}
+                          >
+                            <MethodChip method={e.method} />
+                            <span className="text-sm font-mono">{e.path}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>

@@ -4,13 +4,14 @@ import { LogComponent } from "@/lib/logger/types";
 import { getUserSteamCredentials } from "@/lib/steam/config";
 import { getOwnedGames } from "@/lib/steam/service";
 import { GetGamesResponse } from "@/lib/steam/types";
+import { validateSteamCredentials } from "@/lib/steam/validation";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session?.user?.name) {
       logger.warn(
         LogComponent.AUTH,
         "Unauthorized attempt to access Steam games"
@@ -28,18 +29,18 @@ export async function GET() {
     }
 
     logger.debug(LogComponent.SYSTEM, "Fetching Steam credentials", undefined, {
-      userId: session.user.id,
+      username: session.user.name,
     });
 
-    // Get user's Steam credentials from TOML config
-    const credentials = getUserSteamCredentials(session.user.id);
+    // Get user's Steam credentials from config
+    const credentials = getUserSteamCredentials(session.user.name);
     if (!credentials) {
       logger.warn(
         LogComponent.SYSTEM,
         "Steam credentials not found",
         undefined,
         {
-          userId: session.user.id,
+          username: session.user.name,
         }
       );
       return NextResponse.json(
@@ -54,6 +55,27 @@ export async function GET() {
       );
     }
 
+    // Validate credentials
+    try {
+      validateSteamCredentials(credentials);
+    } catch (error) {
+      logger.warn(LogComponent.SYSTEM, "Invalid Steam credentials", undefined, {
+        username: session.user.name,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message:
+              error instanceof Error ? error.message : "Invalid credentials",
+            code: "INVALID_CREDENTIALS",
+          },
+        },
+        { status: 400 }
+      );
+    }
+
     const startTime = Date.now();
     const games = await getOwnedGames(credentials);
     const responseTime = Date.now() - startTime;
@@ -63,7 +85,7 @@ export async function GET() {
       "Successfully retrieved Steam games",
       undefined,
       {
-        userId: session.user.id,
+        username: session.user.name,
         gameCount: games.game_count,
         responseTime,
       }

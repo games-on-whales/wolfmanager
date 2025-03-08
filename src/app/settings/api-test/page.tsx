@@ -13,18 +13,18 @@ export default async function ApiTestPage() {
   if (!session?.user) redirect("/auth/signin");
   if (session.user.role !== "admin") redirect("/dashboard");
 
-  // Get API key from session
-  const apiKey = session.user.id;
+  // Get user ID from session for API key and authentication
+  const userId = session.user.id;
 
   // 2. Render with page layout
   return (
     <PageLayout
       title="API Test"
-      description="Test and verify Wolf API endpoints"
+      description="Test Wolf and Steam API endpoints with authentication"
     >
       <ErrorBoundary>
         <Suspense fallback={<LoadingState />}>
-          <ApiTestConsole apiKey={apiKey} />
+          <ApiTestConsole apiKey={userId} />
         </Suspense>
       </ErrorBoundary>
     </PageLayout>
