@@ -1,5 +1,6 @@
 import { Agent } from "http";
 import { Socket } from "net";
+import fetch from "node-fetch";
 
 const WOLF_SOCKET_PATH = "/var/run/wolf/wolf.sock";
 
@@ -49,7 +50,7 @@ export async function callWolfApi(
       method,
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
-      agent,
+      agent: agent as any,
     });
 
     const responseText = await response.text();
