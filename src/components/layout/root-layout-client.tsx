@@ -28,7 +28,7 @@ export function RootLayoutClient({ children }: RootLayoutClientProps) {
           <Header />
           {children}
         </div>
-        <Toaster closeButton position="bottom-right" />
+        <Toaster closeButton />
       </ThemeProvider>
     </SessionProvider>
   );
