@@ -3,10 +3,9 @@ dev
 .next
 .pnpm-store
 .shadcn-ui
-config/default.toml
+config/*
 .env.local
 .env
 logs/*
-config
 logs
 
