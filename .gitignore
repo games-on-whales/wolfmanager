@@ -8,4 +8,5 @@ config/*
 .env
 logs/*
 logs
+package-lock.json
 
