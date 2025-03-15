@@ -2,6 +2,9 @@ import { validateUser } from "@/lib/config";
 import { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
+// Add a Map to store active sessions
+const activeSessions = new Map<string, boolean>();
+
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("Please provide process.env.NEXTAUTH_SECRET");
 }
@@ -30,6 +33,7 @@ declare module "next-auth/jwt" {
     id: string;
     role?: string;
     requiresFirstTimeSetup: boolean;
+    sessionId?: string;
   }
 }
 
@@ -91,14 +95,28 @@ export const authOptions: AuthOptions = {
       }
 
       if (user) {
+        // Generate a unique session ID when creating a new token
+        const sessionId = crypto.randomUUID();
+        activeSessions.set(sessionId, true);
+
         const updatedToken = {
           ...token,
           role: user.role,
           id: user.id,
           requiresFirstTimeSetup: user.requiresFirstTimeSetup,
+          sessionId,
         };
         console.log("JWT Callback - Updated token:", updatedToken);
         return updatedToken;
+      }
+
+      // Check if the session is still valid
+      if (token.sessionId && !activeSessions.has(token.sessionId)) {
+        // Session was invalidated, force a new login
+        return {
+          ...token,
+          exp: 0, // Expire the token immediately
+        };
       }
 
       console.log("JWT Callback - Returning existing token:", token);
@@ -110,6 +128,11 @@ export const authOptions: AuthOptions = {
         token,
         currentSession: session,
       });
+
+      // Check if the session is still valid
+      if (token.sessionId && !activeSessions.has(token.sessionId)) {
+        throw new Error("Session expired");
+      }
 
       // Explicitly construct the session with only the fields we want
       const updatedSession = {
@@ -132,12 +155,15 @@ export const authOptions: AuthOptions = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
+    maxAge: 8 * 60 * 60, // 8 hours
+    updateAge: 1 * 60 * 60, // 1 hour
   },
   events: {
     async signOut({ token }) {
-      // Clear any server-side session data if needed
+      // Clear the session from active sessions
+      if (token.sessionId) {
+        activeSessions.delete(token.sessionId);
+      }
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
