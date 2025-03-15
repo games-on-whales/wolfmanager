@@ -43,7 +43,7 @@ class ClientLogger {
 
   private async logToServer(entry: LogEntry): Promise<void> {
     try {
-      const response = await fetch("/api/log", {
+      const response = await fetch("/api/logs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
