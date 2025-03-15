@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { clientLogger, LogComponent } from "@/lib/logger";
+import { LogComponent, clientLogger } from "@/lib/logger";
+import { showToast } from "@/lib/toast";
 import { Check, ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -271,6 +272,9 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
           endpoint,
           responseSize: responseText.length,
         });
+        showToast.success("Test Successful", {
+          description: "API endpoint test completed successfully",
+        });
       } else {
         // Add more context to error messages
         let errorMessage = `API request failed: ${response.statusText}`;
@@ -284,6 +288,7 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
           endpoint,
           errorData: data,
         });
+        showToast.error("Test Failed", error as Error);
       }
     } catch (error) {
       // Enhanced error logging with full context
@@ -311,6 +316,7 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
       });
       setResponse(JSON.stringify({ error: errorMessage }, null, 2));
       toast.error(`Failed to make API request: ${errorMessage}`);
+      showToast.error("Test Failed", error as Error);
     } finally {
       setIsLoading(false);
     }
@@ -325,9 +331,13 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
       );
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
+      showToast.success("Copied", {
+        description: "Response copied to clipboard",
+      });
     } catch (err) {
       console.error("Failed to copy:", err);
       toast.error("Failed to copy to clipboard");
+      showToast.error("Copy Failed", "Failed to copy response to clipboard");
     }
   };
 

@@ -1,22 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { clientLogger, LogComponent } from "@/lib/logger";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { Label } from "@/components/ui/label";
+import { LogComponent, clientLogger } from "@/lib/logger";
+import { showToast } from "@/lib/toast";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import * as z from "zod";
 
 const formSchema = z.object({
@@ -32,14 +23,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { data: session, update: updateSession } = useSession();
   const router = useRouter();
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-    },
-  });
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,9 +51,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         username,
       });
 
-      toast.success("Logged in successfully");
-      router.push("/dashboard");
-      router.refresh();
+      showToast.success("Login Successful", {
+        description: "You have been successfully logged in",
+      });
 
       try {
         // Get the session data directly from the API
@@ -104,60 +87,48 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       } catch (error) {
         console.error("Error checking session:", error);
         setIsLoading(false);
-        toast.error("Failed to check login status. Please try again.");
+        showToast.error(
+          "Login Failed",
+          "Failed to check login status. Please try again."
+        );
       }
     } catch (error) {
-      clientLogger.error(LogComponent.AUTH, "Login failed", error);
-      toast.error("Invalid username or password");
+      clientLogger.error(LogComponent.AUTH, "Login failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showToast.error("Login Failed", "Invalid username or password");
     } finally {
       setIsLoading(false);
     }
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={onSubmit} className="space-y-6">
-        <FormField
-          control={form.control}
+    <form onSubmit={onSubmit} className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="username">Username</Label>
+        <Input
+          id="username"
           name="username"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Username</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="username"
-                  {...field}
-                  disabled={isLoading}
-                  autoComplete="username"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          type="text"
+          required
+          disabled={isLoading}
+          autoComplete="username"
         />
-        <FormField
-          control={form.control}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
+          id="password"
           name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Password</FormLabel>
-              <FormControl>
-                <Input
-                  type="password"
-                  placeholder="••••••••"
-                  {...field}
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          type="password"
+          required
+          disabled={isLoading}
+          autoComplete="current-password"
         />
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Logging in..." : "Login"}
-        </Button>
-      </form>
-    </Form>
+      </div>
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? "Logging in..." : "Login"}
+      </Button>
+    </form>
   );
 }

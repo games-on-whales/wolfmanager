@@ -1,7 +1,4 @@
-import { Header } from "@/components/layout/header";
-import { SessionProvider } from "@/components/providers/session-provider";
-import { ThemeProvider } from "@/components/providers/theme-provider";
-import { Toaster } from "@/components/ui/themed-toaster";
+import { RootLayoutClient } from "@/components/layout/root-layout-client";
 import { ensureSecureKeys } from "@/lib/env";
 import { LogComponent, logger } from "@/lib/logger";
 import type { Metadata } from "next";
@@ -24,44 +21,22 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 export const suspense = false;
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Log application startup
-  await logger.info(LogComponent.WOLF_UI, "Application starting", {
+  // Server-side startup log
+  logger.info(LogComponent.WOLF_UI, "Server application starting", {
     environment: process.env.NODE_ENV,
     nodeVersion: process.version,
   });
 
-  try {
-    return (
-      <html lang="en" suppressHydrationWarning>
-        <body className={inter.className}>
-          <SessionProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange
-            >
-              <div className="content-container wolf-theme">
-                <Header />
-                {children}
-              </div>
-              <Toaster closeButton position="bottom-right" />
-            </ThemeProvider>
-          </SessionProvider>
-        </body>
-      </html>
-    );
-  } catch (error) {
-    await logger.error(
-      LogComponent.WOLF_UI,
-      "Failed to initialize application",
-      error
-    );
-    throw error;
-  }
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <RootLayoutClient>{children}</RootLayoutClient>
+      </body>
+    </html>
+  );
 }

@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { clientLogger, LogComponent } from "@/lib/logger";
+import { LogComponent, clientLogger } from "@/lib/logger";
+import { showToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
@@ -31,7 +32,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { DateRange } from "react-day-picker";
-import { toast } from "sonner";
 
 interface LogEntry {
   timestamp: string;
@@ -99,8 +99,12 @@ export function LogViewer({ initialEntries }: LogViewerProps) {
       clientLogger.info(LogComponent.WOLF_UI, "Log entries refreshed", {
         entryCount: newEntries.length,
       });
+      showToast.success("Logs Refreshed", {
+        description: "Log entries have been updated",
+      });
     } catch (error) {
       clientLogger.error(LogComponent.WOLF_UI, "Failed to refresh logs", error);
+      showToast.error("Refresh Failed", error as Error);
     } finally {
       setIsRefreshing(false);
     }
@@ -128,12 +132,16 @@ export function LogViewer({ initialEntries }: LogViewerProps) {
       URL.revokeObjectURL(url);
 
       clientLogger.info(LogComponent.WOLF_UI, "Log entries downloaded");
+      showToast.success("Download Started", {
+        description: "Log file download has started",
+      });
     } catch (error) {
       clientLogger.error(
         LogComponent.WOLF_UI,
         "Failed to download logs",
         error
       );
+      showToast.error("Download Failed", error as Error);
     }
   }, [entries]);
 
@@ -164,30 +172,14 @@ export function LogViewer({ initialEntries }: LogViewerProps) {
     }
   };
 
-  const copyToClipboard = async (
-    entry: LogEntry,
-    index: number,
-    e: React.MouseEvent
-  ) => {
-    e.stopPropagation(); // Prevent triggering the expand/collapse
+  const copyToClipboard = async (text: string) => {
     try {
-      const rawEntry = JSON.stringify(
-        {
-          timestamp: entry.timestamp,
-          level: entry.level,
-          component: entry.component,
-          message: entry.message,
-          metadata: entry.metadata,
-        },
-        null,
-        2
-      );
-      await navigator.clipboard.writeText(rawEntry);
-      setCopiedEntryIndex(index);
-      setTimeout(() => setCopiedEntryIndex(null), 2000);
-      toast.success("Log entry copied to clipboard");
+      await navigator.clipboard.writeText(text);
+      showToast.success("Copied", {
+        description: "Log entry copied to clipboard",
+      });
     } catch (error) {
-      toast.error("Failed to copy to clipboard");
+      showToast.error("Copy Failed", "Failed to copy log entry to clipboard");
     }
   };
 
@@ -331,7 +323,7 @@ export function LogViewer({ initialEntries }: LogViewerProps) {
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 text-zinc-400 hover:text-zinc-100"
-                    onClick={(e) => copyToClipboard(entry, index, e)}
+                    onClick={(e) => copyToClipboard(JSON.stringify(entry))}
                   >
                     {copiedEntryIndex === index ? (
                       <Check className="h-3 w-3" />

@@ -1,9 +1,17 @@
 import { validateUser } from "@/lib/config";
 import { AuthOptions } from "next-auth";
+import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { Logger } from "./logger/logger";
 
-// Add a Map to store active sessions
-const activeSessions = new Map<string, boolean>();
+// Initialize logger
+const logger = Logger.getInstance();
+
+// Add a Map to store active sessions with a timestamp
+const activeSessions = new Map<string, { timestamp: number }>();
+
+// Clear all sessions on server start
+const SERVER_START_TIME = Date.now();
 
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("Please provide process.env.NEXTAUTH_SECRET");
@@ -25,6 +33,7 @@ declare module "next-auth" {
       role?: string;
     };
     requiresFirstTimeSetup: boolean;
+    error?: "SessionExpired";
   }
 }
 
@@ -34,6 +43,8 @@ declare module "next-auth/jwt" {
     role?: string;
     requiresFirstTimeSetup: boolean;
     sessionId?: string;
+    serverStartTime?: number;
+    error?: "SessionExpired";
   }
 }
 
@@ -48,34 +59,30 @@ export const authOptions: AuthOptions = {
       async authorize(credentials) {
         try {
           if (!credentials?.username || !credentials?.password) {
-            console.log("Missing credentials");
+            logger.debug("auth", "Missing credentials");
             return null;
           }
 
           const user = validateUser(credentials.username, credentials.password);
-          console.log("Raw user data from validation:", user);
 
           if (user) {
-            // Create the auth user with explicit requiresFirstTimeSetup
             const requiresFirstTimeSetup = user.has_changed_password === false;
-            console.log("First time setup check:", {
-              has_changed_password: user.has_changed_password,
-              requiresFirstTimeSetup,
+            logger.debug("auth", "User authenticated successfully", {
+              username: credentials.username,
             });
-
-            const authUser = {
+            return {
               id: user.id,
               name: user.username,
               role: user.is_admin ? "admin" : "user",
               requiresFirstTimeSetup,
             };
-            console.log("Final authorized user object:", authUser);
-            return authUser;
           }
-          console.log("User not found or invalid credentials");
+          logger.warn("auth", "Invalid credentials", {
+            username: credentials.username,
+          });
           return null;
         } catch (error) {
-          console.error("Auth error:", error);
+          logger.error("auth", "Authentication error", error);
           return null;
         }
       },
@@ -83,75 +90,102 @@ export const authOptions: AuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user, trigger, session }) {
-      console.log("JWT Callback - Input:", {
-        user,
-        trigger,
-        session,
-        currentToken: token,
-      });
-
+      // Handle session update
       if (trigger === "update" && session?.name) {
         token.name = session.name;
+        return token;
       }
 
+      // Handle new sign in
       if (user) {
-        // Generate a unique session ID when creating a new token
         const sessionId = crypto.randomUUID();
-        activeSessions.set(sessionId, true);
-
-        const updatedToken = {
-          ...token,
-          role: user.role,
-          id: user.id,
-          requiresFirstTimeSetup: user.requiresFirstTimeSetup,
+        activeSessions.set(sessionId, { timestamp: Date.now() });
+        logger.debug("auth", "New session created", {
+          userId: user.id,
           sessionId,
-        };
-        console.log("JWT Callback - Updated token:", updatedToken);
-        return updatedToken;
-      }
+        });
 
-      // Check if the session is still valid
-      if (token.sessionId && !activeSessions.has(token.sessionId)) {
-        // Session was invalidated, force a new login
         return {
           ...token,
-          exp: 0, // Expire the token immediately
+          id: user.id,
+          name: user.name,
+          role: user.role,
+          requiresFirstTimeSetup: user.requiresFirstTimeSetup,
+          sessionId,
+          serverStartTime: SERVER_START_TIME,
         };
       }
 
-      console.log("JWT Callback - Returning existing token:", token);
+      // Check if the token is from a previous server instance
+      if (token.serverStartTime !== SERVER_START_TIME) {
+        logger.info(
+          "auth",
+          "Token from previous server instance - forcing logout",
+          {
+            userId: token.id,
+            sessionId: token.sessionId,
+          }
+        );
+        return {
+          error: "SessionExpired",
+          name: token.name,
+          exp: 0,
+          id: token.id || "expired",
+          requiresFirstTimeSetup: false,
+        } as JWT;
+      }
+
+      // Handle existing session
+      if (!token.sessionId || !activeSessions.has(token.sessionId)) {
+        logger.info("auth", "Invalid or expired session - forcing logout", {
+          userId: token.id,
+          sessionId: token.sessionId,
+        });
+        return {
+          error: "SessionExpired",
+          name: token.name,
+          exp: 0,
+          id: token.id || "expired",
+          requiresFirstTimeSetup: false,
+        } as JWT;
+      }
+
       return token;
     },
     async session({ session, token }) {
-      console.log("Session Callback:", {
-        hasUser: !!session?.user,
-        token,
-        currentSession: session,
-      });
-
-      // Check if the session is still valid
-      if (token.sessionId && !activeSessions.has(token.sessionId)) {
-        throw new Error("Session expired");
+      // If token has error or is invalid, return error session
+      if (
+        token.error ||
+        !token.id ||
+        !token.sessionId ||
+        !activeSessions.has(token.sessionId)
+      ) {
+        logger.info("auth", "Session validation failed - forcing logout", {
+          sessionId: token?.sessionId,
+          error: token.error,
+        });
+        return {
+          ...session,
+          error: "SessionExpired",
+          expires: new Date(0).toISOString(),
+        };
       }
 
-      // Explicitly construct the session with only the fields we want
-      const updatedSession = {
+      return {
         ...session,
         user: {
-          id: token.id as string,
-          name: token.name as string,
+          id: token.id,
+          name: token.name,
           role: token.role,
         },
         requiresFirstTimeSetup: token.requiresFirstTimeSetup,
       };
-
-      console.log("Updated session:", updatedSession);
-      return updatedSession;
     },
   },
   pages: {
     signIn: "/login",
     error: "/login",
+    signOut: "/login",
   },
   session: {
     strategy: "jwt",
@@ -160,9 +194,12 @@ export const authOptions: AuthOptions = {
   },
   events: {
     async signOut({ token }) {
-      // Clear the session from active sessions
-      if (token.sessionId) {
+      if (token?.sessionId) {
         activeSessions.delete(token.sessionId);
+        logger.debug("auth", "Session removed on signout", {
+          userId: token.id,
+          sessionId: token.sessionId,
+        });
       }
     },
   },

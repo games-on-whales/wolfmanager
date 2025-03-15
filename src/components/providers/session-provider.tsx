@@ -3,8 +3,10 @@
 import { clientLogger, LogComponent } from "@/lib/logger";
 import {
   SessionProvider as NextAuthSessionProvider,
+  signOut,
   useSession,
 } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 interface SessionProviderProps {
@@ -13,8 +15,15 @@ interface SessionProviderProps {
 
 function SessionLogger() {
   const { data: session } = useSession();
+  const router = useRouter();
 
   useEffect(() => {
+    if (session?.error === "SessionExpired") {
+      clientLogger.info(LogComponent.AUTH, "Session expired - logging out");
+      signOut({ callbackUrl: "/login" });
+      return;
+    }
+
     if (session) {
       clientLogger.info(LogComponent.AUTH, "Session updated", {
         userId: session.user.id,
@@ -24,7 +33,7 @@ function SessionLogger() {
     } else {
       clientLogger.info(LogComponent.AUTH, "Session ended");
     }
-  }, [session]);
+  }, [session, router]);
 
   return null;
 }

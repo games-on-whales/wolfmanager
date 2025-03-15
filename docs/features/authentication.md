@@ -47,7 +47,6 @@ flowchart LR
 The following routes are accessible without authentication:
 
 - `/login`
-- `/register`
 - `/api/auth/*`
 
 ### Protected Routes

@@ -1,5 +1,4 @@
-import { getToken } from "next-auth/jwt";
-import type { NextRequest } from "next/server";
+import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
 // Define paths that don't require authentication
@@ -7,37 +6,45 @@ const publicPaths = ["/login", "/register", "/api/auth"];
 // Define paths that require admin access
 const adminPaths = ["/admin", "/users"];
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export default withAuth(
+  async function middleware(req) {
+    const token = req.nextauth.token;
+    const { pathname } = req.nextUrl;
 
-  // Check if the path is public
-  if (publicPaths.some((path) => pathname.startsWith(path))) {
+    // Allow public paths
+    if (publicPaths.some((path) => pathname.startsWith(path))) {
+      return NextResponse.next();
+    }
+
+    // Check for expired or invalid session
+    if (!token || token.error === "SessionExpired") {
+      const url = new URL("/login", req.url);
+      url.searchParams.set("error", "SessionExpired");
+      url.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(url);
+    }
+
+    // Check for admin-only routes
+    if (
+      adminPaths.some((path) => pathname.startsWith(path)) &&
+      token.role !== "admin"
+    ) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+
     return NextResponse.next();
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => {
+        // Return true to allow the middleware to handle the response
+        return true;
+      },
+    },
   }
-
-  // Get the token and verify authentication
-  const token = await getToken({ req: request });
-
-  // If no token and trying to access protected route, redirect to login
-  if (!token) {
-    const url = new URL("/login", request.url);
-    url.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(url);
-  }
-
-  // Check for admin-only routes
-  if (
-    adminPaths.some((path) => pathname.startsWith(path)) &&
-    token.role !== "admin"
-  ) {
-    // Redirect non-admin users to homepage if they try to access admin routes
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
-  return NextResponse.next();
-}
+);
 
 // Configure the paths that trigger the middleware
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth).*)"],
 };

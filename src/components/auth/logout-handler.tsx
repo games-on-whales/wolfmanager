@@ -1,10 +1,10 @@
 "use client";
 
 import { clientLogger, LogComponent } from "@/lib/logger";
+import { showToast } from "@/lib/toast";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { toast } from "sonner";
 
 export function LogoutHandler() {
   const router = useRouter();
@@ -14,12 +14,14 @@ export function LogoutHandler() {
       try {
         clientLogger.info(LogComponent.AUTH, "Logging out user");
         await signOut({ redirect: false });
-        toast.success("Logged out successfully");
+        showToast.success("Logged out successfully", {
+          description: "You have been successfully logged out of your account",
+        });
         router.push("/login");
         router.refresh();
       } catch (error) {
         clientLogger.error(LogComponent.AUTH, "Logout failed", error);
-        toast.error("Failed to log out");
+        showToast.error("Failed to log out", error as Error);
         router.push("/dashboard");
       }
     }

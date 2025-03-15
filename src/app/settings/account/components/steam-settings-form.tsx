@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { clientLogger, LogComponent } from "@/lib/logger";
+import { showToast } from "@/lib/toast";
 import { useSession } from "next-auth/react";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 
 interface SteamSettingsFormProps {
   steamId: string | null;
@@ -15,7 +15,7 @@ interface SteamSettingsFormProps {
 
 export function SteamSettingsForm({ steamId, apiKey }: SteamSettingsFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const { update: updateSession, data: session } = useSession();
+  const { update: updateSession } = useSession();
   const formRef = useRef<HTMLFormElement>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -24,72 +24,43 @@ export function SteamSettingsForm({ steamId, apiKey }: SteamSettingsFormProps) {
 
     try {
       const formData = new FormData(event.currentTarget);
-      const steamId = formData.get("steamId") as string;
-      const apiKey = formData.get("apiKey") as string;
+      const newSteamId = formData.get("steamId") as string;
+      const newApiKey = formData.get("apiKey") as string;
 
-      // Basic validation
-      if (!steamId.trim() || !apiKey.trim()) {
-        toast.error("Both Steam ID and API Key are required");
-        setIsLoading(false);
-        return;
-      }
-
-      if (!session?.user?.name) {
-        toast.error("Session error: User not found");
-        setIsLoading(false);
-        return;
-      }
-
-      // Log the attempt (without sensitive data)
-      clientLogger.info(
-        LogComponent.WOLF_UI,
-        "Attempting to update Steam settings"
-      );
+      clientLogger.info(LogComponent.STEAM, "Updating Steam settings");
 
       const response = await fetch("/api/user/steam", {
-        method: "PUT",
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: session.user.name,
-          steamId,
-          apiKey,
+          steamId: newSteamId || null,
+          apiKey: newApiKey || null,
         }),
       });
 
-      const data = await response
-        .json()
-        .catch(() => ({ message: "Invalid server response" }));
-
       if (!response.ok) {
-        throw new Error(data.message || "Failed to update Steam settings");
+        throw new Error("Failed to update Steam settings");
       }
 
-      // Update session to reflect changes
-      await updateSession();
-
-      toast.success(data.message || "Steam settings updated successfully");
+      showToast.success("Steam Settings Updated", {
+        description: "Your Steam settings have been successfully updated",
+      });
       clientLogger.info(
-        LogComponent.WOLF_UI,
+        LogComponent.STEAM,
         "Steam settings updated successfully"
       );
 
-      // Safely reset the form
-      if (formRef.current) {
-        formRef.current.reset();
-      }
+      // Update session to reflect new values
+      await updateSession();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to update Steam settings";
       clientLogger.error(
-        LogComponent.WOLF_UI,
+        LogComponent.STEAM,
         "Failed to update Steam settings",
-        { error: errorMessage }
+        error
       );
-      toast.error(errorMessage);
+      showToast.error("Steam Settings Update Failed", error as Error);
     } finally {
       setIsLoading(false);
     }

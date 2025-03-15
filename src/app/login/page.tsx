@@ -5,11 +5,15 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { LoginClient } from "./components/login-client";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: { error?: string; callbackUrl?: string };
+}) {
   const session = await getServerSession(authOptions);
 
   // If authenticated and no first-time setup needed, redirect to dashboard
-  if (session?.user && !session.requiresFirstTimeSetup) {
+  if (session?.user && !session.requiresFirstTimeSetup && !session.error) {
     redirect("/dashboard");
   }
 
@@ -19,6 +23,8 @@ export default async function LoginPage() {
         <LoginClient
           isFirstTimeSetup={session?.requiresFirstTimeSetup || false}
           initialSession={session}
+          error={searchParams.error}
+          callbackUrl={searchParams.callbackUrl}
         />
       </Suspense>
     </div>

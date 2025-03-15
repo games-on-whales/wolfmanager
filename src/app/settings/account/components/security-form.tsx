@@ -10,11 +10,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { clientLogger, LogComponent } from "@/lib/logger";
+import { LogComponent, clientLogger } from "@/lib/logger";
+import { showToast } from "@/lib/toast";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 
 export function SecurityForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -31,12 +31,15 @@ export function SecurityForm() {
       const confirmPassword = formData.get("confirmPassword") as string;
 
       if (!currentPassword || !newPassword || !confirmPassword) {
-        toast.error("Please fill in all password fields");
+        showToast.error(
+          "Validation Error",
+          "Please fill in all password fields"
+        );
         return;
       }
 
       if (newPassword !== confirmPassword) {
-        toast.error("New passwords do not match");
+        showToast.error("Validation Error", "New passwords do not match");
         return;
       }
 
@@ -57,7 +60,9 @@ export function SecurityForm() {
         throw new Error("Failed to update password");
       }
 
-      toast.success("Password updated successfully");
+      showToast.success("Password Updated", {
+        description: "Your password has been successfully updated",
+      });
       clientLogger.info(LogComponent.AUTH, "Password updated successfully");
 
       // Sign out after password change
@@ -65,7 +70,7 @@ export function SecurityForm() {
       router.push("/login");
     } catch (error) {
       clientLogger.error(LogComponent.AUTH, "Failed to update password", error);
-      toast.error("Failed to update password");
+      showToast.error("Password Update Failed", error as Error);
     } finally {
       setIsLoading(false);
     }

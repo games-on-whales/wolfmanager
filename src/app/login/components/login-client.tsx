@@ -6,28 +6,47 @@ import { ConstellationBackground } from "@/components/ui/constellation-bg";
 import { GameControls } from "@/components/ui/game-controls";
 import { SpaceInvaders } from "@/components/ui/space-invaders";
 import { StarfieldBackground } from "@/components/ui/starfield-bg";
+import { LogComponent, clientLogger } from "@/lib/logger";
+import { showToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { Session } from "next-auth";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface LoginClientProps {
   isFirstTimeSetup: boolean;
   initialSession: Session | null;
+  error?: string;
+  callbackUrl?: string;
 }
 
 export function LoginClient({
   isFirstTimeSetup,
   initialSession,
+  error,
+  callbackUrl,
 }: LoginClientProps) {
   const [showEasterEgg, setShowEasterEgg] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (error === "SessionExpired") {
+      clientLogger.info(
+        LogComponent.AUTH,
+        "Session expired - showing notification"
+      );
+      showToast.error(
+        "Session Expired",
+        "Your session has expired. Please log in again."
+      );
+    }
+  }, [error]);
 
   const handleLoginSuccess = (isFirstLogin: boolean) => {
     if (isFirstLogin) {
       router.push("/first-time-setup");
     } else {
-      router.push("/dashboard");
+      router.push(callbackUrl || "/dashboard");
     }
   };
 
