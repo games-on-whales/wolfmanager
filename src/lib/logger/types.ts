@@ -18,6 +18,7 @@ export const LogComponent = {
   PAIRING: "pairing",
   AUTH: "auth",
   SYSTEM: "system",
+  STEAM: "steam",
 } as const;
 
 export type LogComponent = (typeof LogComponent)[keyof typeof LogComponent];

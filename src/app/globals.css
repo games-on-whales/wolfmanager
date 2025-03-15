@@ -353,35 +353,44 @@
 
 /* Custom Notification Styling */
 .wolf-notification {
-  @apply rounded-md border;
-  background-color: hsl(var(--notif-bg));
-  border-color: hsl(var(--border));
+  @apply relative border bg-card text-card-foreground shadow-sm;
 }
+
 .wolf-notification-info {
-  border-left: 4px solid hsl(214, 90%, 52%);
-  background-color: hsl(var(--notif-info-bg));
+  @apply border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50;
 }
+
 .wolf-notification-success {
-  border-left: 4px solid hsl(142, 76%, 36%);
-  background-color: hsl(var(--notif-success-bg));
+  @apply border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/50;
 }
+
 .wolf-notification-warning {
-  border-left: 4px solid hsl(32, 95%, 44%);
-  background-color: hsl(var(--notif-warning-bg));
+  @apply border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/50;
 }
+
 .wolf-notification-error {
-  border-left: 4px solid hsl(0, 84%, 60%);
-  background-color: hsl(var(--notif-error-bg));
+  @apply border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50;
 }
 
-/* Add text color for notification in light theme */
-.wolf-notification h4 {
-  @apply text-foreground;
+/* Toast Overrides */
+.sonner-toast {
+  @apply shadow-lg;
 }
 
-/* Custom notification styling - Dark theme override */
-.dark .wolf-notification h4 {
-  @apply text-foreground;
+.sonner-toast[data-type="success"] svg {
+  @apply text-green-500 dark:text-green-400;
+}
+
+.sonner-toast[data-type="error"] svg {
+  @apply text-red-500 dark:text-red-400;
+}
+
+.sonner-toast[data-type="warning"] svg {
+  @apply text-yellow-500 dark:text-yellow-400;
+}
+
+.sonner-toast[data-type="info"] svg {
+  @apply text-blue-500 dark:text-blue-400;
 }
 
 /* Custom Expandable Menu Styling */
@@ -459,3 +468,24 @@
 }
 
 /* Add any additional styles below */
+
+/* Toast Custom Styling */
+.toast-custom {
+  @apply flex gap-3 items-start min-h-[64px];
+}
+
+.toast-custom[data-type="success"] svg {
+  @apply text-green-300;
+}
+
+.toast-custom[data-type="error"] svg {
+  @apply text-red-300;
+}
+
+.toast-custom[data-type="warning"] svg {
+  @apply text-yellow-300;
+}
+
+.toast-custom[data-type="info"] svg {
+  @apply text-blue-300;
+}
