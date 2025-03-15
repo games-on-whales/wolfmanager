@@ -24,6 +24,7 @@ export interface UserConfig {
   created_at: string;
   updated_at: string;
   has_changed_password: boolean;
+  display_name?: string;
   steam_id?: string;
   steam_api_key?: string;
   clients: ClientDevice[];
