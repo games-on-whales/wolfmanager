@@ -266,14 +266,13 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
       setResponse(JSON.stringify(data, null, 2));
 
       if (response.ok) {
-        toast.success("API request successful");
+        showToast.success("Test Successful", {
+          description: "API endpoint test completed successfully",
+        });
         clientLogger.info(LogComponent.WOLF_UI, "API request successful", {
           status: response.status,
           endpoint,
           responseSize: responseText.length,
-        });
-        showToast.success("Test Successful", {
-          description: "API endpoint test completed successfully",
         });
       } else {
         // Add more context to error messages
@@ -281,14 +280,15 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
         if (data?.error?.message) {
           errorMessage += ` - ${data.error.message}`;
         }
-        toast.error(errorMessage);
+
         clientLogger.error(LogComponent.WOLF_UI, "API request failed", {
           status: response.status,
           statusText: response.statusText,
           endpoint,
           errorData: data,
         });
-        showToast.error("Test Failed", error as Error);
+
+        showToast.error("Test Failed", errorMessage);
       }
     } catch (error) {
       // Enhanced error logging with full context
