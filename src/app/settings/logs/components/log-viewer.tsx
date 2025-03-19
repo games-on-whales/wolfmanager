@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LogComponent, clientLogger } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -91,20 +92,33 @@ export function LogViewer({ initialEntries }: LogViewerProps) {
       setIsRefreshing(true);
 
       const response = await fetch("/api/logs");
-      if (!response.ok) throw new Error("Failed to fetch logs");
+      const data = await response.json();
 
-      const newEntries = await response.json();
-      setEntries(newEntries);
+      if (response.status === 401) {
+        throw new Error("Unauthorized: You need admin access to view logs");
+      }
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch logs");
+      }
+
+      setEntries(data.entries || []);
 
       clientLogger.info(LogComponent.WOLF_UI, "Log entries refreshed", {
-        entryCount: newEntries.length,
+        entryCount: data.entries?.length || 0,
       });
       showToast.success("Logs Refreshed", {
         description: "Log entries have been updated",
       });
     } catch (error) {
-      clientLogger.error(LogComponent.WOLF_UI, "Failed to refresh logs", error);
-      showToast.error("Refresh Failed", error as Error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to refresh logs";
+      clientLogger.error(
+        LogComponent.WOLF_UI,
+        "Failed to refresh logs",
+        error as Error,
+        { errorMessage }
+      );
+      showToast.error("Refresh Failed", errorMessage);
     } finally {
       setIsRefreshing(false);
     }
@@ -139,7 +153,7 @@ export function LogViewer({ initialEntries }: LogViewerProps) {
       clientLogger.error(
         LogComponent.WOLF_UI,
         "Failed to download logs",
-        error
+        error as Error
       );
       showToast.error("Download Failed", error as Error);
     }
