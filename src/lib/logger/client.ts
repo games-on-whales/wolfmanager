@@ -6,7 +6,7 @@ import { LogComponent, LogEntry } from "./types";
  * Client-side logger wrapper that ensures proper error boundary integration
  * and loading state handling in Next.js client components.
  */
-class ClientLogger {
+export class ClientLogger {
   private static instance: ClientLogger;
   private queue: Promise<void>[] = [];
   private processingQueue = false;

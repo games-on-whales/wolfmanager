@@ -1,12 +1,21 @@
-import { clientLogger } from "./client";
-import { getLoggerConfig } from "./config";
+/**
+ * Logger exports
+ * This file re-exports the full-featured logger implementation
+ */
+
+// Export types and enums
+export { LogComponent } from "./types";
+export type { LogEntry, LogLevel, LoggerConfig } from "./types";
+export { logger };
+
+// Create and export singleton instances
 import { Logger } from "./logger";
+const logger = Logger.getInstance();
 
-// Initialize the logger with configuration
-const logger = Logger.getInstance(getLoggerConfig());
-
-// Export both server and client loggers
-export { clientLogger, logger };
+// Create and export client singleton instance
+import { ClientLogger } from "./client";
+const clientLogger = ClientLogger.getInstance();
+export { clientLogger };
 
 // Re-export types and components
 export * from "./plugins/wolf-server";
