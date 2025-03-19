@@ -1,39 +1,33 @@
 "use client";
 
-import { clientLogger, LogComponent } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import {
   SessionProvider as NextAuthSessionProvider,
-  signOut,
   useSession,
 } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { ReactNode, useEffect } from "react";
 
 interface SessionProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 function SessionLogger() {
   const { data: session } = useSession();
-  const router = useRouter();
 
   useEffect(() => {
-    if (session?.error === "SessionExpired") {
-      clientLogger.info(LogComponent.AUTH, "Session expired - logging out");
-      signOut({ callbackUrl: "/login" });
-      return;
-    }
+    const logSession = async () => {
+      if (!session) {
+        await clientLogger.debug(LogComponent.AUTH, "Session ended");
+      } else {
+        await clientLogger.debug(LogComponent.AUTH, "Session updated", {
+          user: session.user?.name,
+        });
+      }
+    };
 
-    if (session) {
-      clientLogger.info(LogComponent.AUTH, "Session updated", {
-        userId: session.user.id,
-        username: session.user.name,
-        requiresSetup: session.requiresFirstTimeSetup,
-      });
-    } else {
-      clientLogger.info(LogComponent.AUTH, "Session ended");
-    }
-  }, [session, router]);
+    logSession();
+  }, [session]);
 
   return null;
 }

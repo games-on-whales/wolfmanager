@@ -1,6 +1,5 @@
 import { authOptions } from "@/lib/auth";
-import { logger } from "@/lib/logger";
-import { LogComponent } from "@/lib/logger/types";
+import { LogComponent, logger } from "@/lib/logger";
 import { getUserSteamCredentials } from "@/lib/steam/config";
 import { getOwnedGames, refreshGameArtwork } from "@/lib/steam/service";
 import { RefreshArtworkResponse } from "@/lib/steam/types";
@@ -12,7 +11,10 @@ export async function POST() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      logger.warn(LogComponent.AUTH, "Unauthorized attempt to refresh artwork");
+      await logger.warn(
+        LogComponent.AUTH,
+        "Unauthorized attempt to refresh artwork"
+      );
       return NextResponse.json(
         {
           success: false,
@@ -25,10 +27,9 @@ export async function POST() {
       );
     }
 
-    logger.debug(
-      LogComponent.SYSTEM,
+    await logger.debug(
+      LogComponent.STEAM,
       "Fetching Steam credentials for artwork refresh",
-      undefined,
       {
         userId: session.user.id,
       }
@@ -37,10 +38,9 @@ export async function POST() {
     // Get user's Steam credentials from TOML config
     const credentials = getUserSteamCredentials(session.user.id);
     if (!credentials) {
-      logger.warn(
-        LogComponent.SYSTEM,
+      await logger.warn(
+        LogComponent.STEAM,
         "Steam credentials not found for artwork refresh",
-        undefined,
         {
           userId: session.user.id,
         }
@@ -61,7 +61,7 @@ export async function POST() {
     try {
       validateSteamCredentials(credentials);
     } catch (error) {
-      logger.warn(LogComponent.SYSTEM, "Invalid Steam credentials", undefined, {
+      await logger.warn(LogComponent.STEAM, "Invalid Steam credentials", {
         userId: session.user.id,
         error: error instanceof Error ? error.message : "Unknown error",
       });
@@ -79,10 +79,9 @@ export async function POST() {
     }
 
     // Get user's games
-    logger.debug(
-      LogComponent.SYSTEM,
+    await logger.debug(
+      LogComponent.STEAM,
       "Fetching games for artwork refresh",
-      undefined,
       {
         userId: session.user.id,
       }
@@ -94,21 +93,16 @@ export async function POST() {
     let processed = 0;
     const total = games.length;
 
-    logger.info(
-      LogComponent.SYSTEM,
-      "Starting artwork refresh process",
-      undefined,
-      {
-        userId: session.user.id,
-        totalGames: total,
-      }
-    );
+    await logger.info(LogComponent.STEAM, "Starting artwork refresh process", {
+      userId: session.user.id,
+      totalGames: total,
+    });
 
     // Start the refresh process
     const startTime = Date.now();
-    await refreshGameArtwork(games, (p, t) => {
+    await refreshGameArtwork(games, async (p, t) => {
       processed = p;
-      logger.debug(LogComponent.SYSTEM, "Artwork refresh progress", undefined, {
+      await logger.debug(LogComponent.STEAM, "Artwork refresh progress", {
         userId: session.user.id,
         processed: p,
         total: t,
@@ -117,7 +111,7 @@ export async function POST() {
     });
     const responseTime = Date.now() - startTime;
 
-    logger.info(LogComponent.SYSTEM, "Completed artwork refresh", undefined, {
+    await logger.info(LogComponent.STEAM, "Completed artwork refresh", {
       userId: session.user.id,
       processed,
       total,
@@ -135,7 +129,11 @@ export async function POST() {
 
     return NextResponse.json(response);
   } catch (error) {
-    logger.error(LogComponent.SYSTEM, "Error refreshing artwork", error);
+    await logger.error(
+      LogComponent.STEAM,
+      "Error refreshing artwork",
+      error instanceof Error ? error : new Error(String(error))
+    );
 
     if (error instanceof Error) {
       return NextResponse.json(

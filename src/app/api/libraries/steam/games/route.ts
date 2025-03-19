@@ -1,6 +1,5 @@
 import { authOptions } from "@/lib/auth";
-import { logger } from "@/lib/logger";
-import { LogComponent } from "@/lib/logger/types";
+import { LogComponent, logger } from "@/lib/logger";
 import { getUserSteamCredentials } from "@/lib/steam/config";
 import { getOwnedGames } from "@/lib/steam/service";
 import { GetGamesResponse } from "@/lib/steam/types";
@@ -12,7 +11,7 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.name) {
-      logger.warn(
+      await logger.warn(
         LogComponent.AUTH,
         "Unauthorized attempt to access Steam games"
       );
@@ -28,21 +27,16 @@ export async function GET() {
       );
     }
 
-    logger.debug(LogComponent.SYSTEM, "Fetching Steam credentials", undefined, {
+    await logger.debug(LogComponent.STEAM, "Fetching Steam credentials", {
       username: session.user.name,
     });
 
     // Get user's Steam credentials from config
     const credentials = getUserSteamCredentials(session.user.name);
     if (!credentials) {
-      logger.warn(
-        LogComponent.SYSTEM,
-        "Steam credentials not found",
-        undefined,
-        {
-          username: session.user.name,
-        }
-      );
+      await logger.warn(LogComponent.STEAM, "Steam credentials not found", {
+        username: session.user.name,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -59,7 +53,7 @@ export async function GET() {
     try {
       validateSteamCredentials(credentials);
     } catch (error) {
-      logger.warn(LogComponent.SYSTEM, "Invalid Steam credentials", undefined, {
+      await logger.warn(LogComponent.STEAM, "Invalid Steam credentials", {
         username: session.user.name,
         error: error instanceof Error ? error.message : "Unknown error",
       });
@@ -80,10 +74,9 @@ export async function GET() {
     const games = await getOwnedGames(credentials);
     const responseTime = Date.now() - startTime;
 
-    logger.info(
-      LogComponent.SYSTEM,
+    await logger.info(
+      LogComponent.STEAM,
       "Successfully retrieved Steam games",
-      undefined,
       {
         username: session.user.name,
         gameCount: games.game_count,
@@ -98,7 +91,11 @@ export async function GET() {
 
     return NextResponse.json(response);
   } catch (error) {
-    logger.error(LogComponent.SYSTEM, "Error fetching Steam games", error);
+    await logger.error(
+      LogComponent.STEAM,
+      "Error fetching Steam games",
+      error instanceof Error ? error : new Error(String(error))
+    );
 
     if (error instanceof Error) {
       return NextResponse.json(

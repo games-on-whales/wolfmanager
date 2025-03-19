@@ -1,6 +1,7 @@
 "use client";
 
-import { clientLogger, LogComponent } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -10,21 +11,27 @@ export function LogoutHandler() {
   const router = useRouter();
 
   useEffect(() => {
-    async function handleLogout() {
+    const handleLogout = async () => {
       try {
-        clientLogger.info(LogComponent.AUTH, "Logging out user");
+        await clientLogger.info(LogComponent.AUTH, "User logging out");
         await signOut({ redirect: false });
-        showToast.success("Logged out successfully", {
-          description: "You have been successfully logged out of your account",
+        await clientLogger.debug(LogComponent.AUTH, "Logout successful");
+        showToast.success("Logged Out", {
+          description: "You have been successfully logged out",
         });
         router.push("/login");
-        router.refresh();
       } catch (error) {
-        clientLogger.error(LogComponent.AUTH, "Logout failed", error);
-        showToast.error("Failed to log out", error as Error);
-        router.push("/dashboard");
+        await clientLogger.error(
+          LogComponent.AUTH,
+          "Logout failed",
+          error as Error
+        );
+        showToast.error("Logout Failed", error as Error, {
+          description: "An error occurred while logging out",
+        });
+        router.push("/login");
       }
-    }
+    };
 
     handleLogout();
   }, [router]);

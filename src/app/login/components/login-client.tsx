@@ -6,7 +6,8 @@ import { ConstellationBackground } from "@/components/ui/constellation-bg";
 import { GameControls } from "@/components/ui/game-controls";
 import { SpaceInvaders } from "@/components/ui/space-invaders";
 import { StarfieldBackground } from "@/components/ui/starfield-bg";
-import { LogComponent, clientLogger } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { Session } from "next-auth";
@@ -30,28 +31,44 @@ export function LoginClient({
   const router = useRouter();
 
   useEffect(() => {
-    if (error === "SessionExpired") {
-      clientLogger.info(
-        LogComponent.AUTH,
-        "Session expired - showing notification"
-      );
-      showToast.error(
-        "Session Expired",
-        "Your session has expired. Please log in again."
-      );
-    }
-  }, [error]);
+    const handleError = async () => {
+      if (error === "SessionExpired") {
+        await clientLogger.info(
+          LogComponent.AUTH,
+          "Session expired - redirecting to login",
+          {
+            callbackUrl: callbackUrl || "/dashboard",
+          }
+        );
+        showToast.error(
+          "Session Expired",
+          "Your session has expired. Please log in again."
+        );
+      }
+    };
+    handleError();
+  }, [error, callbackUrl]);
 
-  const handleLoginSuccess = (isFirstLogin: boolean) => {
-    if (isFirstLogin) {
-      router.push("/first-time-setup");
-    } else {
-      router.push(callbackUrl || "/dashboard");
-    }
+  const handleLoginSuccess = async (isFirstLogin: boolean) => {
+    const redirectUrl = isFirstLogin
+      ? "/first-time-setup"
+      : callbackUrl || "/dashboard";
+    await clientLogger.debug(
+      LogComponent.AUTH,
+      "Login successful - redirecting",
+      {
+        isFirstLogin,
+        redirectUrl,
+      }
+    );
+    router.push(redirectUrl);
   };
 
-  const handleLogoClick = () => {
+  const handleLogoClick = async () => {
     setShowEasterEgg(!showEasterEgg);
+    await clientLogger.debug(LogComponent.WOLF_UI, "Easter egg toggled", {
+      showEasterEgg: !showEasterEgg,
+    });
   };
 
   return (

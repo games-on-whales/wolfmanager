@@ -1,5 +1,4 @@
-import { logger } from "@/lib/logger";
-import { LogComponent } from "@/lib/logger/types";
+import { LogComponent, logger } from "@/lib/logger";
 import { getGameArtwork } from "@/lib/steam/service";
 import { GetArtworkResponse } from "@/lib/steam/types";
 import { NextResponse } from "next/server";
@@ -23,7 +22,7 @@ export async function GET(
       );
     }
 
-    logger.debug(LogComponent.SYSTEM, "Fetching artwork", undefined, {
+    await logger.debug(LogComponent.STEAM, "Fetching artwork", {
       appId,
     });
 
@@ -31,16 +30,11 @@ export async function GET(
     const artwork = await getGameArtwork(appId);
     const responseTime = Date.now() - startTime;
 
-    logger.info(
-      LogComponent.SYSTEM,
-      "Successfully retrieved artwork",
-      undefined,
-      {
-        appId,
-        artworkCount: artwork.length,
-        responseTime,
-      }
-    );
+    await logger.info(LogComponent.STEAM, "Successfully retrieved artwork", {
+      appId,
+      artworkCount: artwork.length,
+      responseTime,
+    });
 
     const response: GetArtworkResponse = {
       success: true,
@@ -49,9 +43,14 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    logger.error(LogComponent.SYSTEM, "Error fetching artwork", error, {
-      appId: params.appId,
-    });
+    await logger.error(
+      LogComponent.STEAM,
+      "Error fetching artwork",
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        appId: params.appId,
+      }
+    );
 
     if (error instanceof Error) {
       return NextResponse.json(

@@ -3,91 +3,94 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { clientLogger, LogComponent } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { useSession } from "next-auth/react";
 import { useRef, useState } from "react";
 
-interface SteamSettingsFormProps {
-  steamId: string | null;
-  apiKey: string | null;
+interface SteamSettingsFormData {
+  steamId: string;
+  steamApiKey: string;
 }
 
-export function SteamSettingsForm({ steamId, apiKey }: SteamSettingsFormProps) {
+export function SteamSettingsForm() {
   const [isLoading, setIsLoading] = useState(false);
   const { update: updateSession } = useSession();
   const formRef = useRef<HTMLFormElement>(null);
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsLoading(true);
 
     try {
       const formData = new FormData(event.currentTarget);
-      const newSteamId = formData.get("steamId") as string;
-      const newApiKey = formData.get("apiKey") as string;
+      const data: SteamSettingsFormData = {
+        steamId: formData.get("steamId") as string,
+        steamApiKey: formData.get("steamApiKey") as string,
+      };
 
-      clientLogger.info(LogComponent.STEAM, "Updating Steam settings");
+      await clientLogger.debug(LogComponent.WOLF_UI, "Saving Steam settings", {
+        steamId: data.steamId,
+        hasApiKey: !!data.steamApiKey,
+      });
 
-      const response = await fetch("/api/user/steam", {
+      const response = await fetch("/api/settings/steam", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          steamId: newSteamId || null,
-          apiKey: newApiKey || null,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update Steam settings");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to save Steam settings");
       }
 
-      showToast.success("Steam Settings Updated", {
-        description: "Your Steam settings have been successfully updated",
-      });
-      clientLogger.info(
-        LogComponent.STEAM,
-        "Steam settings updated successfully"
+      await clientLogger.info(
+        LogComponent.WOLF_UI,
+        "Steam settings saved successfully"
       );
+      showToast.success("Settings Saved", {
+        description: "Your Steam settings have been saved successfully",
+      });
 
       // Update session to reflect new values
       await updateSession();
     } catch (error) {
-      clientLogger.error(
-        LogComponent.STEAM,
-        "Failed to update Steam settings",
-        error
+      const err = error instanceof Error ? error : new Error(String(error));
+      await clientLogger.error(
+        LogComponent.WOLF_UI,
+        "Failed to save Steam settings",
+        err
       );
-      showToast.error("Steam Settings Update Failed", error as Error);
+      showToast.error("Save Failed", err);
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="space-y-4">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="steamId">Steam ID</Label>
         <Input
           id="steamId"
           name="steamId"
           placeholder="Enter your Steam ID"
-          required
+          disabled={isLoading}
         />
         <p className="text-sm text-muted-foreground">
           Your Steam ID can be found in your Steam profile URL
         </p>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="apiKey">Steam API Key</Label>
+        <Label htmlFor="steamApiKey">Steam API Key</Label>
         <Input
-          id="apiKey"
-          name="apiKey"
+          id="steamApiKey"
+          name="steamApiKey"
           type="password"
           placeholder="Enter your Steam API Key"
-          required
+          disabled={isLoading}
         />
         <p className="text-sm text-muted-foreground">
           Get your API key from{" "}
@@ -101,8 +104,8 @@ export function SteamSettingsForm({ steamId, apiKey }: SteamSettingsFormProps) {
           </a>
         </p>
       </div>
-      <Button type="submit" disabled={isLoading} className="w-full">
-        {isLoading ? "Updating..." : "Update Steam Settings"}
+      <Button type="submit" disabled={isLoading}>
+        {isLoading ? "Saving..." : "Save Settings"}
       </Button>
     </form>
   );

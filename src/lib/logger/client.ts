@@ -65,77 +65,72 @@ export class ClientLogger {
     }
   }
 
-  public debug(
+  public async debug(
     component: LogComponent,
     message: string,
-    raw?: unknown,
     metadata?: Record<string, unknown>
-  ): void {
+  ): Promise<void> {
     const promise = this.logToServer({
       timestamp: new Date(),
       level: "debug",
       component,
       message,
-      raw,
       metadata,
     });
     this.queue.push(promise);
-    this.processQueue();
+    await this.processQueue();
   }
 
-  public info(
+  public async info(
     component: LogComponent,
     message: string,
-    raw?: unknown,
     metadata?: Record<string, unknown>
-  ): void {
+  ): Promise<void> {
     const promise = this.logToServer({
       timestamp: new Date(),
       level: "info",
       component,
       message,
-      raw,
       metadata,
     });
     this.queue.push(promise);
-    this.processQueue();
+    await this.processQueue();
   }
 
-  public warn(
+  public async warn(
     component: LogComponent,
     message: string,
-    raw?: unknown,
     metadata?: Record<string, unknown>
-  ): void {
+  ): Promise<void> {
     const promise = this.logToServer({
       timestamp: new Date(),
       level: "warn",
       component,
       message,
-      raw,
       metadata,
     });
     this.queue.push(promise);
-    this.processQueue();
+    await this.processQueue();
   }
 
-  public error(
+  public async error(
     component: LogComponent,
     message: string,
-    raw?: unknown,
+    error: Error,
     metadata?: Record<string, unknown>
-  ): void {
+  ): Promise<void> {
     const promise = this.logToServer({
       timestamp: new Date(),
       level: "error",
       component,
       message,
-      raw,
+      raw: error,
       metadata,
     });
     this.queue.push(promise);
-    this.processQueue();
+    await this.processQueue();
   }
 }
 
+// Export the singleton instance
 export const clientLogger = ClientLogger.getInstance();

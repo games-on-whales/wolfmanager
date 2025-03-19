@@ -8,9 +8,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { clientLogger, LogComponent } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
+import { showToast } from "@/lib/toast";
 import { Session } from "next-auth";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface DashboardClientProps {
   session: Session;
@@ -19,20 +22,70 @@ interface DashboardClientProps {
 export function DashboardClient({ session }: DashboardClientProps) {
   const router = useRouter();
   const username = session?.user?.name;
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Format date consistently for both server and client
+  useEffect(() => {
+    const logDashboardLoad = async () => {
+      await clientLogger.info(LogComponent.WOLF_UI, "Dashboard loaded", {
+        username,
+        timestamp: new Date().toISOString(),
+      });
+    };
+    logDashboardLoad();
+  }, [username]);
+
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat("en-US", {
       year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZoneName: "short",
     }).format(date);
   };
 
-  clientLogger.info(LogComponent.WOLF_UI, "Dashboard loaded", {
-    username: session?.user?.name,
-    role: session?.user?.role,
-  });
+  const handleRefreshData = async () => {
+    setIsLoading(true);
+    try {
+      await clientLogger.debug(
+        LogComponent.WOLF_UI,
+        "Refreshing dashboard data"
+      );
+
+      const response = await fetch("/api/dashboard/refresh", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to refresh data");
+      }
+
+      await clientLogger.info(
+        LogComponent.WOLF_UI,
+        "Dashboard data refreshed successfully"
+      );
+      showToast.success("Data Refreshed", {
+        description: "The dashboard data has been refreshed successfully",
+      });
+    } catch (error) {
+      await clientLogger.error(
+        LogComponent.WOLF_UI,
+        "Failed to refresh dashboard data",
+        error instanceof Error ? error : new Error(String(error))
+      );
+      showToast.error(
+        "Refresh Failed",
+        error instanceof Error
+          ? error
+          : new Error("Failed to refresh dashboard data")
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <ProtectedRoute>

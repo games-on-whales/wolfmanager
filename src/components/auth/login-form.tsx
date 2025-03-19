@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogComponent, clientLogger } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -33,7 +34,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     const password = formData.get("password") as string;
 
     try {
-      clientLogger.info(LogComponent.AUTH, "Attempting login", {
+      await clientLogger.debug(LogComponent.AUTH, "Attempting login", {
         username,
       });
 
@@ -43,60 +44,52 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         redirect: false,
       });
 
-      if (!result?.ok) {
-        throw new Error(result?.error || "Failed to sign in");
+      if (result?.error) {
+        await clientLogger.error(
+          LogComponent.AUTH,
+          "Login failed",
+          new Error(result.error),
+          {
+            username,
+          }
+        );
+        showToast.error("Login Failed", "Invalid username or password");
+        return;
       }
 
-      clientLogger.info(LogComponent.AUTH, "Login successful", {
+      await clientLogger.info(LogComponent.AUTH, "Login successful", {
         username,
       });
 
-      showToast.success("Login Successful", {
-        description: "You have been successfully logged in",
-      });
+      const isFirstLogin = username === "admin" && password === "admin";
+      onSuccess(isFirstLogin);
 
-      try {
-        // Get the session data directly from the API
-        const response = await fetch("/api/auth/session");
-        const sessionData = await response.json();
-        console.log("Session data after login:", sessionData);
-
-        // Check if this is a first-time login
-        const isFirstTimeLogin = Boolean(sessionData?.requiresFirstTimeSetup);
-
-        console.log("First-time login check:", {
-          requiresFirstTimeSetup: sessionData?.requiresFirstTimeSetup,
-          isFirstTimeLogin,
-          rawSessionData: sessionData,
-        });
-
-        // Let the parent component handle the success
-        console.log("Calling onSuccess with:", isFirstTimeLogin);
-        onSuccess(isFirstTimeLogin);
-
-        // Only redirect if not a first-time login
-        if (!isFirstTimeLogin) {
-          console.log("Not first-time login, redirecting to dashboard");
-          // Use replace to avoid navigation stack issues
-          router.replace("/dashboard");
-        } else {
-          console.log("First-time login detected, showing wizard");
-          // Stay on the current page and let the wizard handle it
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error("Error checking session:", error);
-        setIsLoading(false);
-        showToast.error(
-          "Login Failed",
-          "Failed to check login status. Please try again."
+      if (!isFirstLogin) {
+        await clientLogger.debug(
+          LogComponent.AUTH,
+          "Redirecting to dashboard after login",
+          {
+            username,
+          }
         );
+        router.replace("/dashboard");
+      } else {
+        await clientLogger.debug(
+          LogComponent.AUTH,
+          "First-time login detected, showing wizard",
+          {
+            username,
+          }
+        );
+        setIsLoading(false);
       }
     } catch (error) {
-      clientLogger.error(LogComponent.AUTH, "Login failed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      showToast.error("Login Failed", "Invalid username or password");
+      await clientLogger.error(
+        LogComponent.AUTH,
+        "Login error",
+        error as Error
+      );
+      showToast.error("Login Error", "An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }

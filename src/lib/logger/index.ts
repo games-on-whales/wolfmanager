@@ -8,14 +8,9 @@ export { LogComponent } from "./types";
 export type { LogEntry, LogLevel, LoggerConfig } from "./types";
 export { logger };
 
-// Create and export singleton instances
+// Create and export server singleton instance
 import { Logger } from "./logger";
 const logger = Logger.getInstance();
-
-// Create and export client singleton instance
-import { ClientLogger } from "./client";
-const clientLogger = ClientLogger.getInstance();
-export { clientLogger };
 
 // Re-export types and components
 export * from "./plugins/wolf-server";
@@ -30,7 +25,7 @@ await logger.info(LogComponent.WOLF_UI, "Server-side log");
 
 // Client Components:
 "use client";
-import { clientLogger, LogComponent } from "@/lib/logger";
+import { clientLogger, LogComponent } from "@/lib/logger/client";
 
-clientLogger.info(LogComponent.WOLF_UI, "Client-side log");
+await clientLogger.info(LogComponent.WOLF_UI, "Client-side log");
 */

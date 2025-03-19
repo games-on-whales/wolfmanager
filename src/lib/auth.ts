@@ -3,15 +3,10 @@ import { AuthOptions } from "next-auth";
 import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { Logger } from "./logger/logger";
+import { LogComponent } from "./logger/types";
 
 // Initialize logger
 const logger = Logger.getInstance();
-
-// Add a Map to store active sessions with a timestamp
-const activeSessions = new Map<string, { timestamp: number }>();
-
-// Clear all sessions on server start
-const SERVER_START_TIME = Date.now();
 
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("Please provide process.env.NEXTAUTH_SECRET");
@@ -42,9 +37,8 @@ declare module "next-auth/jwt" {
     id: string;
     role?: string;
     requiresFirstTimeSetup: boolean;
-    sessionId?: string;
-    serverStartTime?: number;
     error?: "SessionExpired";
+    exp?: number;
   }
 }
 
@@ -59,7 +53,7 @@ export const authOptions: AuthOptions = {
       async authorize(credentials) {
         try {
           if (!credentials?.username || !credentials?.password) {
-            logger.debug("auth", "Missing credentials");
+            logger.debug(LogComponent.AUTH, "Missing credentials");
             return null;
           }
 
@@ -67,7 +61,7 @@ export const authOptions: AuthOptions = {
 
           if (user) {
             const requiresFirstTimeSetup = user.has_changed_password === false;
-            logger.debug("auth", "User authenticated successfully", {
+            logger.debug(LogComponent.AUTH, "User authenticated successfully", {
               username: credentials.username,
             });
             return {
@@ -77,12 +71,12 @@ export const authOptions: AuthOptions = {
               requiresFirstTimeSetup,
             };
           }
-          logger.warn("auth", "Invalid credentials", {
+          logger.warn(LogComponent.AUTH, "Invalid credentials", {
             username: credentials.username,
           });
           return null;
         } catch (error) {
-          logger.error("auth", "Authentication error", error);
+          logger.error(LogComponent.AUTH, "Authentication error", error);
           return null;
         }
       },
@@ -98,11 +92,8 @@ export const authOptions: AuthOptions = {
 
       // Handle new sign in
       if (user) {
-        const sessionId = crypto.randomUUID();
-        activeSessions.set(sessionId, { timestamp: Date.now() });
-        logger.debug("auth", "New session created", {
+        logger.debug(LogComponent.AUTH, "New session created", {
           userId: user.id,
-          sessionId,
         });
 
         return {
@@ -111,65 +102,38 @@ export const authOptions: AuthOptions = {
           name: user.name,
           role: user.role,
           requiresFirstTimeSetup: user.requiresFirstTimeSetup,
-          sessionId,
-          serverStartTime: SERVER_START_TIME,
         };
-      }
-
-      // Check if the token is from a previous server instance
-      if (token.serverStartTime !== SERVER_START_TIME) {
-        logger.info(
-          "auth",
-          "Token from previous server instance - forcing logout",
-          {
-            userId: token.id,
-            sessionId: token.sessionId,
-          }
-        );
-        return {
-          error: "SessionExpired",
-          name: token.name,
-          exp: 0,
-          id: token.id || "expired",
-          requiresFirstTimeSetup: false,
-        } as JWT;
-      }
-
-      // Handle existing session
-      if (!token.sessionId || !activeSessions.has(token.sessionId)) {
-        logger.info("auth", "Invalid or expired session - forcing logout", {
-          userId: token.id,
-          sessionId: token.sessionId,
-        });
-        return {
-          error: "SessionExpired",
-          name: token.name,
-          exp: 0,
-          id: token.id || "expired",
-          requiresFirstTimeSetup: false,
-        } as JWT;
       }
 
       return token;
     },
     async session({ session, token }) {
-      // If token has error or is invalid, return error session
-      if (
-        token.error ||
-        !token.id ||
-        !token.sessionId ||
-        !activeSessions.has(token.sessionId)
-      ) {
-        logger.info("auth", "Session validation failed - forcing logout", {
-          sessionId: token?.sessionId,
-          error: token.error,
-        });
+      if (token.error) {
+        logger.info(
+          LogComponent.AUTH,
+          "Session validation failed - forcing logout",
+          {
+            error: token.error,
+            userId: token.id,
+            tokenExpiry: token.exp
+              ? new Date(token.exp * 1000).toISOString()
+              : undefined,
+          }
+        );
         return {
           ...session,
           error: "SessionExpired",
           expires: new Date(0).toISOString(),
         };
       }
+
+      // Log successful session validation
+      logger.debug(LogComponent.AUTH, "Session validated successfully", {
+        userId: token.id,
+        tokenExpiry: token.exp
+          ? new Date(token.exp * 1000).toISOString()
+          : undefined,
+      });
 
       return {
         ...session,
@@ -194,13 +158,9 @@ export const authOptions: AuthOptions = {
   },
   events: {
     async signOut({ token }) {
-      if (token?.sessionId) {
-        activeSessions.delete(token.sessionId);
-        logger.debug("auth", "Session removed on signout", {
-          userId: token.id,
-          sessionId: token.sessionId,
-        });
-      }
+      logger.debug(LogComponent.AUTH, "User signed out", {
+        userId: token?.id,
+      });
     },
   },
   secret: process.env.NEXTAUTH_SECRET,

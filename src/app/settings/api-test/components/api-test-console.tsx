@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogComponent, clientLogger } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { Check, ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -45,6 +46,27 @@ interface ApiTestConsoleProps {
   apiKey: string;
 }
 
+interface TestResult {
+  id: string;
+  name: string;
+  status: "passed" | "failed";
+  message?: string;
+  duration: number;
+}
+
+class APIError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode?: number,
+    public readonly statusText?: string,
+    public readonly endpoint?: string,
+    public readonly errorData?: any
+  ) {
+    super(message);
+    this.name = "APIError";
+  }
+}
+
 export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [endpoint, setEndpoint] = useState("");
@@ -65,6 +87,7 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
   );
   const [isCopied, setIsCopied] = useState(false);
   const [response, setResponse] = useState("");
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
 
   useEffect(() => {
     async function loadEndpoints() {
@@ -239,24 +262,25 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
       try {
         data = JSON.parse(responseText);
       } catch (parseError) {
-        clientLogger.error(
+        const err = new APIError(
+          `Invalid JSON response: ${responseText.substring(0, 100)}...`,
+          response.status,
+          response.statusText,
+          fullUrl
+        );
+        await clientLogger.error(
           LogComponent.WOLF_UI,
           "Failed to parse API response",
+          err,
           {
-            error: parseError,
             responseText: responseText.substring(0, 200) + "...",
-            status: response.status,
-            statusText: response.statusText,
             contentType: response.headers.get("content-type"),
-            endpoint: fullUrl,
           }
         );
-        throw new Error(
-          `Invalid JSON response: ${responseText.substring(0, 100)}...`
-        );
+        throw err;
       }
 
-      const newResponse = {
+      const newResponse: ApiResponse = {
         status: response.status,
         statusText: response.statusText,
         data,
@@ -269,11 +293,14 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
         showToast.success("Test Successful", {
           description: "API endpoint test completed successfully",
         });
-        clientLogger.info(LogComponent.WOLF_UI, "API request successful", {
-          status: response.status,
-          endpoint,
-          responseSize: responseText.length,
-        });
+        await clientLogger.info(
+          LogComponent.WOLF_UI,
+          "API request successful",
+          {
+            endpoint,
+            responseSize: responseText.length,
+          }
+        );
       } else {
         // Add more context to error messages
         let errorMessage = `API request failed: ${response.statusText}`;
@@ -281,42 +308,44 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
           errorMessage += ` - ${data.error.message}`;
         }
 
-        clientLogger.error(LogComponent.WOLF_UI, "API request failed", {
-          status: response.status,
-          statusText: response.statusText,
+        const err = new APIError(
+          errorMessage,
+          response.status,
+          response.statusText,
           endpoint,
-          errorData: data,
-        });
-
-        showToast.error("Test Failed", errorMessage);
+          data
+        );
+        await clientLogger.error(
+          LogComponent.WOLF_UI,
+          "API request failed",
+          err
+        );
+        showToast.error("Test Failed", err);
       }
     } catch (error) {
       // Enhanced error logging with full context
-      clientLogger.error(LogComponent.WOLF_UI, "API request error", {
-        error:
-          error instanceof Error
-            ? {
-                message: error.message,
-                stack: error.stack,
-                name: error.name,
-              }
-            : error,
+      const err =
+        error instanceof APIError
+          ? error
+          : error instanceof Error
+          ? new APIError(error.message)
+          : new APIError(String(error));
+
+      await clientLogger.error(LogComponent.WOLF_UI, "API request error", err, {
         endpoint,
         method,
         requestBody: method !== "GET" ? body : undefined,
       });
 
       // Set a more informative error response
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      setLatestResponse({
-        status: 0,
-        statusText: "Request Failed",
-        data: { error: errorMessage },
-      });
-      setResponse(JSON.stringify({ error: errorMessage }, null, 2));
-      toast.error(`Failed to make API request: ${errorMessage}`);
-      showToast.error("Test Failed", error as Error);
+      const failedResponse: ApiResponse = {
+        status: err.statusCode || 0,
+        statusText: err.statusText || "Request Failed",
+        data: { error: err.message },
+      };
+      setLatestResponse(failedResponse);
+      setResponse(JSON.stringify(failedResponse.data, null, 2));
+      showToast.error("Test Failed", err);
     } finally {
       setIsLoading(false);
     }
@@ -469,6 +498,66 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
       return JSON.stringify(parsed, null, 2);
     } catch {
       return value;
+    }
+  };
+
+  const handleRunTests = async () => {
+    setIsLoading(true);
+    try {
+      await clientLogger.debug(LogComponent.WOLF_UI, "Starting API tests");
+
+      const response = await fetch("/api/test/run", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to run API tests");
+      }
+
+      const results = await response.json();
+      setTestResults(results);
+      await clientLogger.info(LogComponent.WOLF_UI, "API tests completed", {
+        totalTests: results.length,
+        passedTests: results.filter((r: TestResult) => r.status === "passed")
+          .length,
+      });
+      showToast.success("Tests Completed", {
+        description: "API tests have been completed successfully",
+      });
+    } catch (error) {
+      const err =
+        error instanceof Error ? error : new Error("Failed to run API tests");
+      await clientLogger.error(
+        LogComponent.WOLF_UI,
+        "Failed to run API tests",
+        err
+      );
+      showToast.error("Test Run Failed", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClearResults = async () => {
+    try {
+      await clientLogger.debug(LogComponent.WOLF_UI, "Clearing test results");
+      setTestResults([]);
+      await clientLogger.info(LogComponent.WOLF_UI, "Test results cleared");
+      showToast.success("Results Cleared", {
+        description: "Test results have been cleared",
+      });
+    } catch (error) {
+      const err =
+        error instanceof Error
+          ? error
+          : new Error("Failed to clear test results");
+      await clientLogger.error(
+        LogComponent.WOLF_UI,
+        "Failed to clear test results",
+        err
+      );
+      showToast.error("Clear Failed", err);
     }
   };
 
