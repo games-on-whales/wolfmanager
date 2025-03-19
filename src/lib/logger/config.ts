@@ -14,7 +14,7 @@ const devConfig: LoggerConfig = {
   },
   file: {
     enabled: !isClient, // Disable file transport in client
-    path: path.join(process.cwd(), "logs", "wolf-ui.log"),
+    path: path.join(process.cwd(), "config", "logs", "wolf-ui.log"),
     maxSize: 5 * 1024 * 1024, // 5MB
     maxFiles: 5,
     format: "json",
@@ -37,7 +37,7 @@ const containerConfig: LoggerConfig = {
   },
   file: {
     enabled: !isClient, // Disable file transport in client
-    path: "/var/log/wolf-ui/wolf-ui.log",
+    path: "/config/logs/wolf-ui.log",
     maxSize: 10 * 1024 * 1024,
     maxFiles: 5,
     format: "json",
@@ -60,7 +60,7 @@ const prodConfig: LoggerConfig = {
   },
   file: {
     enabled: !isClient, // Disable file transport in client
-    path: "/var/log/wolf-ui/wolf-ui.log",
+    path: "/config/logs/wolf-ui.log",
     maxSize: 10 * 1024 * 1024, // 10MB
     maxFiles: 10,
     format: "json",

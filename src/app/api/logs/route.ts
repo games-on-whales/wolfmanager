@@ -26,8 +26,8 @@ const logEntrySchema = z.object({
 // Helper function to get log file path
 function getLogPath() {
   return process.env.NODE_ENV === "production"
-    ? "/var/log/wolf-manager/app.log"
-    : path.join(process.cwd(), "logs", "app.log");
+    ? "/config/logs/wolf-ui.log"
+    : path.join(process.cwd(), "config", "logs", "wolf-ui.log");
 }
 
 // GET /api/logs - Retrieve logs (admin only)
@@ -37,14 +37,28 @@ export async function GET() {
 
     // Check authentication and admin status
     if (!session?.user || session.user.role !== "admin") {
-      logger.warn(LogComponent.AUTH, "Unauthorized logs access attempt", {
+      await logger.warn(LogComponent.AUTH, "Unauthorized logs access attempt", {
         userId: session?.user?.id,
       });
-      return new Response("Unauthorized", { status: 401 });
+      return Response.json(
+        { error: "You need admin access to view logs" },
+        { status: 401 }
+      );
     }
 
     // Read log file
     const logPath = getLogPath();
+
+    try {
+      await fs.access(logPath);
+    } catch (error) {
+      await logger.warn(LogComponent.SYSTEM, "Log file not found", {
+        path: logPath,
+        userId: session.user.id,
+      });
+      return Response.json({ entries: [] });
+    }
+
     const content = await fs.readFile(logPath, "utf-8");
 
     // Parse last 1000 lines into JSON
@@ -59,15 +73,19 @@ export async function GET() {
       })
       .filter(Boolean);
 
-    logger.info(LogComponent.SYSTEM, "Logs retrieved", {
+    await logger.info(LogComponent.SYSTEM, "Logs retrieved", {
       count: entries.length,
       userId: session.user.id,
     });
 
-    return Response.json(entries);
+    return Response.json({ entries });
   } catch (error) {
-    logger.error(LogComponent.SYSTEM, "Failed to retrieve logs", error);
-    return new Response("Internal Server Error", { status: 500 });
+    await logger.error(
+      LogComponent.SYSTEM,
+      "Failed to retrieve logs",
+      error instanceof Error ? error : new Error(String(error))
+    );
+    return Response.json({ error: "Failed to retrieve logs" }, { status: 500 });
   }
 }
 
@@ -78,7 +96,7 @@ export async function POST(req: Request) {
 
     // Ensure user is authenticated
     if (!session?.user) {
-      return new Response("Unauthorized", { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Parse and validate request body
@@ -91,9 +109,17 @@ export async function POST(req: Request) {
       metadata: {
         ...validatedEntry.metadata,
         userId: session.user.id,
-        sessionId: session.user.id, // Using user ID as session ID since email is not available
+        sessionId: session.user.id,
       },
     };
+
+    // Ensure log directory exists
+    const logPath = getLogPath();
+    const logDir = path.dirname(logPath);
+    await fs.mkdir(logDir, { recursive: true });
+
+    // Write log entry to file
+    await fs.appendFile(logPath, JSON.stringify(enrichedEntry) + "\n", "utf8");
 
     // Forward to appropriate logger based on level
     switch (enrichedEntry.level) {
@@ -123,13 +149,20 @@ export async function POST(req: Request) {
         break;
     }
 
-    return new Response(null, { status: 201 });
+    return Response.json(null, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new Response("Invalid log entry format", { status: 400 });
+      return Response.json(
+        { error: "Invalid log entry format" },
+        { status: 400 }
+      );
     }
 
-    logger.error(LogComponent.SYSTEM, "Failed to process log entry", error);
-    return new Response("Internal Server Error", { status: 500 });
+    await logger.error(
+      LogComponent.SYSTEM,
+      "Failed to process log entry",
+      error instanceof Error ? error : new Error(String(error))
+    );
+    return Response.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
