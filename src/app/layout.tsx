@@ -1,6 +1,7 @@
 import { RootLayoutClient } from "@/components/layout/root-layout-client";
 import { ensureSecureKeys } from "@/lib/env";
-import { LogComponent, logger } from "@/lib/logger";
+import { Logger } from "@/lib/logger/logger";
+import { LogComponent } from "@/lib/logger/types";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -27,6 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   // Server-side startup log
+  const logger = Logger.getInstance();
   logger.info(LogComponent.WOLF_UI, "Server application starting", {
     environment: process.env.NODE_ENV,
     nodeVersion: process.version,
