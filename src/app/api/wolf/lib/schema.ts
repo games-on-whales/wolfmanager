@@ -1,17 +1,40 @@
+import { LogComponent, logger } from "@/lib/logger";
 import { z } from "zod";
 
+export interface WolfApiEndpointDetails {
+  summary?: string;
+  description?: string;
+  requestBody?: {
+    content?: {
+      "application/json"?: {
+        schema?: unknown;
+      };
+    };
+  };
+  responses?: {
+    [key: string]: {
+      content?: {
+        "application/json"?: {
+          schema?: unknown;
+        };
+      };
+    };
+  };
+}
+
 export interface WolfApiSchema {
-  paths: Record<
-    string,
-    {
-      get?: any;
-      post?: any;
-      put?: any;
-      delete?: any;
-    }
-  >;
-  components: {
-    schemas: Record<string, any>;
+  openapi: string;
+  info: {
+    title: string;
+    version: string;
+  };
+  paths: {
+    [path: string]: {
+      [method: string]: WolfApiEndpointDetails;
+    };
+  };
+  components?: {
+    schemas?: Record<string, unknown>;
   };
 }
 
@@ -43,7 +66,11 @@ export async function loadWolfApiSchema(): Promise<WolfApiSchema> {
       wolfApiSchema = data as WolfApiSchema;
       return wolfApiSchema;
     } catch (error) {
-      console.error("[WOLF_SCHEMA] Failed to load schema:", error);
+      await logger.error(
+        LogComponent.WOLF_UI,
+        "Failed to load Wolf API schema",
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     } finally {
       loadingPromise = null;
@@ -60,21 +87,36 @@ export async function isValidWolfEndpoint(
   try {
     const schema = await loadWolfApiSchema();
     const apiPath = `/api/v1${endpoint}`;
-    const methodKey =
-      method.toLowerCase() as keyof WolfApiSchema["paths"][string];
+    const methodKey = method.toLowerCase();
     return !!schema.paths[apiPath]?.[methodKey];
   } catch (error) {
-    console.error("[WOLF_SCHEMA] Error validating endpoint:", error);
+    await logger.error(
+      LogComponent.WOLF_UI,
+      "Error validating endpoint",
+      error instanceof Error ? error : new Error(String(error))
+    );
     return false;
   }
 }
 
-export async function getAvailableEndpoints() {
+export interface EndpointInfo {
+  path: string;
+  method: string;
+  summary: string;
+  description: string;
+  requestSchema?: unknown;
+  responseSchema?: unknown;
+  components?: WolfApiSchema["components"];
+}
+
+export async function getAvailableEndpoints(): Promise<EndpointInfo[]> {
   const schema = await loadWolfApiSchema();
 
   return Object.entries(schema.paths)
     .map(([path, methods]) => {
-      return Object.entries(methods).map(([method, details]) => ({
+      return Object.entries(
+        methods as Record<string, WolfApiEndpointDetails>
+      ).map(([method, details]) => ({
         path: path.replace("/api/v1", ""),
         method: method.toUpperCase(),
         summary: details.summary || "",
@@ -91,7 +133,7 @@ export async function getAvailableEndpoints() {
 
 export interface ValidationSuccess {
   success: true;
-  data: any;
+  data: unknown;
 }
 
 export interface ValidationError {
@@ -104,13 +146,14 @@ export type ValidationResult = ValidationSuccess | ValidationError;
 export async function validateRequestBody(
   endpoint: string,
   method: string,
-  body: any
+  body: unknown
 ): Promise<ValidationResult> {
   const schema = await loadWolfApiSchema();
   const apiPath = `/api/v1${endpoint}`;
-  const methodKey =
-    method.toLowerCase() as keyof WolfApiSchema["paths"][string];
-  const operation = schema.paths[apiPath]?.[methodKey];
+  const methodKey = method.toLowerCase();
+  const operation = schema.paths[apiPath]?.[methodKey] as
+    | WolfApiEndpointDetails
+    | undefined;
 
   if (!operation?.requestBody?.content?.["application/json"]?.schema) {
     return { success: true, data: body };
@@ -129,10 +172,14 @@ export async function validateRequestBody(
 }
 
 function createZodSchemaFromOpenApi(schema: any): z.ZodType {
-  if (schema.$ref) {
+  if (!schema) {
+    return z.any();
+  }
+
+  if (schema.$ref && wolfApiSchema?.components?.schemas) {
     const refPath = schema.$ref.split("/");
     const schemaName = refPath[refPath.length - 1];
-    const refSchema = wolfApiSchema?.components.schemas[schemaName];
+    const refSchema = wolfApiSchema.components.schemas[schemaName];
     return createZodSchemaFromOpenApi(refSchema);
   }
 
