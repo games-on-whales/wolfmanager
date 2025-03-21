@@ -1,6 +1,7 @@
 "use client";
 
 import { getAvailableSteamEndpoints } from "@/app/api/libraries/steam/lib/schema";
+import { getAvailableSystemEndpoints } from "@/app/api/system/lib/schema";
 import { getAvailableEndpoints } from "@/app/api/wolf/lib/schema";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +37,7 @@ interface Endpoint {
   requestSchema?: any;
   responseSchema?: any;
   components?: {
-    schemas: Record<string, any>;
+    schemas?: Record<string, any> | Record<string, unknown>;
   };
   group: string;
 }
@@ -93,10 +94,12 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
     async function loadEndpoints() {
       try {
         setIsLoadingSchema(true);
-        const [wolfEndpoints, steamEndpoints] = await Promise.all([
-          getAvailableEndpoints(),
-          getAvailableSteamEndpoints(),
-        ]);
+        const [wolfEndpoints, steamEndpoints, systemEndpoints] =
+          await Promise.all([
+            getAvailableEndpoints(),
+            getAvailableSteamEndpoints(),
+            getAvailableSystemEndpoints(),
+          ]);
 
         clientLogger.debug(LogComponent.WOLF_UI, "Loading API endpoints", {
           wolfEndpoints: wolfEndpoints.map((e) => ({
@@ -104,6 +107,10 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
             method: e.method,
           })),
           steamEndpoints: steamEndpoints.map((e) => ({
+            path: e.path,
+            method: e.method,
+          })),
+          systemEndpoints: systemEndpoints.map((e) => ({
             path: e.path,
             method: e.method,
           })),
@@ -123,15 +130,22 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
           group: "Steam API",
         }));
 
+        const transformedSystemEndpoints = systemEndpoints.map((endpoint) => ({
+          ...endpoint,
+          group: "System API",
+        }));
+
         const allEndpoints = [
           ...transformedWolfEndpoints,
           ...transformedSteamEndpoints,
+          ...transformedSystemEndpoints,
         ];
 
         clientLogger.info(LogComponent.WOLF_UI, "API endpoints loaded", {
           totalEndpoints: allEndpoints.length,
           wolfEndpoints: transformedWolfEndpoints.length,
           steamEndpoints: transformedSteamEndpoints.length,
+          systemEndpoints: transformedSystemEndpoints.length,
         });
 
         setEndpoints(allEndpoints);
