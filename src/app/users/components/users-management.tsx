@@ -20,20 +20,18 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { LogComponent } from "@/lib/logger";
 import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { createUser, deleteUser, updateUserAction } from "../actions";
@@ -57,9 +55,27 @@ interface UsersManagementProps {
 }
 
 export function UsersManagement({ initialUsers }: UsersManagementProps) {
-  const [users, setUsers] = useState<User[]>(initialUsers);
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [optimisticUsers, addOptimisticUser] = useOptimistic(initialUsers);
+
+  const addOptimisticUserToList = (newUser: User) => {
+    addOptimisticUser((state: User[]) => [...state, newUser]);
+  };
+
+  const removeOptimisticUser = (userId: string) => {
+    addOptimisticUser((state: User[]) =>
+      state.filter((user) => user.id !== userId)
+    );
+  };
+
+  const updateOptimisticUser = (userId: string, updatedUser: Partial<User>) => {
+    addOptimisticUser((state: User[]) =>
+      state.map((user) =>
+        user.id === userId ? { ...user, ...updatedUser } : user
+      )
+    );
+  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -77,28 +93,30 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
         isAdmin: values.isAdmin,
       });
 
-      const result = await createUser(values);
+      startTransition(async () => {
+        const result = await createUser(values);
 
-      if (!result.success || !result.data) {
-        throw new Error(result.error || "Failed to create user");
-      }
-
-      const newUser: User = result.data;
-      setUsers((prev) => [...prev, newUser]);
-
-      await clientLogger.info(
-        LogComponent.WOLF_UI,
-        "User created successfully",
-        {
-          userId: newUser.id,
+        if (!result.success || !result.data) {
+          throw new Error(result.error || "Failed to create user");
         }
-      );
 
-      showToast.success("Success", {
-        description: "User created successfully",
+        const newUser: User = result.data;
+        addOptimisticUserToList(newUser);
+
+        await clientLogger.info(
+          LogComponent.WOLF_UI,
+          "User created successfully",
+          {
+            userId: newUser.id,
+          }
+        );
+
+        showToast.success("Success", {
+          description: "User created successfully",
+        });
+        setIsOpen(false);
+        form.reset();
       });
-      setIsOpen(false);
-      form.reset();
     } catch (error) {
       const err =
         error instanceof Error ? error : new Error("Failed to create user");
@@ -117,24 +135,26 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
         userId,
       });
 
-      const result = await deleteUser(userId);
+      startTransition(async () => {
+        const result = await deleteUser(userId);
 
-      if (!result.success) {
-        throw new Error(result.error || "Failed to delete user");
-      }
-
-      setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
-
-      await clientLogger.info(
-        LogComponent.WOLF_UI,
-        "User deleted successfully",
-        {
-          userId,
+        if (!result.success) {
+          throw new Error(result.error || "Failed to delete user");
         }
-      );
 
-      showToast.success("Success", {
-        description: "User deleted successfully",
+        removeOptimisticUser(userId);
+
+        await clientLogger.info(
+          LogComponent.WOLF_UI,
+          "User deleted successfully",
+          {
+            userId,
+          }
+        );
+
+        showToast.success("Success", {
+          description: "User deleted successfully",
+        });
       });
     } catch (error) {
       const err =
@@ -162,29 +182,27 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
         ...data,
       });
 
-      const result = await updateUserAction(userId, data);
+      startTransition(async () => {
+        const result = await updateUserAction(userId, data);
 
-      if (!result.success || !result.data) {
-        throw new Error(result.error || "Failed to update user");
-      }
-
-      const updatedUser: User = result.data;
-      setUsers((prevUsers) =>
-        prevUsers.map((user) =>
-          user.id === userId ? { ...user, ...updatedUser } : user
-        )
-      );
-
-      await clientLogger.info(
-        LogComponent.WOLF_UI,
-        "User updated successfully",
-        {
-          userId,
+        if (!result.success || !result.data) {
+          throw new Error(result.error || "Failed to update user");
         }
-      );
 
-      showToast.success("Success", {
-        description: "User updated successfully",
+        const updatedUser: User = result.data;
+        updateOptimisticUser(userId, updatedUser);
+
+        await clientLogger.info(
+          LogComponent.WOLF_UI,
+          "User updated successfully",
+          {
+            userId,
+          }
+        );
+
+        showToast.success("Success", {
+          description: "User updated successfully",
+        });
       });
     } catch (error) {
       const err =
@@ -199,136 +217,119 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
   };
 
   return (
-    <div className="container mx-auto py-10">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold">User Management</h1>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button>Add User</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New User</DialogTitle>
-              <DialogDescription>
-                Create a new user account. The user will be prompted to change
-                their password on first login.
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-4"
-              >
-                <FormField
-                  control={form.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Username</FormLabel>
-                      <FormControl>
-                        <Input placeholder="username" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Initial Password</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="password"
-                          placeholder="••••••••"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        User will be required to change this on first login
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="isAdmin"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">
-                          Administrator
-                        </FormLabel>
-                        <FormDescription>
-                          Grant administrative privileges to this user
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button type="submit">Create User</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="grid gap-4">
-        {users.map((user) => (
-          <Card key={user.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>{user.username}</CardTitle>
-                  <CardDescription>
-                    {user.isAdmin ? "Administrator" : "Standard User"}
-                  </CardDescription>
-                </div>
-                {user.username !== "admin" && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => handleDeleteUser(user.id)}
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Users Management</CardTitle>
+          <CardDescription>Manage system users and their roles</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <DialogTrigger asChild>
+                <Button>Add User</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New User</DialogTitle>
+                  <DialogDescription>
+                    Create a new user account with specified permissions.
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                  <form
+                    onSubmit={form.handleSubmit(onSubmit)}
+                    className="space-y-4"
                   >
-                    Remove User
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm text-muted-foreground">
-                      Created
-                    </Label>
-                    <p className="text-sm">
-                      {new Date(user.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">
-                      Last Updated
-                    </Label>
-                    <p className="text-sm">
-                      {new Date(user.updatedAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                    <FormField
+                      control={form.control}
+                      name="username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Username</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="isAdmin"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel>Administrator</FormLabel>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <DialogFooter>
+                      <Button type="submit" disabled={isPending}>
+                        {isPending ? "Creating..." : "Create User"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+            <div className="space-y-4">
+              {optimisticUsers.map((user) => (
+                <Card key={user.id}>
+                  <CardContent className="flex items-center justify-between p-4">
+                    <div>
+                      <p className="font-medium">{user.username}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {user.isAdmin ? "Administrator" : "User"}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          handleUpdateUser(user.id, {
+                            isAdmin: !user.isAdmin,
+                          })
+                        }
+                        disabled={isPending}
+                      >
+                        Toggle Admin
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleDeleteUser(user.id)}
+                        disabled={isPending}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
