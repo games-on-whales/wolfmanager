@@ -18,22 +18,18 @@ export const metadata: Metadata = {
   description: "Modern Admin Interface",
 };
 
-// Disable default loading state
-export const dynamic = "force-dynamic";
-export const suspense = false;
+// Server-side startup log
+const logger = Logger.getInstance();
+logger.info(LogComponent.WOLF_UI, "Server application starting", {
+  environment: process.env.NODE_ENV,
+  nodeVersion: process.version,
+});
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Server-side startup log
-  const logger = Logger.getInstance();
-  logger.info(LogComponent.WOLF_UI, "Server application starting", {
-    environment: process.env.NODE_ENV,
-    nodeVersion: process.version,
-  });
-
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
