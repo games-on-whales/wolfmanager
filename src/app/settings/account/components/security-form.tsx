@@ -8,73 +8,91 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { LogComponent, clientLogger } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { updateUserPassword } from "../actions";
+
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+type PasswordForm = z.infer<typeof passwordSchema>;
 
 export function SecurityForm() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const form = useForm<PasswordForm>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
+
+  const onSubmit = async (data: PasswordForm) => {
     setIsLoading(true);
-
     try {
-      const formData = new FormData(event.currentTarget);
-      const currentPassword = formData.get("currentPassword") as string;
-      const newPassword = formData.get("newPassword") as string;
-      const confirmPassword = formData.get("confirmPassword") as string;
+      await clientLogger.debug(LogComponent.AUTH, "Updating password");
 
-      if (!currentPassword || !newPassword || !confirmPassword) {
-        showToast.error(
-          "Validation Error",
-          "Please fill in all password fields"
-        );
-        return;
-      }
-
-      if (newPassword !== confirmPassword) {
-        showToast.error("Validation Error", "New passwords do not match");
-        return;
-      }
-
-      clientLogger.info(LogComponent.AUTH, "Updating password");
-
-      const response = await fetch("/api/auth/password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-        }),
+      const result = await updateUserPassword({
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to update password");
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
+      await clientLogger.info(
+        LogComponent.AUTH,
+        "Password updated successfully"
+      );
       showToast.success("Password Updated", {
-        description: "Your password has been successfully updated",
+        description: "Your password has been updated successfully",
       });
-      clientLogger.info(LogComponent.AUTH, "Password updated successfully");
 
       // Sign out after password change
       await signOut({ redirect: false });
       router.push("/login");
     } catch (error) {
-      clientLogger.error(LogComponent.AUTH, "Failed to update password", error);
-      showToast.error("Password Update Failed", error as Error);
+      await clientLogger.error(
+        LogComponent.AUTH,
+        "Failed to update password",
+        error
+      );
+      showToast.error(
+        "Password Update Failed",
+        error instanceof Error ? error : new Error("Failed to update password")
+      );
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   return (
     <Card>
@@ -83,38 +101,52 @@ export function SecurityForm() {
         <CardDescription>Update your password</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current Password</Label>
-            <Input
-              id="currentPassword"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
               name="currentPassword"
-              type="password"
-              required
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Current Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">New Password</Label>
-            <Input
-              id="newPassword"
+            <FormField
+              control={form.control}
               name="newPassword"
-              type="password"
-              required
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>New Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm New Password</Label>
-            <Input
-              id="confirmPassword"
+            <FormField
+              control={form.control}
               name="confirmPassword"
-              type="password"
-              required
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm New Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? "Updating..." : "Update Password"}
-          </Button>
-        </form>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Updating..." : "Update Password"}
+            </Button>
+          </form>
+        </Form>
       </CardContent>
     </Card>
   );

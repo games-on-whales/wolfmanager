@@ -2,6 +2,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { PageLayout } from "@/components/layout/page-layout";
 import { LoadingState } from "@/components/loading-state";
 import { authOptions } from "@/lib/auth";
+import { loadConfig } from "@/lib/config";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -15,7 +16,15 @@ export default async function FirstTimeSetupPage() {
   }
 
   // If user has already completed first-time setup, redirect to dashboard
-  if (!session.requiresFirstTimeSetup) {
+  if (session.requiresFirstTimeSetup === false) {
+    redirect("/dashboard");
+  }
+
+  // If we don't have a clear indication of first-time setup status, check the user config
+  const config = loadConfig();
+  const user = config.users[session.user.name];
+
+  if (!user || user.has_changed_password) {
     redirect("/dashboard");
   }
 

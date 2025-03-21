@@ -8,6 +8,7 @@ import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { useSession } from "next-auth/react";
 import { useRef, useState } from "react";
+import { updateSteamSettings } from "../actions";
 
 interface SteamSettingsFormData {
   steamId: string;
@@ -30,24 +31,19 @@ export function SteamSettingsForm() {
         steamApiKey: formData.get("steamApiKey") as string,
       };
 
-      await clientLogger.debug(LogComponent.WOLF_UI, "Saving Steam settings", {
+      await clientLogger.debug(LogComponent.STEAM, "Saving Steam settings", {
         steamId: data.steamId,
         hasApiKey: !!data.steamApiKey,
       });
 
-      const response = await fetch("/api/settings/steam", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const result = await updateSteamSettings(data);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to save Steam settings");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to save Steam settings");
       }
 
       await clientLogger.info(
-        LogComponent.WOLF_UI,
+        LogComponent.STEAM,
         "Steam settings saved successfully"
       );
       showToast.success("Settings Saved", {
@@ -59,7 +55,7 @@ export function SteamSettingsForm() {
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       await clientLogger.error(
-        LogComponent.WOLF_UI,
+        LogComponent.STEAM,
         "Failed to save Steam settings",
         err
       );

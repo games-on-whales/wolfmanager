@@ -1,5 +1,6 @@
 "use client";
 
+import { updateSteamSettings } from "@/app/settings/account/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,7 +94,9 @@ export function FirstTimeWizard() {
         LogComponent.AUTH,
         "Password updated successfully"
       );
-      handleNext();
+
+      // Move to Steam step instead of signing out
+      setCurrentStep("steam");
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,
@@ -112,13 +115,26 @@ export function FirstTimeWizard() {
   const handleSteamSubmit = async (data: z.infer<typeof steamSchema>) => {
     setIsLoading(true);
     try {
-      // Save Steam settings logic here
+      // Use the existing updateSteamSettings server action
+      const result = await updateSteamSettings({
+        steamId: data.steamId || "",
+        steamApiKey: data.steamApiKey || "",
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to save Steam settings");
+      }
+
       showToast.success("Steam settings saved successfully");
       await clientLogger.info(
         LogComponent.AUTH,
         "Steam settings saved successfully"
       );
-      handleNext();
+
+      // Sign out and redirect to login after completing setup
+      await signOut({ redirect: false });
+      showToast.success("Setup completed successfully");
+      router.replace("/login");
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,
@@ -310,22 +326,15 @@ export function FirstTimeWizard() {
               />
               <CardFooter className="px-0 flex justify-between">
                 <Button
-                  variant="outline"
                   type="button"
+                  variant="outline"
                   onClick={handleSkip}
                   disabled={isLoading}
                 >
                   Skip
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    isLoading ||
-                    !steamForm.watch("steamId") ||
-                    !steamForm.watch("steamApiKey")
-                  }
-                >
-                  Complete Setup
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? "Saving..." : "Complete Setup"}
                 </Button>
               </CardFooter>
             </form>

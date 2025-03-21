@@ -1,5 +1,6 @@
 "use client";
 
+import { validateLogin } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,12 +10,6 @@ import { showToast } from "@/lib/toast";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import * as z from "zod";
-
-const formSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-});
 
 interface LoginFormProps {
   onSuccess: (isFirstTimeLogin: boolean) => void;
@@ -34,6 +29,17 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     const password = formData.get("password") as string;
 
     try {
+      await clientLogger.debug(LogComponent.AUTH, "Validating login input", {
+        username,
+      });
+
+      // Server-side validation
+      const validationResult = await validateLogin({ username, password });
+      if (!validationResult.success) {
+        showToast.error("Validation Error", validationResult.error);
+        return;
+      }
+
       await clientLogger.debug(LogComponent.AUTH, "Attempting login", {
         username,
       });
@@ -61,10 +67,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         username,
       });
 
-      const isFirstLogin = username === "admin" && password === "admin";
-      onSuccess(isFirstLogin);
+      // Update session to get the latest data
+      await updateSession();
 
-      if (!isFirstLogin) {
+      // Check if first time setup is required from the session
+      const session = await fetch("/api/auth/session").then((res) =>
+        res.json()
+      );
+      const requiresFirstTimeSetup = session?.requiresFirstTimeSetup;
+
+      onSuccess(requiresFirstTimeSetup);
+
+      if (!requiresFirstTimeSetup) {
         await clientLogger.debug(
           LogComponent.AUTH,
           "Redirecting to dashboard after login",
@@ -81,7 +95,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             username,
           }
         );
-        setIsLoading(false);
+        router.replace("/first-time-setup");
       }
     } catch (error) {
       await clientLogger.error(
