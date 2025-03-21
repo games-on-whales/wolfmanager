@@ -13,7 +13,8 @@ import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { Session } from "next-auth";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useTransition } from "react";
+import { refreshDashboardData } from "../actions";
 
 interface DashboardClientProps {
   session: Session;
@@ -22,7 +23,7 @@ interface DashboardClientProps {
 export function DashboardClient({ session }: DashboardClientProps) {
   const router = useRouter();
   const username = session?.user?.name;
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     const logDashboardLoad = async () => {
@@ -47,28 +48,26 @@ export function DashboardClient({ session }: DashboardClientProps) {
   };
 
   const handleRefreshData = async () => {
-    setIsLoading(true);
     try {
       await clientLogger.debug(
         LogComponent.WOLF_UI,
         "Refreshing dashboard data"
       );
 
-      const response = await fetch("/api/dashboard/refresh", {
-        method: "POST",
-      });
+      startTransition(async () => {
+        const result = await refreshDashboardData();
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to refresh data");
-      }
+        if (!result.success) {
+          throw new Error(result.error || "Failed to refresh data");
+        }
 
-      await clientLogger.info(
-        LogComponent.WOLF_UI,
-        "Dashboard data refreshed successfully"
-      );
-      showToast.success("Data Refreshed", {
-        description: "The dashboard data has been refreshed successfully",
+        await clientLogger.info(
+          LogComponent.WOLF_UI,
+          "Dashboard data refreshed successfully"
+        );
+        showToast.success("Data Refreshed", {
+          description: "The dashboard data has been refreshed successfully",
+        });
       });
     } catch (error) {
       await clientLogger.error(
@@ -82,8 +81,6 @@ export function DashboardClient({ session }: DashboardClientProps) {
           ? error
           : new Error("Failed to refresh dashboard data")
       );
-    } finally {
-      setIsLoading(false);
     }
   };
 

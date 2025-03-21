@@ -51,7 +51,7 @@ A web interface for managing Wolf, providing a centralized dashboard for game li
   - ✅ Dark mode support
   - ✅ Responsive design patterns
   - ✅ Interactive API test console
-  - 🚧 User management interface
+  - ✅ User management interface
 
 - **Core Functionality**
   - ✅ User authentication and session management
@@ -82,22 +82,82 @@ A web interface for managing Wolf, providing a centralized dashboard for game li
 ### Frontend
 
 - **Framework**: Next.js 14 with App Router
-- **Language**: TypeScript
+  - Server Components (RSC) for optimal performance
+  - Server Actions for form handling
+  - Streaming and Suspense for enhanced loading states
+  - Route Handlers for API endpoints
+  - Middleware for authentication and routing
+- **Language**: TypeScript 5.0+
+  - Strict type checking enabled
+  - Path aliases for clean imports
+  - Type-safe API routes
+  - Zod schema validation
 - **UI Components**:
-  - Shadcn UI (based on Radix UI)
-  - Tailwind CSS for styling
-  - Custom React components
-- **State Management**: React Server Components + Client Hooks
-- **API Integration**: Server Actions + API Routes
-- **Validation**: Zod for runtime type checking
+  - Shadcn UI
+    - Pre-built accessible components
+    - Customizable design system
+    - Dark mode support
+    - Form components with validation
+  - Radix UI Primitives
+    - Headless UI components
+    - ARIA compliant
+    - Keyboard navigation
+    - Focus management
+  - Tailwind CSS
+    - JIT (Just-In-Time) compilation
+    - Custom theme configuration
+    - Responsive design utilities
+    - Dark mode classes
+- **State Management**:
+  - Server State:
+    - ✅ Next.js Server Actions for mutations
+    - 🚧 React Server Components for data fetching
+    - ✅ Next.js Cache for performance optimization
+    - ✅ Server-side data validation with Zod
+  - Client State:
+    - ✅ React Hook Form for form management
+    - ✅ Optimistic updates with useOptimistic hook
+    - ✅ Local state with useState for UI interactions
+    - ✅ Shadcn UI form components with validation
+    - ✅ Client-side toast notifications
+  - Data Flow:
+    - ✅ Server Actions for server mutations
+    - ✅ Route Handlers for API endpoints
+    - ✅ Optimistic UI updates for better UX
+    - ✅ Type-safe data fetching
+    - 🚧 Direct function calls for server-side data access
+- **Authentication**:
+  - NextAuth.js with custom providers
+  - Role-based access control
+  - Secure session management
+  - Protected API routes
+- **Data Fetching**:
+  - Server Components for direct database access
+  - Route Handlers for API endpoints
+  - Cached data revalidation
+  - Optimistic updates
 
 ### Backend
 
-- **Runtime**: Node.js
-- **API**: Next.js API Routes with OpenAPI validation
-- **Authentication**: NextAuth.js
-- **Data Validation**: Zod schemas
-- **Wolf Integration**: Unix socket communication
+- **Runtime**: Node.js 18+ (LTS)
+- **API Layer**:
+  - Next.js Route Handlers
+  - OpenAPI schema validation
+  - Type-safe endpoints
+  - Rate limiting and security headers
+- **Authentication**:
+  - NextAuth.js with JWT
+  - Custom session handling
+  - Role-based middleware
+- **Validation**:
+  - Zod schemas for runtime validation
+  - TypeScript for static type checking
+  - Custom validation middleware
+- **Wolf Integration**:
+  - Unix socket communication
+  - Type-safe API client
+  - Real-time event handling
+  - Error boundary management
 
 ### Development Tools
 

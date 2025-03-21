@@ -1,13 +1,15 @@
 "use client";
 
-import { ErrorBoundary } from "@/components/error-boundary";
 import { PageLayout } from "@/components/layout/page-layout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { AlertCircle } from "lucide-react";
 
 export default function UsersError({
   error,
   reset,
 }: {
-  error: Error;
+  error: Error & { digest?: string };
   reset: () => void;
 }) {
   return (
@@ -15,20 +17,18 @@ export default function UsersError({
       title="User Management"
       description="An error occurred while loading users"
     >
-      <ErrorBoundary
-        showToast
-        fallback={
-          <div className="mt-4">
-            <ErrorBoundary>
-              <div className="text-destructive">
-                {error.message || "Failed to load users"}
-              </div>
-            </ErrorBoundary>
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription className="flex flex-col gap-4">
+          <p>{error.message || "Failed to load users"}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={reset}>
+              Try again
+            </Button>
           </div>
-        }
-      >
-        {null}
-      </ErrorBoundary>
+        </AlertDescription>
+      </Alert>
     </PageLayout>
   );
 }

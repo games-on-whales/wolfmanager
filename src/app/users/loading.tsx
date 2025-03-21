@@ -4,7 +4,7 @@ import { LoadingState } from "@/components/loading-state";
 export default function UsersLoading() {
   return (
     <PageLayout title="User Management" description="Loading user data...">
-      <LoadingState />
+      <LoadingState type="table" count={5} />
     </PageLayout>
   );
 }
