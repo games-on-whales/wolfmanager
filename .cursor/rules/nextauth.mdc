@@ -1,0 +1,35 @@
+---
+description: NextAuth rules offer a quick reference for setting up authentication in Next.js. They cover installation, secure configuration, session management, client integration, and testing.
+globs: 
+alwaysApply: false
+---
+# NextAuth Integration Rules
+
+## Setup
+- Install `next-auth` via npm or yarn.
+- Create a dynamic API route at `pages/api/auth/[...nextauth].js` (or `.ts`).
+
+## Configuration
+- Import NextAuth and required providers (e.g., GitHub, Google).
+- Export NextAuth configuration as the default export.
+- Configure providers using environment variables.
+
+## Environment & Security
+- Store sensitive keys (e.g., clientId, clientSecret) in environment variables.
+- Validate environment variables on startup.
+- Protect API routes by checking session validity.
+
+## Session & Callbacks
+- Choose a session strategy (JWT or database sessions).
+- Customize callbacks for session, JWT, and sign-in as needed.
+- Implement error handling in all callback functions.
+
+## Client-Side Integration
+- Use the `useSession` hook from `next-auth/react` for accessing session data.
+- Utilize `signIn` and `signOut` functions for authentication flows.
+- Handle loading and error states in UI components.
+
+## Testing & Maintenance
+- Test the complete authentication flow end-to-end.
+- Regularly update NextAuth and its dependencies.
+- Consult the [official documentation](mdc:https:/next-auth.js.org/getting-started/example) for updates and best practices.

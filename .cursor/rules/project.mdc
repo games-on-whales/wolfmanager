@@ -1,0 +1,24 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project
+
+# Project Rules
+- Application Code Location: all code is location in /src/ , never places application code elsewhere
+- Documentation: all docs are in Markdown format and located in /docs/
+
+# Task Management
+- Create a TODO.md if one does not exist and populate it with a series of tasks to be completed based on the Product requirements document
+- Task Completion: When an item on the TODO.md is completed, update that item with a tick, do not remove it so we can keep track of things
+- If we cannot implement an item mark it with a cross. and provide a short comment on why
+- BUGS: if a bug / issue is discovered but were not immediately fixing it add it to the TODO.md under the Bugs heading
+
+# Technology Stack
+This is the technology stack being used to build the application, do not deviate. If deviation is needed you must ask and provide a technical reason and the options to choose from. Always lean towards free and opensource options.
+- NextJS for backend [nextjs.mdc](mdc:.cursor/rules/nextjs.mdc)
+- Tailwind for Styling [tailwind.mdc](mdc:.cursor/rules/tailwind.mdc)
+- NextAuth for Authentication and Session Management [nextauth.mdc](mdc:.cursor/rules/nextauth.mdc)
+- Custom Logging implementation [logger.mdc](mdc:.cursor/rules/logger.mdc)
+- ShadCN for Component Library [shadcn.mdc](mdc:.cursor/rules/shadcn.mdc)

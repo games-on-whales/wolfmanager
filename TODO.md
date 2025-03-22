@@ -21,7 +21,7 @@
 - [x] Create base layout components
 - [x] Set up responsive navigation
 - [ ] Build reusable form components
-- [ ] Implement dark mode support
+- [ ] Implement light mode support (partial dark is the default light is broken)
 
 ## Logging & Monitoring
 
