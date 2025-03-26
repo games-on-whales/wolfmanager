@@ -4,22 +4,20 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
 export default async function Home() {
-  // Check if user is authenticated
-  await logger.info(LogComponent.WOLF_UI, "Initial route check", {
-    path: "/",
-  });
-
   const session = await getServerSession(authOptions);
+
+  // If user is authenticated, redirect to dashboard
   if (session?.user) {
-    await logger.debug(LogComponent.WOLF_UI, "Redirecting to dashboard", {
-      userId: session.user.id,
-    });
+    await logger.debug(
+      LogComponent.WOLF_UI,
+      "Redirecting authenticated user to dashboard",
+      {
+        userId: session.user.id,
+      }
+    );
     redirect("/dashboard");
-  } else {
-    await logger.debug(LogComponent.WOLF_UI, "Redirecting to login");
-    redirect("/login");
   }
 
-  // This is unreachable but required for TypeScript
-  return null;
+  // If not authenticated, redirect to login without logging as it's expected behavior
+  redirect("/login");
 }
