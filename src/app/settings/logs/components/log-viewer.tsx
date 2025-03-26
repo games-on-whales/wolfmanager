@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -225,17 +225,70 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
     setDate(undefined);
   };
 
+  const getLogCounts = (entries: LogEntry[]) => {
+    return entries.reduce((acc, entry) => {
+      acc[entry.level] = (acc[entry.level] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  };
+
   return (
     <Card className="w-full h-[calc(100vh-12rem)] flex flex-col">
       <CardHeader className="border-b shrink-0 pb-3">
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>System Logs</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              {filteredEntries.length} entries{" "}
-              {levelFilter !== "all" && `• ${levelFilter.toUpperCase()}`}{" "}
-              {componentFilter !== "all" && `• ${componentFilter}`}
-            </p>
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center space-x-2 text-muted-foreground">
+              <p className="text-sm">
+                {filteredEntries.length.toLocaleString()}{" "}
+                {filteredEntries.length === 1 ? "entry" : "entries"}
+              </p>
+              {(levelFilter !== "all" || componentFilter !== "all") && (
+                <>
+                  <span className="text-sm">•</span>
+                  {levelFilter !== "all" && (
+                    <p className="text-sm font-medium">
+                      {levelFilter.toUpperCase()}
+                    </p>
+                  )}
+                  {componentFilter !== "all" && (
+                    <p className="text-sm font-medium">{componentFilter}</p>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="flex items-center space-x-3">
+              {Object.entries(getLogCounts(logs)).map(([level, count]) => (
+                <div
+                  key={level}
+                  className="flex items-center space-x-1.5"
+                  role="button"
+                  onClick={() =>
+                    setLevelFilter(level === levelFilter ? "all" : level)
+                  }
+                >
+                  <div
+                    className={cn(
+                      "w-2 h-2 rounded-full",
+                      level === "error" && "bg-red-500",
+                      level === "warn" && "bg-yellow-500",
+                      level === "info" && "bg-blue-500",
+                      level === "debug" && "bg-gray-500"
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "text-xs font-medium cursor-pointer",
+                      levelFilter === level
+                        ? "text-foreground"
+                        : "text-muted-foreground",
+                      "hover:text-foreground transition-colors"
+                    )}
+                  >
+                    {count.toLocaleString()} {level}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="flex items-center space-x-2">
             <Button

@@ -7,6 +7,7 @@ const logger = Logger.getInstance();
 
 // Define paths that don't require authentication
 const publicPaths = [
+  "/",
   "/login",
   "/register",
   "/api/auth",
@@ -43,6 +44,11 @@ export default withAuth(
 
     // Allow public paths
     if (publicPaths.some((path) => pathname.startsWith(path))) {
+      // Special handling for root path
+      if (pathname === "/" && token) {
+        // If authenticated, redirect to dashboard
+        return NextResponse.redirect(new URL("/dashboard", req.url));
+      }
       return NextResponse.next();
     }
 
@@ -60,8 +66,13 @@ export default withAuth(
         error: token?.error || "NoToken",
       });
 
-      const url = new URL("/login", req.url);
-      url.searchParams.set("error", "SessionExpired");
+      // For API routes, return 401
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      // For non-API routes, redirect to unauthorized page
+      const url = new URL("/error/unauthorized", req.url);
       url.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(url);
     }
@@ -78,7 +89,14 @@ export default withAuth(
             userRole: token.role,
           }
         );
-        return NextResponse.redirect(new URL("/", req.url));
+
+        // For API routes, return 403
+        if (pathname.startsWith("/api/")) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
+        // For non-API routes, redirect to forbidden page
+        return NextResponse.redirect(new URL("/error/forbidden", req.url));
       }
 
       await logger.info(LogComponent.AUTH, "Admin route accessed", {

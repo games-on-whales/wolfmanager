@@ -17,11 +17,11 @@ export function WithAuth({ children, requireAdmin = false }: WithAuthProps) {
   }
 
   if (status === "unauthenticated") {
-    redirect("/login");
+    redirect("/error/unauthorized");
   }
 
   if (requireAdmin && session?.user?.role !== "admin") {
-    redirect("/");
+    redirect("/error/forbidden");
   }
 
   return <>{children}</>;

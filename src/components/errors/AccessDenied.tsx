@@ -20,7 +20,9 @@ import {
   RefreshCw,
   ShieldAlert,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export type AccessDeniedVariant = "unauthorized" | "forbidden" | "expired";
 
@@ -50,7 +52,7 @@ const variantConfig: Record<AccessDeniedVariant, VariantConfig> = {
     icon: LogIn,
     primaryAction: {
       label: "Log In",
-      href: "/auth/signin",
+      href: "/login",
     },
     secondaryAction: {
       label: "Back",
@@ -78,7 +80,7 @@ const variantConfig: Record<AccessDeniedVariant, VariantConfig> = {
     icon: RefreshCw,
     primaryAction: {
       label: "Log In Again",
-      href: "/auth/signin",
+      href: "/login",
     },
     secondaryAction: {
       label: "Go Home",
@@ -96,21 +98,14 @@ export function AccessDenied({
   const router = useRouter();
   const config = variantConfig[variant];
 
-  // Log the access denied event
-  clientLogger.warn(LogComponent.AUTH, `Access denied: ${variant}`, {
-    variant,
-    customMessage: message,
-    ...metadata,
-  });
-
-  const handlePrimaryAction = () => {
-    clientLogger.info(
-      LogComponent.AUTH,
-      `User initiated ${variant} primary action`,
-      { action: config.primaryAction.label }
-    );
-    router.push(config.primaryAction.href);
-  };
+  // Log the access denied event on client-side only
+  useEffect(() => {
+    clientLogger.warn(LogComponent.AUTH, `Access denied: ${variant}`, {
+      variant,
+      customMessage: message,
+      ...metadata,
+    });
+  }, [variant, message, metadata]);
 
   const handleSecondaryAction = () => {
     clientLogger.info(
@@ -157,10 +152,12 @@ export function AccessDenied({
             <config.secondaryAction.icon className="mr-2 h-4 w-4" />
             {config.secondaryAction.label}
           </Button>
-          <Button onClick={handlePrimaryAction}>
-            <config.icon className="mr-2 h-4 w-4" />
-            {config.primaryAction.label}
-          </Button>
+          <Link href={config.primaryAction.href} passHref>
+            <Button>
+              <config.icon className="mr-2 h-4 w-4" />
+              {config.primaryAction.label}
+            </Button>
+          </Link>
         </CardFooter>
       </Card>
     </div>

@@ -21,11 +21,11 @@ export function ProtectedRoute({
   }
 
   if (status === "unauthenticated") {
-    redirect("/login");
+    redirect("/error/unauthorized");
   }
 
   if (requireAdmin && session?.user?.role !== "admin") {
-    redirect("/");
+    redirect("/error/forbidden");
   }
 
   return <>{children}</>;
