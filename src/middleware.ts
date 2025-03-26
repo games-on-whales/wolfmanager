@@ -1,10 +1,40 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import { Logger } from "./lib/logger/logger";
+import { LogComponent } from "./lib/logger/types";
+
+const logger = Logger.getInstance();
 
 // Define paths that don't require authentication
-const publicPaths = ["/login", "/register", "/api/auth"];
+const publicPaths = [
+  "/login",
+  "/register",
+  "/api/auth",
+  "/_next",
+  "/favicon.ico",
+  "/error/unauthorized",
+  "/error/forbidden",
+  "/error/expired",
+];
+
 // Define paths that require admin access
-const adminPaths = ["/admin", "/users"];
+const adminPaths = [
+  "/admin",
+  "/users",
+  "/api/users",
+  "/api/admin",
+  "/api/system",
+  "/api/wolf/admin",
+  "/settings/api-test",
+];
+
+// API endpoints that require authentication but not admin
+const protectedApiPaths = [
+  "/api/user",
+  "/api/wolf",
+  "/api/libraries",
+  "/api/settings",
+];
 
 export default withAuth(
   async function middleware(req) {
@@ -16,8 +46,20 @@ export default withAuth(
       return NextResponse.next();
     }
 
+    // Log access attempt
+    await logger.debug(LogComponent.AUTH, "Route access attempt", {
+      path: pathname,
+      hasToken: !!token,
+      userRole: token?.role || "none",
+    });
+
     // Check for expired or invalid session
     if (!token || token.error === "SessionExpired") {
+      await logger.warn(LogComponent.AUTH, "Invalid or expired session", {
+        path: pathname,
+        error: token?.error || "NoToken",
+      });
+
       const url = new URL("/login", req.url);
       url.searchParams.set("error", "SessionExpired");
       url.searchParams.set("callbackUrl", pathname);
@@ -25,11 +67,33 @@ export default withAuth(
     }
 
     // Check for admin-only routes
-    if (
-      adminPaths.some((path) => pathname.startsWith(path)) &&
-      token.role !== "admin"
-    ) {
-      return NextResponse.redirect(new URL("/", req.url));
+    if (adminPaths.some((path) => pathname.startsWith(path))) {
+      if (token.role !== "admin") {
+        await logger.warn(
+          LogComponent.AUTH,
+          "Unauthorized admin access attempt",
+          {
+            path: pathname,
+            userId: token.id,
+            userRole: token.role,
+          }
+        );
+        return NextResponse.redirect(new URL("/", req.url));
+      }
+
+      await logger.info(LogComponent.AUTH, "Admin route accessed", {
+        path: pathname,
+        userId: token.id,
+      });
+    }
+
+    // Check for protected API routes
+    if (protectedApiPaths.some((path) => pathname.startsWith(path))) {
+      await logger.debug(LogComponent.AUTH, "Protected API route accessed", {
+        path: pathname,
+        userId: token.id,
+        userRole: token.role,
+      });
     }
 
     return NextResponse.next();
@@ -46,5 +110,8 @@ export default withAuth(
 
 // Configure the paths that trigger the middleware
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth).*)"],
+  matcher: [
+    // Match all paths except static assets and auth endpoints
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
 };

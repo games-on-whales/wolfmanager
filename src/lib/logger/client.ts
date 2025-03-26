@@ -1,5 +1,6 @@
 "use client";
 
+import { createLogEntry } from "@/lib/actions/logging";
 import { LogComponent, LogEntry } from "./types";
 
 /**
@@ -42,26 +43,9 @@ export class ClientLogger {
   }
 
   private async logToServer(entry: LogEntry): Promise<void> {
-    try {
-      const response = await fetch("/api/logs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(entry),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to log: ${response.statusText}`);
-      }
-    } catch (error) {
-      // Store failed logs in localStorage for retry
-      const failedLogs = JSON.parse(
-        localStorage.getItem("failed_logs") || "[]"
-      );
-      failedLogs.push(entry);
-      localStorage.setItem("failed_logs", JSON.stringify(failedLogs));
-      throw error;
+    const result = await createLogEntry(entry);
+    if (!result.success) {
+      console.error("Failed to log entry:", result.error);
     }
   }
 

@@ -19,6 +19,7 @@ export const LogComponent = {
   AUTH: "auth",
   SYSTEM: "system",
   STEAM: "steam",
+  API: "api",
 } as const;
 
 export type LogComponent = (typeof LogComponent)[keyof typeof LogComponent];
@@ -80,4 +81,13 @@ export interface LoggerPlugin {
 export interface LogTransport {
   log: (entry: LogEntry) => Promise<void>;
   flush?: () => Promise<void>;
+}
+
+export interface LogMessage {
+  timestamp: string;
+  level: LogLevel;
+  component: LogComponent;
+  message: string;
+  error?: Error;
+  metadata?: Record<string, unknown>;
 }

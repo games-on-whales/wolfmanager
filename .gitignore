@@ -9,4 +9,4 @@ config/*
 logs/*
 logs
 package-lock.json
-
+scripts/test-auth.sh

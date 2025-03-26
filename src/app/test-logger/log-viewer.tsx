@@ -1,119 +1,97 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { LogComponent } from "@/lib/logger/types";
+import { getLogs } from "@/lib/actions/logging";
+import { clientLogger } from "@/lib/logger/client";
+import { LogComponent, LogEntry } from "@/lib/logger/types";
 import { useEffect, useState } from "react";
 
-interface LogEntry {
-  timestamp: string;
-  level: string;
-  component: LogComponent;
-  message: string;
-  metadata?: Record<string, unknown>;
-  raw?: unknown;
-}
-
-export function LogViewer() {
+export default function LogViewer() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchLogs = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/logs");
-      if (!response.ok) {
-        throw new Error(`Failed to fetch logs: ${response.statusText}`);
-      }
-      const data = await response.json();
-      setLogs(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch logs");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const result = await getLogs();
+        if (result.success) {
+          setLogs(result.entries || []);
+          setError(null);
+        } else {
+          setError(result.error || "Failed to fetch logs");
+          clientLogger.error(
+            LogComponent.SYSTEM,
+            "Failed to fetch logs",
+            new Error(result.error || "Unknown error")
+          );
+        }
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error";
+        setError(errorMessage);
+        clientLogger.error(
+          LogComponent.SYSTEM,
+          "Error in log viewer",
+          err instanceof Error ? err : new Error(errorMessage)
+        );
+      }
+    };
+
     fetchLogs();
-    // Set up polling every 5 seconds
-    const interval = setInterval(fetchLogs, 5000);
+    // Refresh logs every 30 seconds
+    const interval = setInterval(fetchLogs, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const getLevelColor = (level: string) => {
-    switch (level.toLowerCase()) {
-      case "debug":
-        return "text-gray-500";
-      case "info":
-        return "text-blue-500";
-      case "warn":
-        return "text-yellow-500";
-      case "error":
-        return "text-red-500";
-      default:
-        return "text-gray-700";
-    }
-  };
-
   return (
-    <Card className="p-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Recent Logs</h3>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchLogs}
-          disabled={isLoading}
-        >
-          Refresh
-        </Button>
-      </div>
-
-      {error && (
-        <div className="text-red-500 mb-4 p-2 bg-red-50 rounded">{error}</div>
-      )}
-
-      <ScrollArea className="h-[400px] w-full rounded-md border p-4">
-        {logs.length === 0 ? (
-          <div className="text-center text-gray-500">No logs available</div>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>System Logs</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <div className="text-destructive">{error}</div>
         ) : (
-          <div className="space-y-2">
+          <ScrollArea className="h-[500px] w-full rounded-md border p-4">
             {logs.map((log, index) => (
               <div
                 key={index}
-                className="text-sm border-b border-gray-100 last:border-0 pb-2"
+                className={`mb-2 p-2 rounded ${
+                  log.level === "error"
+                    ? "bg-destructive/10"
+                    : log.level === "warn"
+                    ? "bg-warning/10"
+                    : "bg-muted/10"
+                }`}
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-xs">
+                <div className="flex justify-between text-sm">
+                  <span className="font-mono">
                     {new Date(log.timestamp).toLocaleString()}
                   </span>
-                  <span className={`font-medium ${getLevelColor(log.level)}`}>
+                  <span
+                    className={`px-2 rounded ${
+                      log.level === "error"
+                        ? "bg-destructive text-destructive-foreground"
+                        : log.level === "warn"
+                        ? "bg-warning text-warning-foreground"
+                        : "bg-primary text-primary-foreground"
+                    }`}
+                  >
                     {log.level.toUpperCase()}
                   </span>
-                  <span className="text-gray-600">[{log.component}]</span>
                 </div>
-                <div className="mt-1">{log.message}</div>
-                {(log.metadata || log.raw) && (
-                  <pre className="mt-1 text-xs bg-gray-50 p-2 rounded overflow-x-auto">
-                    {JSON.stringify(
-                      {
-                        ...(log.metadata ? { metadata: log.metadata } : {}),
-                        ...(log.raw ? { raw: log.raw } : {}),
-                      },
-                      null,
-                      2
-                    )}
+                <div className="mt-1 font-mono text-sm">{log.message}</div>
+                {log.metadata && (
+                  <pre className="mt-1 text-xs text-muted-foreground">
+                    {JSON.stringify(log.metadata, null, 2)}
                   </pre>
                 )}
               </div>
             ))}
-          </div>
+          </ScrollArea>
         )}
-      </ScrollArea>
+      </CardContent>
     </Card>
   );
 }
