@@ -1,72 +1,194 @@
+import {
+  API_ERROR_CODES,
+  createErrorResponse,
+  createSuccessResponse,
+} from "@/lib/api-utils";
 import { authOptions } from "@/lib/auth";
-import { addUser, loadConfig, removeUser } from "@/lib/config";
+import { loadConfig, saveConfig } from "@/lib/config";
+import { LogComponent, logger } from "@/lib/logger";
 import { getServerSession } from "next-auth";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/users
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== "admin") {
-      return new NextResponse("Unauthorized", { status: 401 });
+    if (!session?.user?.name) {
+      return NextResponse.json(
+        createErrorResponse("Unauthorized", API_ERROR_CODES.UNAUTHORIZED),
+        { status: 401 }
+      );
     }
 
     const config = loadConfig();
-    const users = Object.values(config.users).map((user) => ({
-      id: user.id,
-      username: user.username,
-      isAdmin: user.is_admin,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at,
-    }));
+    const user = config.users[session.user.name];
 
-    return NextResponse.json(users);
+    if (!user) {
+      await logger.error(
+        LogComponent.WOLF_UI,
+        `Failed to get clients: User ${session.user.name} not found`
+      );
+      return NextResponse.json(
+        createErrorResponse("User not found", API_ERROR_CODES.NOT_FOUND),
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(createSuccessResponse({ clients: user.clients }));
   } catch (error) {
-    return new NextResponse("Internal Server Error", { status: 500 });
+    await logger.error(
+      LogComponent.WOLF_UI,
+      "Error getting user clients",
+      error
+    );
+    return NextResponse.json(
+      createErrorResponse(
+        "Failed to get clients",
+        API_ERROR_CODES.INTERNAL_ERROR
+      ),
+      { status: 500 }
+    );
   }
 }
 
 // POST /api/users
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== "admin") {
-      return new NextResponse("Unauthorized", { status: 401 });
+    if (!session?.user?.name) {
+      return NextResponse.json(
+        createErrorResponse("Unauthorized", API_ERROR_CODES.UNAUTHORIZED),
+        { status: 401 }
+      );
     }
 
-    const body = await req.json();
-    const { username, password, isAdmin } = body;
+    const { deviceId, friendlyName } = await req.json();
 
-    const user = addUser(username, password, isAdmin);
-    return NextResponse.json(user);
+    const config = loadConfig();
+    const user = config.users[session.user.name];
+
+    if (!user) {
+      await logger.error(
+        LogComponent.WOLF_UI,
+        `Failed to add client: User ${session.user.name} not found`
+      );
+      return NextResponse.json(
+        createErrorResponse("User not found", API_ERROR_CODES.NOT_FOUND),
+        { status: 404 }
+      );
+    }
+
+    // Check if client already exists
+    if (user.clients.some((client) => client.id === deviceId)) {
+      await logger.warn(
+        LogComponent.WOLF_UI,
+        `Client ${deviceId} already paired with user ${session.user.name}`
+      );
+      return NextResponse.json(
+        createErrorResponse(
+          "Client already paired",
+          API_ERROR_CODES.VALIDATION_ERROR
+        ),
+        { status: 400 }
+      );
+    }
+
+    const newClient = {
+      id: deviceId,
+      friendly_name: friendlyName,
+    };
+
+    user.clients.push(newClient);
+    saveConfig(config);
+
+    await logger.info(
+      LogComponent.WOLF_UI,
+      `Added client ${deviceId} to user ${session.user.name}`
+    );
+
+    return NextResponse.json(createSuccessResponse({ client: newClient }));
   } catch (error) {
-    return new NextResponse(
-      error instanceof Error ? error.message : "Internal Server Error",
+    await logger.error(LogComponent.WOLF_UI, "Error adding client", error);
+    return NextResponse.json(
+      createErrorResponse(
+        "Failed to add client",
+        API_ERROR_CODES.INTERNAL_ERROR
+      ),
       { status: 500 }
     );
   }
 }
 
 // DELETE /api/users
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== "admin") {
-      return new NextResponse("Unauthorized", { status: 401 });
+    if (!session?.user?.name) {
+      return NextResponse.json(
+        createErrorResponse("Unauthorized", API_ERROR_CODES.UNAUTHORIZED),
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
+    const deviceId = searchParams.get("deviceId");
 
-    if (!userId) {
-      return new NextResponse("User ID is required", { status: 400 });
+    if (!deviceId) {
+      return NextResponse.json(
+        createErrorResponse(
+          "Device ID is required",
+          API_ERROR_CODES.VALIDATION_ERROR
+        ),
+        { status: 400 }
+      );
     }
 
-    removeUser(userId);
-    return new NextResponse(null, { status: 204 });
+    const config = loadConfig();
+    const user = config.users[session.user.name];
+
+    if (!user) {
+      await logger.error(
+        LogComponent.WOLF_UI,
+        `Failed to remove client: User ${session.user.name} not found`
+      );
+      return NextResponse.json(
+        createErrorResponse("User not found", API_ERROR_CODES.NOT_FOUND),
+        { status: 404 }
+      );
+    }
+
+    const clientIndex = user.clients.findIndex(
+      (client) => client.id === deviceId
+    );
+
+    if (clientIndex === -1) {
+      await logger.warn(
+        LogComponent.WOLF_UI,
+        `Client ${deviceId} not found for user ${session.user.name}`
+      );
+      return NextResponse.json(
+        createErrorResponse("Client not found", API_ERROR_CODES.NOT_FOUND),
+        { status: 404 }
+      );
+    }
+
+    const removedClient = user.clients[clientIndex];
+    user.clients.splice(clientIndex, 1);
+    saveConfig(config);
+
+    await logger.info(
+      LogComponent.WOLF_UI,
+      `Removed client ${deviceId} from user ${session.user.name}`
+    );
+
+    return NextResponse.json(createSuccessResponse({ client: removedClient }));
   } catch (error) {
-    return new NextResponse(
-      error instanceof Error ? error.message : "Internal Server Error",
+    await logger.error(LogComponent.WOLF_UI, "Error removing client", error);
+    return NextResponse.json(
+      createErrorResponse(
+        "Failed to remove client",
+        API_ERROR_CODES.INTERNAL_ERROR
+      ),
       { status: 500 }
     );
   }

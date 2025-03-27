@@ -66,6 +66,48 @@
 
 - [x] Add protected route middleware
 
+## Port Old Code
+
+- [x] Port old pairing workflow
+  - [x] Pairing must still append clients to the Users clients list
+    - [x] Create TOML configuration utilities in src/lib/config.ts
+      - [x] Implement loadConfig<T> function for type-safe TOML loading
+      - [x] Implement saveConfig function for TOML file updates
+      - [x] Add TypeScript interfaces for user and client configurations
+    - [x] Create user service for client management
+      - [x] Implement addClientToUser function for updating client list
+      - [x] Add error handling and validation
+      - [x] Add logging for configuration changes
+    - [x] Update PairDialog component
+      - [x] Integrate with TOML configuration service
+      - [x] Add proper error handling for configuration updates
+      - [x] Update success/error notifications
+    - [x] Pair Page Updates
+      - [x] Update Paired Clients list to show only the users paired client
+      - [x] Add Unpair button/function to paired clients
+    - [ ] Testing and Validation
+      - [ ] Test TOML file operations
+      - [ ] Verify client data persistence
+      - [ ] Test error scenarios
+      - [ ] Validate TOML file structure
+    - [ ] Required Bug Fixes
+      - [ ] Fix: PIN Validation in Pairing Dialog
+        - [ ] Add proper PIN validation in PairDialog component
+        - [ ] Implement server-side PIN verification before pairing
+        - [ ] Add error handling and user feedback for invalid PINs
+        - [ ] Add logging for failed PIN attempts
+      - [ ] Fix: Client List Synchronization
+        - [ ] Add Wolf client list comparison during paired clients fetch
+        - [ ] Implement auto-cleanup of orphaned clients
+        - [ ] Add periodic sync mechanism
+        - [ ] Add logging for sync operations and removals
+      - [ ] Fix: Duplicate Pairing Requests
+        - [ ] Add pairing secret storage to user configuration
+        - [ ] Implement pairing secret validation
+        - [ ] Filter out previously used pairing requests
+        - [ ] Add cleanup mechanism for old pairing secrets
+        - [ ] Add logging for duplicate request detection
+
 ## UI/Components
 
 - [x] Install and configure ShadCN component library
@@ -133,6 +175,20 @@
 - [ ] Fix mobile navigation menu flickering ❌ (Requires investigation of z-index conflicts)
 - [ ] Address hydration mismatch in auth components
 - [ ] Resolve memory leak in real-time updates
+- [ ] Fix pairing dialog accepting invalid PINs
+  - [ ] Add proper PIN validation in PairDialog component
+  - [ ] Implement server-side PIN verification
+  - [ ] Add error handling for invalid PINs
+- [ ] Fix paired clients list synchronization with Wolf
+  - [ ] Compare local config with Wolf's paired client list
+  - [ ] Auto-remove clients that no longer exist in Wolf
+  - [ ] Add periodic sync to keep lists in sync
+  - [ ] Add logging for sync operations
+- [ ] Fix duplicate pairing requests issue
+  - [ ] Store pairing secrets in user configuration
+  - [ ] Validate pairing requests against stored secrets
+  - [ ] Filter out already used pairing requests
+  - [ ] Add cleanup for old pairing secrets
 
 ## Future Enhancements
 
