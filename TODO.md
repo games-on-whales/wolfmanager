@@ -108,6 +108,14 @@
         - [ ] Add cleanup mechanism for old pairing secrets
         - [ ] Add logging for duplicate request detection
 
+## Bug CleanUp
+
+- [ ] API Test Console
+  - [ ] Post input text field has text and cursor in different spots
+  - [ ] Post requests input fields do not have example of the body to post
+  - [ ] UI navigation is not scrollable
+  - [ ] API path listed is not correct for wolf
+
 ## UI/Components
 
 - [x] Install and configure ShadCN component library
