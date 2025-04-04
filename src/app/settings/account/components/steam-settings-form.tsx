@@ -8,7 +8,7 @@ import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { useSession } from "next-auth/react";
 import { useRef, useState } from "react";
-import { updateSteamSettings } from "../actions";
+import { testSteamCredentials, updateSteamSettings } from "../actions";
 
 interface SteamSettingsFormData {
   steamId: string;
@@ -16,13 +16,17 @@ interface SteamSettingsFormData {
 }
 
 export function SteamSettingsForm() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const { update: updateSession } = useSession();
   const formRef = useRef<HTMLFormElement>(null);
+  const [currentSteamId, setCurrentSteamId] = useState("");
+  const [currentApiKey, setCurrentApiKey] = useState("");
+  const [credentialsVerified, setCredentialsVerified] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsLoading(true);
+    setIsSaving(true);
 
     try {
       const formData = new FormData(event.currentTarget);
@@ -61,7 +65,70 @@ export function SteamSettingsForm() {
       );
       showToast.error("Save Failed", err);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
+    }
+  };
+
+  const handleTestClick = async () => {
+    if (!currentSteamId || !currentApiKey) {
+      showToast.warning("Missing Fields", {
+        description: "Please enter both Steam ID and API Key to test.",
+      });
+      return;
+    }
+    setIsTesting(true);
+    let result: { success: boolean; isValid: boolean; error?: string } | null =
+      null;
+    try {
+      await clientLogger.debug(
+        LogComponent.STEAM,
+        "Testing Steam credentials",
+        {
+          steamId: currentSteamId,
+          hasApiKey: !!currentApiKey,
+        }
+      );
+
+      result = await testSteamCredentials({
+        steamId: currentSteamId,
+        steamApiKey: currentApiKey,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to test credentials");
+      }
+
+      if (result.isValid) {
+        await clientLogger.info(
+          LogComponent.STEAM,
+          "Steam credentials test successful"
+        );
+        showToast.success("Test Successful", {
+          description: "Your Steam credentials are valid.",
+        });
+        setCredentialsVerified(true);
+      } else {
+        await clientLogger.warn(
+          LogComponent.STEAM,
+          "Steam credentials test failed - Invalid"
+        );
+        showToast.error(
+          "Test Failed",
+          "Your Steam credentials appear to be invalid."
+        );
+        setCredentialsVerified(false);
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      await clientLogger.error(
+        LogComponent.STEAM,
+        "Failed to test Steam credentials",
+        err
+      );
+      showToast.error("Test Error", err);
+      setCredentialsVerified(false);
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -73,7 +140,12 @@ export function SteamSettingsForm() {
           id="steamId"
           name="steamId"
           placeholder="Enter your Steam ID"
-          disabled={isLoading}
+          value={currentSteamId}
+          onChange={(e) => {
+            setCurrentSteamId(e.target.value);
+            setCredentialsVerified(false);
+          }}
+          disabled={isSaving || isTesting}
         />
         <p className="text-sm text-muted-foreground">
           Your Steam ID can be found in your Steam profile URL
@@ -86,7 +158,12 @@ export function SteamSettingsForm() {
           name="steamApiKey"
           type="password"
           placeholder="Enter your Steam API Key"
-          disabled={isLoading}
+          value={currentApiKey}
+          onChange={(e) => {
+            setCurrentApiKey(e.target.value);
+            setCredentialsVerified(false);
+          }}
+          disabled={isSaving || isTesting}
         />
         <p className="text-sm text-muted-foreground">
           Get your API key from{" "}
@@ -100,9 +177,22 @@ export function SteamSettingsForm() {
           </a>
         </p>
       </div>
-      <Button type="submit" disabled={isLoading}>
-        {isLoading ? "Saving..." : "Save Settings"}
-      </Button>
+      <div className="flex space-x-2">
+        <Button
+          type="submit"
+          disabled={isSaving || isTesting || !credentialsVerified}
+        >
+          {isSaving ? "Saving..." : "Save Settings"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleTestClick}
+          disabled={isSaving || isTesting}
+        >
+          {isTesting ? "Testing..." : "Test Credentials"}
+        </Button>
+      </div>
     </form>
   );
 }

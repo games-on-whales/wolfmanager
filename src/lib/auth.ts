@@ -53,103 +53,113 @@ export const authOptions: AuthOptions = {
       async authorize(credentials) {
         try {
           if (!credentials?.username || !credentials?.password) {
-            logger.debug(LogComponent.AUTH, "Missing credentials");
+            logger.warn(LogComponent.AUTH, "Missing credentials");
             return null;
           }
 
           const user = validateUser(credentials.username, credentials.password);
 
-          if (user) {
-            const requiresFirstTimeSetup = user.has_changed_password === false;
-            logger.debug(LogComponent.AUTH, "User authenticated successfully", {
+          if (!user) {
+            logger.warn(LogComponent.AUTH, "Invalid credentials", {
               username: credentials.username,
             });
-            return {
-              id: user.id,
-              name: user.username,
-              role: user.is_admin ? "admin" : "user",
-              requiresFirstTimeSetup,
-            };
+            return null;
           }
-          logger.warn(LogComponent.AUTH, "Invalid credentials", {
+
+          logger.info(LogComponent.AUTH, "User authorized successfully", {
             username: credentials.username,
           });
-          return null;
+
+          return {
+            id: user.id,
+            name: user.username,
+            role: user.is_admin ? "admin" : "user",
+            requiresFirstTimeSetup: !user.has_changed_password,
+          };
         } catch (error) {
-          logger.error(LogComponent.AUTH, "Authentication error", error);
+          logger.error(LogComponent.AUTH, "Authorization error", error);
           return null;
         }
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user, trigger, session }) {
-      // Handle session update
-      if (trigger === "update" && session?.name) {
-        token.name = session.name;
-        return token;
-      }
-
-      // Handle new sign in
-      if (user) {
-        logger.debug(LogComponent.AUTH, "New session created", {
-          userId: user.id,
-        });
-
-        return {
-          ...token,
-          id: user.id,
-          name: user.name,
-          role: user.role,
-          requiresFirstTimeSetup: user.requiresFirstTimeSetup,
-        };
-      }
-
-      return token;
-    },
-    async session({ session, token }) {
-      if (token.error) {
-        logger.info(
-          LogComponent.AUTH,
-          "Session validation failed - forcing logout",
-          {
-            error: token.error,
-            userId: token.id,
-            tokenExpiry: token.exp
-              ? new Date(token.exp * 1000).toISOString()
-              : undefined,
-          }
-        );
-        return {
-          ...session,
-          error: "SessionExpired",
-          expires: new Date(0).toISOString(),
-        };
-      }
-
-      // Log successful session validation
-      logger.debug(LogComponent.AUTH, "Session validated successfully", {
-        userId: token.id,
-        tokenExpiry: token.exp
-          ? new Date(token.exp * 1000).toISOString()
-          : undefined,
-      });
-
-      return {
-        ...session,
-        user: {
-          id: token.id,
-          name: token.name,
-          role: token.role,
-        },
-        requiresFirstTimeSetup: token.requiresFirstTimeSetup,
-      };
-    },
-  },
   pages: {
     signIn: "/login",
     error: "/login",
     signOut: "/login",
+  },
+  callbacks: {
+    async jwt({ token, user, trigger, session }) {
+      try {
+        // Handle session update
+        if (trigger === "update" && session?.name) {
+          token.name = session.name;
+          return token;
+        }
+
+        // Handle new sign in
+        if (user) {
+          logger.debug(LogComponent.AUTH, "Creating new JWT token", {
+            userId: user.id,
+          });
+
+          return {
+            ...token,
+            id: user.id,
+            name: user.name,
+            role: user.role,
+            requiresFirstTimeSetup: user.requiresFirstTimeSetup,
+          };
+        }
+
+        return token;
+      } catch (error) {
+        logger.error(LogComponent.AUTH, "JWT callback error", error);
+        return token;
+      }
+    },
+    async session({ session, token }) {
+      try {
+        if (token.error) {
+          logger.info(
+            LogComponent.AUTH,
+            "Session validation failed - forcing logout",
+            {
+              error: token.error,
+              userId: token.id,
+              tokenExpiry: token.exp
+                ? new Date(token.exp * 1000).toISOString()
+                : undefined,
+            }
+          );
+          return {
+            ...session,
+            error: "SessionExpired",
+            expires: new Date(0).toISOString(),
+          };
+        }
+
+        logger.debug(LogComponent.AUTH, "Session validated successfully", {
+          userId: token.id,
+          tokenExpiry: token.exp
+            ? new Date(token.exp * 1000).toISOString()
+            : undefined,
+        });
+
+        return {
+          ...session,
+          user: {
+            id: token.id,
+            name: token.name,
+            role: token.role,
+          },
+          requiresFirstTimeSetup: token.requiresFirstTimeSetup,
+        };
+      } catch (error) {
+        logger.error(LogComponent.AUTH, "Session callback error", error);
+        return session;
+      }
+    },
   },
   session: {
     strategy: "jwt",

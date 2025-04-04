@@ -92,21 +92,53 @@
       - [ ] Validate TOML file structure
     - [ ] Required Bug Fixes
       - [ ] Fix: PIN Validation in Pairing Dialog
-        - [ ] Add proper PIN validation in PairDialog component
-        - [ ] Implement server-side PIN verification before pairing
-        - [ ] Add error handling and user feedback for invalid PINs
-        - [ ] Add logging for failed PIN attempts
+        - [x] Create PIN validation service
+          - [x] Implement PIN format validation using Zod (4-digit PIN)
+          - [x] Add rate limiting mechanism
+          - [ ] Add unit tests for validation service
+        - [x] Update server actions
+          - [x] Add PIN verification endpoint
+          - [x] Integrate with Wolf API
+          - [x] Add comprehensive error handling
+          - [x] Refactor to use server actions instead of API routes
+          - [ ] Add integration tests
+        - [x] Enhance PairDialog component
+          - [x] Add real-time PIN validation
+          - [x] Implement error states and feedback
+          - [x] Add loading states
+          - [x] Refactor to use new server actions
+          - [ ] Add E2E tests
+        - [x] Implement logging
+          - [x] Add logging for validation attempts
+          - [x] Add logging for rate limiting
+          - [x] Add logging for Wolf API interactions
       - [ ] Fix: Client List Synchronization
-        - [ ] Add Wolf client list comparison during paired clients fetch
-        - [ ] Implement auto-cleanup of orphaned clients
+        - [x] Add Wolf client list comparison during paired clients fetch
+        - [x] Filter out stale pairing requests
+        - [x] Add manual refresh for pending requests
+        - [x] Show pair_secret for debugging
         - [ ] Add periodic sync mechanism
-        - [ ] Add logging for sync operations and removals
+        - [x] Add logging for sync operations and removals
       - [ ] Fix: Duplicate Pairing Requests
-        - [ ] Add pairing secret storage to user configuration
-        - [ ] Implement pairing secret validation
-        - [ ] Filter out previously used pairing requests
+        - [x] Add pairing secret storage to user configuration
+        - [x] Implement pairing secret validation
+        - [x] Filter out previously used pairing requests
         - [ ] Add cleanup mechanism for old pairing secrets
-        - [ ] Add logging for duplicate request detection
+        - [x] Add logging for duplicate request detection
+      - [x] Fix: Client Verification Process
+        - [x] Update client verification to use Wolf API instead of TOML
+        - [x] Add verification after pairing
+        - [x] Improve error handling for failed verifications
+      - [x] Fix: Pairing Process
+        - [x] Remove incorrect /pair/complete endpoint usage
+        - [x] Use /pair/client response for pairing status
+        - [x] Verify client exists in Wolf
+        - [x] Save to TOML only after verification
+      - [x] Fix: Unpairing Process
+        - [x] Add proper unpairing with Wolf API
+        - [x] Add waiting period for Wolf processing
+        - [x] Remove from TOML after successful unpairing
+        - [x] Synchronize after unpairing
 
 ## Bug CleanUp
 
@@ -184,6 +216,7 @@
 - [ ] Address hydration mismatch in auth components
 - [ ] Resolve memory leak in real-time updates
 - [ ] Fix pairing dialog accepting invalid PINs
+  - [x] Fix friendly name field being disabled after PIN validation
   - [ ] Add proper PIN validation in PairDialog component
   - [ ] Implement server-side PIN verification
   - [ ] Add error handling for invalid PINs

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint",
-    "migrate-crypto": "ts-node src/scripts/migrate-crypto.ts"
+    "migrate-crypto": "ts-node src/scripts/migrate-crypto.ts",
+    "rehash-passwords": "ts-node --project tsconfig.scripts.json src/scripts/rehash-passwords.ts"
   },
   "dependencies": {
     "@auth/core": "^0.34.2",

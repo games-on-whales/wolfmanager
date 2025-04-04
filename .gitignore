@@ -10,3 +10,4 @@ logs/*
 logs
 package-lock.json
 scripts/test-auth.sh
+.cursor/mcp.json

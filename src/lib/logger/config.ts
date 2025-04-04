@@ -67,7 +67,7 @@ const prodConfig: LoggerConfig = {
   },
   console: {
     enabled: true,
-    colorize: false,
+    colorize: true,
     includeMetadata: true,
   },
 };

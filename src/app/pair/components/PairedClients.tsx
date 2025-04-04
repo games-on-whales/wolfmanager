@@ -8,28 +8,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ClientDevice } from "@/lib/config";
 import { UserService } from "@/lib/services/user-service";
+import { ClientDevice } from "@/types/client";
 import { Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+// Define a type for the client data including the optional owner
+type ClientWithOwner = ClientDevice & { owner?: string };
+
 export function PairedClients() {
   const { data: session } = useSession();
-  const [clients, setClients] = useState<ClientDevice[]>([]);
+  const [clients, setClients] = useState<ClientWithOwner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unpairingId, setUnpairingId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchClients = async () => {
-      if (!session?.user?.name) return;
-
       try {
         setIsLoading(true);
         setError(null);
-        const response = await UserService.getUserClients(session.user.name);
+        const response = await UserService.getClientsWithOwners();
         if (response.success && response.data) {
           setClients(response.data.clients);
         } else {
@@ -46,20 +47,24 @@ export function PairedClients() {
     };
 
     fetchClients();
-  }, [session?.user?.name]);
+  }, []);
 
   const handleUnpair = async (deviceId: string) => {
-    if (!session?.user?.name) return;
+    if (!session?.user?.name) {
+      toast.error("Authentication Required", {
+        description: "You must be logged in to unpair devices.",
+      });
+      return;
+    }
 
     try {
       setUnpairingId(deviceId);
-      const response = await UserService.removeClientFromUser(
-        session.user.name,
-        deviceId
-      );
+      const response = await UserService.removeClientFromUser(deviceId);
 
       if (response.success) {
-        setClients((prev) => prev.filter((client) => client.id !== deviceId));
+        setClients((prev: ClientWithOwner[]) =>
+          prev.filter((client) => client.id !== deviceId)
+        );
         toast.success("Device unpaired successfully");
       } else {
         throw new Error(response.error?.message || "Failed to unpair device");
@@ -121,7 +126,9 @@ export function PairedClients() {
           <Card key={client.id}>
             <CardHeader>
               <CardTitle>{client.friendly_name}</CardTitle>
-              <CardDescription>ID: {client.id}</CardDescription>
+              <CardDescription>
+                ID: {client.id} {client.owner && `(Owner: ${client.owner})`}
+              </CardDescription>
             </CardHeader>
             <CardFooter>
               <Button

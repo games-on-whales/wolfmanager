@@ -88,16 +88,37 @@ export async function callWolfApi(
 
       res.on("end", () => {
         try {
+          // Add logging for the raw data received before parsing
+          console.log("[WOLF_SOCKET_RAW_DATA]", {
+            endpoint,
+            method,
+            statusCode: res.statusCode,
+            headers: res.headers,
+            rawData: data, // Log the raw string data
+          });
+
           // Handle empty response
           if (!data) {
+            console.log("[WOLF_SOCKET_EMPTY_RESPONSE]", { endpoint, method });
             resolve({});
             return;
           }
 
           const jsonResponse = JSON.parse(data);
+          // Add logging for the parsed response before resolving
+          console.log("[WOLF_SOCKET_PARSED_RESPONSE]", {
+            endpoint,
+            method,
+            jsonResponse,
+          });
           resolve(jsonResponse);
         } catch (error) {
-          console.error("[WOLF_SOCKET_PARSE_ERROR]", error);
+          console.error("[WOLF_SOCKET_PARSE_ERROR]", {
+            endpoint,
+            method,
+            rawData: data, // Include raw data in parse error log
+            error,
+          });
           reject(new Error("Failed to parse Wolf API response"));
         }
       });

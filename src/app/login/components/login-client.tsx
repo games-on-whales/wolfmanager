@@ -10,23 +10,15 @@ import { LogComponent } from "@/lib/logger";
 import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import { Session } from "next-auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface LoginClientProps {
-  isFirstTimeSetup: boolean;
-  initialSession: Session | null;
   error?: string;
   callbackUrl?: string;
 }
 
-export function LoginClient({
-  isFirstTimeSetup,
-  initialSession,
-  error,
-  callbackUrl,
-}: LoginClientProps) {
+export function LoginClient({ error, callbackUrl }: LoginClientProps) {
   const [showEasterEgg, setShowEasterEgg] = useState(false);
   const router = useRouter();
 
@@ -48,21 +40,6 @@ export function LoginClient({
     };
     handleError();
   }, [error, callbackUrl]);
-
-  const handleLoginSuccess = async (isFirstLogin: boolean) => {
-    const redirectUrl = isFirstLogin
-      ? "/first-time-setup"
-      : callbackUrl || "/dashboard";
-    await clientLogger.debug(
-      LogComponent.AUTH,
-      "Login successful - redirecting",
-      {
-        isFirstLogin,
-        redirectUrl,
-      }
-    );
-    router.push(redirectUrl);
-  };
 
   const handleLogoClick = async () => {
     setShowEasterEgg(!showEasterEgg);
@@ -123,7 +100,7 @@ export function LoginClient({
               </p>
             </CardHeader>
             <CardContent>
-              <LoginForm onSuccess={handleLoginSuccess} />
+              <LoginForm />
             </CardContent>
           </Card>
         </div>

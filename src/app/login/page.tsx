@@ -13,16 +13,18 @@ export default async function LoginPage({
   const session = await getServerSession(authOptions);
 
   // If authenticated and no first-time setup needed, redirect to dashboard
-  if (session?.user && !session.requiresFirstTimeSetup && !session.error) {
-    redirect("/dashboard");
+  if (session?.user) {
+    if (session.requiresFirstTimeSetup) {
+      redirect("/first-time-setup");
+    } else {
+      redirect(searchParams.callbackUrl || "/dashboard");
+    }
   }
 
   return (
     <div className="dark">
       <Suspense fallback={<LoadingSpinner />}>
         <LoginClient
-          isFirstTimeSetup={session?.requiresFirstTimeSetup || false}
-          initialSession={session}
           error={searchParams.error}
           callbackUrl={searchParams.callbackUrl}
         />

@@ -1,3 +1,4 @@
+import { ClientDevice } from "@/types/client";
 import TOML from "@iarna/toml";
 import bcrypt from "bcryptjs";
 import fs from "fs";
@@ -5,15 +6,12 @@ import fsPromises from "fs/promises";
 import path from "path";
 import toml from "toml";
 import { decrypt, encrypt } from "./crypto";
+import { Logger } from "./logger/logger";
+import { LogComponent } from "./logger/types";
 
 export interface SystemConfig {
   name: string;
   version: string;
-}
-
-export interface ClientDevice {
-  id: string;
-  friendly_name: string;
 }
 
 export interface UserConfig {
@@ -33,20 +31,43 @@ export interface UserConfig {
 export interface Config {
   system: SystemConfig;
   users: { [username: string]: UserConfig };
+  clients: ClientDevice[];
 }
 
 export function isValidConfig(config: unknown): config is Config {
   const c = config as Config;
-  return (
-    typeof c === "object" &&
-    c !== null &&
-    typeof c.system === "object" &&
-    c.system !== null &&
-    typeof c.system.name === "string" &&
-    typeof c.system.version === "string" &&
-    typeof c.users === "object" &&
-    c.users !== null
-  );
+  if (
+    typeof c !== "object" ||
+    c === null ||
+    typeof c.system !== "object" ||
+    c.system === null ||
+    typeof c.system.name !== "string" ||
+    typeof c.system.version !== "string" ||
+    typeof c.users !== "object" ||
+    c.users === null
+  ) {
+    return false;
+  }
+
+  // Optional but recommended: Check each user has a valid clients array
+  for (const user of Object.values(c.users)) {
+    if (
+      typeof user !== "object" ||
+      user === null ||
+      !Array.isArray(user.clients)
+    ) {
+      // Log if needed, or just return false
+      logger.warn(
+        LogComponent.SYSTEM,
+        `Invalid or missing 'clients' array for user: ${
+          user?.username ?? "UNKNOWN"
+        } in config validation`
+      );
+      return false;
+    }
+  }
+
+  return true;
 }
 
 const configPath = path.join(process.cwd(), "config", "default.toml");
@@ -83,116 +104,197 @@ export async function getConfig(): Promise<Config> {
   return config;
 }
 
+const logger = Logger.getInstance();
+
 export function loadConfig(decryptSensitiveData: boolean = false): Config {
   try {
+    logger.debug(LogComponent.SYSTEM, "Reading config file", { configPath });
     const configFile = fs.readFileSync(configPath, "utf-8");
+    logger.debug(LogComponent.SYSTEM, "Parsing config file");
     const parsedConfig = TOML.parse(configFile);
+    logger.debug(LogComponent.SYSTEM, "Parsed config object", {
+      configStructure: {
+        hasSystem: typeof parsedConfig.system === "object",
+        hasUsers: typeof parsedConfig.users === "object",
+        hasClients: typeof parsedConfig.clients === "object",
+      },
+    });
 
     if (!isValidConfig(parsedConfig)) {
+      logger.error(
+        LogComponent.SYSTEM,
+        "Invalid configuration structure detected by isValidConfig",
+        null,
+        { parsedConfig }
+      );
       throw new Error("Invalid configuration structure");
     }
 
-    // Only decrypt sensitive data if explicitly requested
+    // Decrypt sensitive data if requested
     if (decryptSensitiveData) {
       Object.values(parsedConfig.users).forEach((user) => {
         if (user.steam_id && isEncryptedString(user.steam_id)) {
           try {
             user.steam_id = decrypt(user.steam_id);
           } catch (error) {
-            console.error(
-              `Failed to decrypt steam_id for user ${user.username}`
+            logger.error(
+              LogComponent.SYSTEM,
+              `Failed to decrypt steam_id for user ${user.username}`,
+              error instanceof Error ? error : new Error(String(error))
             );
-            user.steam_id = "";
+            user.steam_id = ""; // Clear potentially corrupt data
           }
         }
-
         if (user.steam_api_key && isEncryptedString(user.steam_api_key)) {
           try {
             user.steam_api_key = decrypt(user.steam_api_key);
           } catch (error) {
-            console.error(
-              `Failed to decrypt steam_api_key for user ${user.username}`
+            logger.error(
+              LogComponent.SYSTEM,
+              `Failed to decrypt steam_api_key for user ${user.username}`,
+              error instanceof Error ? error : new Error(String(error))
             );
-            user.steam_api_key = "";
+            user.steam_api_key = ""; // Clear potentially corrupt data
           }
         }
       });
     }
 
-    // Initialize empty clients array if not present
+    // **Crucially: Ensure user.clients array exists after parsing**
     Object.values(parsedConfig.users).forEach((user) => {
-      if (!user.clients) {
+      if (!user.clients || !Array.isArray(user.clients)) {
+        logger.warn(
+          LogComponent.SYSTEM,
+          `User ${user.username} missing 'clients' array in loaded config, initializing empty array.`
+        );
         user.clients = [];
       }
     });
 
+    logger.info(LogComponent.SYSTEM, "Configuration loaded successfully.");
     return parsedConfig;
   } catch (error) {
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to load or parse configuration file",
+      error instanceof Error ? error : new Error(String(error)),
+      { configPath }
+    );
+
+    // Handle ENOENT (file not found) by creating default
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      // If the file doesn't exist, create it with default settings
+      logger.warn(
+        LogComponent.SYSTEM,
+        "Config file not found, creating default configuration."
+      );
       const defaultConfig: Config = {
-        system: {
-          name: "WolfUI",
-          version: "1.0.0",
-        },
+        system: { name: "WolfUI", version: "1.0.0" },
         users: {
           admin: {
             id: "1",
             username: "admin",
-            password_hash: defaultAdminHash,
+            password_hash: defaultAdminHash, // Use pre-computed hash
             is_admin: true,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             has_changed_password: false,
-            clients: [],
+            clients: [], // Initialize user clients
             steam_id: "",
             steam_api_key: "",
           },
         },
+        clients: [], // Initialize top-level clients
       };
-      saveConfig(defaultConfig);
-      return defaultConfig;
+      try {
+        saveConfig(defaultConfig); // Attempt to save the default
+        logger.info(
+          LogComponent.SYSTEM,
+          "Default configuration created and saved."
+        );
+        return defaultConfig; // Return the newly created default
+      } catch (saveError) {
+        logger.error(
+          LogComponent.SYSTEM,
+          "Failed to save default configuration file",
+          saveError instanceof Error ? saveError : new Error(String(saveError)),
+          { configPath }
+        );
+        // If saving default also fails, re-throw the original error or a new specific one
+        throw new Error(`Failed to load or create configuration: ${error}`);
+      }
     }
+
+    // Re-throw other errors after logging
     throw error;
   }
 }
 
 export function saveConfig(config: Config): void {
-  // Sort users by ID to maintain consistent order
-  const sortedUsers = Object.entries(config.users).sort(
-    (a, b) => Number(a[1].id) - Number(b[1].id)
-  );
+  try {
+    // Sort users by ID to maintain consistent order
+    const sortedUsers = Object.entries(config.users).sort(
+      (a, b) => Number(a[1].id) - Number(b[1].id)
+    );
 
-  // Create a deep copy and encrypt sensitive data before saving
-  const encryptedConfig = {
-    system: config.system,
-    users: Object.fromEntries(
-      sortedUsers.map(([username, user]) => {
-        const encryptedUser = { ...user };
-        // Only encrypt non-empty strings that aren't already encrypted
-        if (
-          encryptedUser.steam_id &&
-          encryptedUser.steam_id.length > 0 &&
-          !isEncryptedString(encryptedUser.steam_id)
-        ) {
-          encryptedUser.steam_id = encrypt(encryptedUser.steam_id);
-        }
-        if (
-          encryptedUser.steam_api_key &&
-          encryptedUser.steam_api_key.length > 0 &&
-          !isEncryptedString(encryptedUser.steam_api_key)
-        ) {
-          encryptedUser.steam_api_key = encrypt(encryptedUser.steam_api_key);
-        }
-        return [username, encryptedUser];
-      })
-    ),
-  };
+    // Create a deep copy and encrypt sensitive data before saving
+    const encryptedConfig = {
+      system: config.system,
+      users: Object.fromEntries(
+        sortedUsers.map(([username, user]) => {
+          const encryptedUser = { ...user };
+          // Ensure user.clients exists before potential encryption steps
+          if (!encryptedUser.clients || !Array.isArray(encryptedUser.clients)) {
+            logger.warn(
+              LogComponent.SYSTEM,
+              `User ${username} missing 'clients' array before save, initializing empty array.`
+            );
+            encryptedUser.clients = [];
+          }
 
-  const configString = TOML.stringify(
-    encryptedConfig as unknown as TOML.JsonMap
-  );
-  fs.writeFileSync(configPath, configString, "utf-8");
+          // Only encrypt non-empty strings that aren't already encrypted
+          if (
+            encryptedUser.steam_id &&
+            encryptedUser.steam_id.length > 0 &&
+            !isEncryptedString(encryptedUser.steam_id)
+          ) {
+            encryptedUser.steam_id = encrypt(encryptedUser.steam_id);
+          }
+          if (
+            encryptedUser.steam_api_key &&
+            encryptedUser.steam_api_key.length > 0 &&
+            !isEncryptedString(encryptedUser.steam_api_key)
+          ) {
+            encryptedUser.steam_api_key = encrypt(encryptedUser.steam_api_key);
+          }
+          return [username, encryptedUser];
+        })
+      ),
+    };
+
+    logger.debug(
+      LogComponent.SYSTEM,
+      "Stringifying configuration for saving.",
+      { configPath }
+    );
+    const configString = TOML.stringify(
+      encryptedConfig as unknown as TOML.JsonMap
+    );
+    logger.debug(LogComponent.SYSTEM, "Writing configuration file.", {
+      configPath,
+    });
+    fs.writeFileSync(configPath, configString, "utf-8");
+    logger.info(LogComponent.SYSTEM, "Configuration saved successfully.", {
+      configPath,
+    });
+  } catch (error) {
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to save configuration file",
+      error instanceof Error ? error : new Error(String(error)),
+      { configPath }
+    );
+    throw error; // Re-throw error after logging
+  }
 }
 
 export function updateUserSteamInfo(
@@ -217,7 +319,8 @@ export function updateUserSteamInfo(
 export function addUserClient(
   username: string,
   deviceId: string,
-  friendlyName: string
+  friendlyName: string,
+  pairSecret: string
 ): void {
   const config = loadConfig();
   const user = config.users[username];
@@ -234,6 +337,7 @@ export function addUserClient(
   user.clients.push({
     id: deviceId,
     friendly_name: friendlyName,
+    pair_secret: pairSecret,
   });
   user.updated_at = new Date().toISOString();
 
@@ -341,20 +445,109 @@ export function removeUser(userId: string): void {
   saveConfig(config);
 }
 
-export function validateUser(username: string, password: string): UserConfig {
-  const config = loadConfig();
-  const user = config.users[username];
+export function validateUser(username: string, password: string) {
+  try {
+    logger.debug(LogComponent.AUTH, "Attempting to validate user", {
+      username,
+      configPath: path.resolve(configPath),
+    });
 
-  if (!user) {
-    throw new Error("Invalid credentials");
+    // Load config without decrypting sensitive data since we only need password hash
+    const config = loadConfig(false);
+    const user = config.users[username];
+
+    if (!user) {
+      logger.warn(LogComponent.AUTH, "User not found in config", {
+        username,
+        availableUsers: Object.keys(config.users),
+      });
+      return null; // Exit early if user not found
+    }
+
+    // --- Enhanced Logging Before Comparison ---
+    logger.debug(LogComponent.AUTH, "Preparing for bcrypt comparison", {
+      username,
+      isPasswordString: typeof password === "string",
+      passwordLength: typeof password === "string" ? password.length : "N/A",
+      isHashString: typeof user.password_hash === "string",
+      hashLength:
+        typeof user.password_hash === "string"
+          ? user.password_hash.length
+          : "N/A",
+      hashStart:
+        typeof user.password_hash === "string"
+          ? user.password_hash.substring(0, 7)
+          : "N/A",
+    });
+
+    // Check types explicitly before calling compareSync
+    if (
+      typeof password !== "string" ||
+      typeof user.password_hash !== "string"
+    ) {
+      logger.error(
+        LogComponent.AUTH,
+        "Invalid types for bcrypt comparison",
+        null,
+        {
+          username,
+          passwordType: typeof password,
+          hashType: typeof user.password_hash,
+        }
+      );
+      return null;
+    }
+
+    // Change to DEBUG for visibility
+    logger.debug(LogComponent.AUTH, "Values *just* before bcrypt comparison", {
+      receivedPassword: `"${password}"`,
+      storedHash: `"${user.password_hash}"`,
+    });
+
+    // Verify the password using bcrypt
+    const passwordValid = bcrypt.compareSync(password, user.password_hash);
+    // --- End of Enhanced Logging ---
+
+    logger.debug(LogComponent.AUTH, "Password validation result", {
+      username,
+      isValid: passwordValid,
+    });
+
+    if (!passwordValid) {
+      logger.warn(LogComponent.AUTH, "Invalid password comparison result", {
+        username,
+        hashType: user.password_hash.substring(0, 4),
+      });
+      return null;
+    }
+
+    logger.info(LogComponent.AUTH, "User validated successfully", {
+      username,
+      userId: user.id,
+      isAdmin: user.is_admin,
+      hasChangedPassword: user.has_changed_password,
+    });
+
+    return {
+      id: user.id,
+      username: user.username,
+      is_admin: user.is_admin,
+      has_changed_password: user.has_changed_password,
+    };
+  } catch (error) {
+    // Log the actual error object and its stack trace
+    logger.error(
+      LogComponent.AUTH,
+      "Error caught during user validation process", // More specific message
+      error instanceof Error ? error : new Error(String(error)), // Pass the error object itself
+      {
+        username,
+        // Add stack trace if available
+        stack: error instanceof Error ? error.stack : "N/A",
+      }
+    );
+    return null;
   }
-
-  const isValid = bcrypt.compareSync(password, user.password_hash);
-  if (!isValid) {
-    throw new Error("Invalid credentials");
-  }
-
-  return user;
 }
 
 // Add a new function to verify Steam credentials
@@ -363,15 +556,15 @@ export function verifyUserSteamCredentials(
   steamId: string,
   steamApiKey: string
 ): boolean {
-  const config = loadConfig();
+  // Load config WITH decryption
+  const config = loadConfig(true);
   const user = config.users[username];
 
+  // Check if user and stored credentials exist
   if (!user || !user.steam_id || !user.steam_api_key) {
     return false;
   }
 
-  return (
-    bcrypt.compareSync(steamId, user.steam_id) &&
-    bcrypt.compareSync(steamApiKey, user.steam_api_key)
-  );
+  // Use standard string comparison against decrypted values
+  return steamId === user.steam_id && steamApiKey === user.steam_api_key;
 }

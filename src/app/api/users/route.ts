@@ -62,7 +62,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { deviceId, friendlyName } = await req.json();
+    const { deviceId, friendlyName, pairSecret } = await req.json();
+
+    if (!deviceId || !friendlyName || !pairSecret) {
+      return NextResponse.json(
+        createErrorResponse(
+          "Missing required fields",
+          API_ERROR_CODES.VALIDATION_ERROR
+        ),
+        { status: 400 }
+      );
+    }
 
     const config = loadConfig();
     const user = config.users[session.user.name];
@@ -96,6 +106,7 @@ export async function POST(req: NextRequest) {
     const newClient = {
       id: deviceId,
       friendly_name: friendlyName,
+      pair_secret: pairSecret,
     };
 
     user.clients.push(newClient);

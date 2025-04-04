@@ -10,13 +10,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast";
 import { type PendingPairRequest } from "@/lib/api/wolf-pair";
+import { LogComponent, logger } from "@/lib/logger";
 import { UserService } from "@/lib/services/user-service";
-import { Loader2 } from "lucide-react";
+import { PINSchema } from "@/lib/services/validation/pin";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useState, useTransition } from "react";
 import { PendingPairRequests } from "./PendingPairRequests";
 
 export function PairDialog() {
@@ -26,112 +27,187 @@ export function PairDialog() {
     useState<PendingPairRequest | null>(null);
   const [friendlyName, setFriendlyName] = useState("");
   const [pin, setPin] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [isPairing, setIsPairing] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
-  const handleSelectRequest = (request: PendingPairRequest) => {
+  const handleSelectRequest = async (request: PendingPairRequest) => {
+    console.log("[PairDialog] Selected pairing request:", {
+      requestId: request.id,
+      deviceType: request.deviceType,
+    });
+
+    await logger.debug(LogComponent.PAIRING, "Selected pairing request", {
+      requestId: request.id,
+      deviceType: request.deviceType,
+    });
     setSelectedRequest(request);
     setIsOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedRequest || !session?.user?.name) return;
+  const handlePinChange = async (value: string) => {
+    // Only allow digits and limit to 4 characters
+    const sanitizedValue = value.replace(/[^0-9]/g, "").slice(0, 4);
+    setPin(sanitizedValue);
 
-    setIsSubmitting(true);
+    // Real-time format validation
+    const result = PINSchema.safeParse(sanitizedValue);
+    if (!result.success && sanitizedValue.length === 4) {
+      await logger.warn(LogComponent.PAIRING, "Invalid PIN format", {
+        errors: result.error.errors,
+      });
+    }
+  };
+
+  const handleSubmit = async (formData: FormData) => {
+    if (!session?.user?.name || !selectedRequest) {
+      const error = !session?.user?.name
+        ? "You must be logged in"
+        : "You must select a device to pair";
+      await logger.error(LogComponent.PAIRING, error);
+      toast({
+        title: "Error",
+        description: error,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsPairing(true);
+
     try {
-      const response = await UserService.addClientToUser(
-        session.user.name,
-        selectedRequest.id,
-        friendlyName
+      console.log("[PairDialog] Starting pairing process:", {
+        username: session.user.name,
+        friendlyName,
+        pinLength: pin.length,
+      });
+
+      await logger.debug(LogComponent.PAIRING, "Starting pairing process", {
+        username: session.user.name,
+        friendlyName,
+      });
+
+      await logger.debug(
+        LogComponent.PAIRING,
+        "Calling UserService.pairDevice"
+      );
+      console.log("[PairDialog] About to call UserService.pairDevice");
+
+      const pairResult = await UserService.pairDevice(
+        pin,
+        friendlyName,
+        selectedRequest.pair_secret
       );
 
-      if (!response.success) {
-        throw new Error(response.error?.message || "Failed to pair device");
+      if (!pairResult.success) {
+        console.error("[PairDialog] Pairing failed:", pairResult.error);
+        throw new Error(pairResult.error?.message || "Failed to pair device");
       }
 
-      toast.success(`${friendlyName} has been paired with your account.`);
+      const newClient = pairResult.data?.client;
+      console.log("[PairDialog] Pairing successful, new client:", newClient);
+      await logger.info(LogComponent.PAIRING, "Pairing successful");
+      toast({
+        title: "Success",
+        description: "Device paired successfully",
+        variant: "default",
+      });
 
-      setIsOpen(false);
-      setSelectedRequest(null);
-      setFriendlyName("");
+      // Reset form and close dialog
       setPin("");
-
-      // Refresh the page to show updated clients
+      setFriendlyName("");
+      setIsOpen(false);
       router.refresh();
     } catch (error) {
-      toast.error("Failed to pair device", {
-        description: "Please check the PIN and try again.",
+      console.error("[PairDialog] Error in pairing process:", error);
+      await logger.error(
+        LogComponent.PAIRING,
+        "Error in pairing process",
+        error instanceof Error ? error : new Error(String(error))
+      );
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An error occurred during pairing",
+        variant: "destructive",
       });
     } finally {
-      setIsSubmitting(false);
+      setIsPairing(false);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <>
       <PendingPairRequests onSelectRequest={handleSelectRequest} />
-
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Pair New Device</DialogTitle>
             <DialogDescription>
-              Enter a friendly name and the PIN displayed on your device to
-              complete pairing.
+              Enter the PIN shown on your device and a friendly name to identify
+              it.
             </DialogDescription>
           </DialogHeader>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="friendlyName">Friendly Name</Label>
-              <Input
-                id="friendlyName"
-                placeholder="e.g., Living Room TV"
-                value={friendlyName}
-                onChange={(e) => setFriendlyName(e.target.value)}
-                required
-              />
+          <form
+            action={(formData) => {
+              startTransition(async () => {
+                await handleSubmit(formData);
+              });
+            }}
+          >
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="pin">PIN</Label>
+                <Input
+                  id="pin"
+                  name="pin"
+                  value={pin}
+                  onChange={(e) => handlePinChange(e.target.value)}
+                  placeholder="Enter 4-digit PIN"
+                  maxLength={4}
+                  disabled={isPending || isPairing}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="friendlyName">Friendly Name</Label>
+                <Input
+                  id="friendlyName"
+                  name="friendlyName"
+                  value={friendlyName}
+                  onChange={(e) => setFriendlyName(e.target.value)}
+                  placeholder="E.g., Living Room TV"
+                  disabled={isPending || isPairing}
+                />
+              </div>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pin">PIN</Label>
-              <Input
-                id="pin"
-                type="text"
-                placeholder="Enter the PIN shown on your device"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                required
-                pattern="[0-9]*"
-                inputMode="numeric"
-                maxLength={6}
-              />
-            </div>
-
-            <div className="flex justify-end space-x-2">
+            <div className="flex justify-end gap-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={() => setIsOpen(false)}
-                disabled={isSubmitting}
+                disabled={isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Pairing...
-                  </>
-                ) : (
-                  "Pair Device"
-                )}
+              <Button
+                type="submit"
+                disabled={
+                  !pin ||
+                  pin.length !== 4 ||
+                  !friendlyName.trim() ||
+                  isPending ||
+                  isPairing
+                }
+              >
+                {isPending || isPairing ? "Pairing..." : "Pair Device"}
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

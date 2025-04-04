@@ -1,24 +1,18 @@
 "use client";
 
-import { validateLogin } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogComponent } from "@/lib/logger";
 import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
-import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useState } from "react";
 
-interface LoginFormProps {
-  onSuccess: (isFirstTimeLogin: boolean) => void;
-}
+interface LoginFormProps {}
 
-export function LoginForm({ onSuccess }: LoginFormProps) {
+export function LoginForm({}: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const { data: session, update: updateSession } = useSession();
-  const router = useRouter();
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,17 +23,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     const password = formData.get("password") as string;
 
     try {
-      await clientLogger.debug(LogComponent.AUTH, "Validating login input", {
-        username,
-      });
-
-      // Server-side validation
-      const validationResult = await validateLogin({ username, password });
-      if (!validationResult.success) {
-        showToast.error("Validation Error", validationResult.error);
-        return;
-      }
-
       await clientLogger.debug(LogComponent.AUTH, "Attempting login", {
         username,
       });
@@ -47,56 +30,12 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       const result = await signIn("credentials", {
         username,
         password,
-        redirect: false,
+        callbackUrl: "/dashboard",
+        redirect: true,
       });
 
-      if (result?.error) {
-        await clientLogger.error(
-          LogComponent.AUTH,
-          "Login failed",
-          new Error(result.error),
-          {
-            username,
-          }
-        );
-        showToast.error("Login Failed", "Invalid username or password");
-        return;
-      }
-
-      await clientLogger.info(LogComponent.AUTH, "Login successful", {
-        username,
-      });
-
-      // Update session to get the latest data
-      await updateSession();
-
-      // Check if first time setup is required from the session
-      const session = await fetch("/api/auth/session").then((res) =>
-        res.json()
-      );
-      const requiresFirstTimeSetup = session?.requiresFirstTimeSetup;
-
-      onSuccess(requiresFirstTimeSetup);
-
-      if (!requiresFirstTimeSetup) {
-        await clientLogger.debug(
-          LogComponent.AUTH,
-          "Redirecting to dashboard after login",
-          {
-            username,
-          }
-        );
-        router.replace("/dashboard");
-      } else {
-        await clientLogger.debug(
-          LogComponent.AUTH,
-          "First-time login detected, showing wizard",
-          {
-            username,
-          }
-        );
-        router.replace("/first-time-setup");
-      }
+      // The code won't reach here due to redirect: true
+      // NextAuth will handle the redirect
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,
@@ -104,7 +43,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         error as Error
       );
       showToast.error("Login Error", "An unexpected error occurred");
-    } finally {
       setIsLoading(false);
     }
   }

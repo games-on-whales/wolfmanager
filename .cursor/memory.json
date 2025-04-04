@@ -1,0 +1,95 @@
+{
+  "entities": [
+    {
+      "type": "entity",
+      "name": "PINValidation",
+      "entityType": "Feature",
+      "observations": [
+        "Implements 4-digit PIN validation for device pairing",
+        "Uses Zod for schema validation",
+        "Includes rate limiting (5 attempts per 15 minutes)",
+        "Integrates with Wolf API for verification"
+      ]
+    },
+    {
+      "type": "entity",
+      "name": "PINValidationService",
+      "entityType": "Component",
+      "observations": [
+        "Located in src/lib/services/validation/pin.ts",
+        "Handles PIN format validation",
+        "Manages rate limiting logic",
+        "Provides error handling and logging",
+        "Uses in-memory Map for rate limiting storage",
+        "Implements resetAttempts method for successful validations",
+        "Throws typed PINValidationError for different error scenarios"
+      ]
+    },
+    {
+      "type": "entity",
+      "name": "PairDialog",
+      "entityType": "Component",
+      "observations": [
+        "Client-side component for device pairing",
+        "Implements real-time PIN validation",
+        "Uses ShadCN UI components",
+        "Handles error states and loading states",
+        "Implements real-time sanitization of PIN input",
+        "Uses font-mono and tracking-wider for better PIN readability",
+        "Integrates with custom useToast hook for notifications"
+      ]
+    },
+    {
+      "type": "entity",
+      "name": "verifyPIN",
+      "entityType": "ServerAction",
+      "observations": [
+        "Server-side action for PIN verification",
+        "Integrates with Wolf API",
+        "Handles API responses and errors",
+        "Implements comprehensive logging",
+        "Handles three types of API responses: 200 success, 500 error, and unexpected",
+        "Resets rate limiting on successful validation",
+        "Uses environment variable WOLF_API_URL for API endpoint"
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "type": "relation",
+      "from": "PINValidation",
+      "to": "PINValidationService",
+      "relationType": "implements validation logic through"
+    },
+    {
+      "type": "relation",
+      "from": "PINValidation",
+      "to": "PairDialog",
+      "relationType": "provides user interface through"
+    },
+    {
+      "type": "relation",
+      "from": "PINValidation",
+      "to": "verifyPIN",
+      "relationType": "handles server-side validation through"
+    },
+    {
+      "type": "relation",
+      "from": "PairDialog",
+      "to": "verifyPIN",
+      "relationType": "calls"
+    },
+    {
+      "type": "relation",
+      "from": "verifyPIN",
+      "to": "PINValidationService",
+      "relationType": "uses"
+    },
+    {
+      "type": "relation",
+      "from": "PairDialog",
+      "to": "PINValidationService",
+      "relationType": "uses schema from"
+    }
+  ]
+}
