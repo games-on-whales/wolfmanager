@@ -8,6 +8,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { UserService } from "@/lib/services/user-service";
 import { ClientDevice } from "@/types/client";
 import { Loader2 } from "lucide-react";
@@ -38,6 +40,11 @@ export function PairedClients() {
         }
       } catch (error) {
         setError("Failed to load paired clients");
+        await clientLogger.error(
+          LogComponent.PAIRING,
+          "Failed to load paired clients",
+          error instanceof Error ? error : new Error(String(error))
+        );
         toast.error("Failed to load paired clients", {
           description: "Please try refreshing the page.",
         });
@@ -51,6 +58,10 @@ export function PairedClients() {
 
   const handleUnpair = async (deviceId: string) => {
     if (!session?.user?.name) {
+      await clientLogger.warn(
+        LogComponent.PAIRING,
+        "Unpair attempt failed: User not authenticated"
+      );
       toast.error("Authentication Required", {
         description: "You must be logged in to unpair devices.",
       });
@@ -65,11 +76,22 @@ export function PairedClients() {
         setClients((prev: ClientWithOwner[]) =>
           prev.filter((client) => client.id !== deviceId)
         );
+        await clientLogger.info(
+          LogComponent.PAIRING,
+          "Device unpaired successfully",
+          { deviceId }
+        );
         toast.success("Device unpaired successfully");
       } else {
         throw new Error(response.error?.message || "Failed to unpair device");
       }
     } catch (error) {
+      await clientLogger.error(
+        LogComponent.PAIRING,
+        "Failed to unpair device",
+        error instanceof Error ? error : new Error(String(error)),
+        { deviceId }
+      );
       toast.error("Failed to unpair device", {
         description: "Please try again.",
       });

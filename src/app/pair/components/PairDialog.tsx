@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { type PendingPairRequest } from "@/lib/api/wolf-pair";
-import { LogComponent, logger } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { UserService } from "@/lib/services/user-service";
 import { PINSchema } from "@/lib/services/validation/pin";
 import { useSession } from "next-auth/react";
@@ -33,12 +34,16 @@ export function PairDialog() {
   const { toast } = useToast();
 
   const handleSelectRequest = async (request: PendingPairRequest) => {
-    console.log("[PairDialog] Selected pairing request:", {
-      requestId: request.id,
-      deviceType: request.deviceType,
-    });
+    clientLogger.info(
+      LogComponent.PAIRING,
+      "[PairDialog] Selected pairing request",
+      {
+        requestId: request.id,
+        deviceType: request.deviceType,
+      }
+    );
 
-    await logger.debug(LogComponent.PAIRING, "Selected pairing request", {
+    await clientLogger.debug(LogComponent.PAIRING, "Selected pairing request", {
       requestId: request.id,
       deviceType: request.deviceType,
     });
@@ -54,7 +59,7 @@ export function PairDialog() {
     // Real-time format validation
     const result = PINSchema.safeParse(sanitizedValue);
     if (!result.success && sanitizedValue.length === 4) {
-      await logger.warn(LogComponent.PAIRING, "Invalid PIN format", {
+      await clientLogger.warn(LogComponent.PAIRING, "Invalid PIN format", {
         errors: result.error.errors,
       });
     }
@@ -65,7 +70,8 @@ export function PairDialog() {
       const error = !session?.user?.name
         ? "You must be logged in"
         : "You must select a device to pair";
-      await logger.error(LogComponent.PAIRING, error);
+      // Pass a new Error object created from the message string
+      await clientLogger.error(LogComponent.PAIRING, error, new Error(error));
       toast({
         title: "Error",
         description: error,
@@ -77,22 +83,28 @@ export function PairDialog() {
     setIsPairing(true);
 
     try {
-      console.log("[PairDialog] Starting pairing process:", {
-        username: session.user.name,
-        friendlyName,
-        pinLength: pin.length,
-      });
+      clientLogger.debug(
+        LogComponent.PAIRING,
+        "[PairDialog] Starting pairing process",
+        {
+          username: session.user.name,
+          friendlyName,
+        }
+      );
 
-      await logger.debug(LogComponent.PAIRING, "Starting pairing process", {
-        username: session.user.name,
-        friendlyName,
-      });
+      await clientLogger.debug(
+        LogComponent.PAIRING,
+        "Starting pairing process",
+        {
+          username: session.user.name,
+          friendlyName,
+        }
+      );
 
-      await logger.debug(
+      await clientLogger.debug(
         LogComponent.PAIRING,
         "Calling UserService.pairDevice"
       );
-      console.log("[PairDialog] About to call UserService.pairDevice");
 
       const pairResult = await UserService.pairDevice(
         pin,
@@ -101,13 +113,30 @@ export function PairDialog() {
       );
 
       if (!pairResult.success) {
-        console.error("[PairDialog] Pairing failed:", pairResult.error);
+        // Ensure we always have an Error object to pass
+        const errorToLog = pairResult.error
+          ? new Error(pairResult.error.message)
+          : new Error("[PairDialog] Pairing failed with unknown reason");
+        const metadata = { errorCode: pairResult.error?.code };
+
+        // Pass the guaranteed Error object as 3rd arg, metadata as 4th
+        clientLogger.error(
+          LogComponent.PAIRING,
+          "[PairDialog] Pairing failed",
+          errorToLog,
+          metadata
+        );
+
         throw new Error(pairResult.error?.message || "Failed to pair device");
       }
 
       const newClient = pairResult.data?.client;
-      console.log("[PairDialog] Pairing successful, new client:", newClient);
-      await logger.info(LogComponent.PAIRING, "Pairing successful");
+      clientLogger.info(
+        LogComponent.PAIRING,
+        "[PairDialog] Pairing successful",
+        { clientId: newClient?.id }
+      );
+      await clientLogger.info(LogComponent.PAIRING, "Pairing successful");
       toast({
         title: "Success",
         description: "Device paired successfully",
@@ -120,8 +149,12 @@ export function PairDialog() {
       setIsOpen(false);
       router.refresh();
     } catch (error) {
-      console.error("[PairDialog] Error in pairing process:", error);
-      await logger.error(
+      clientLogger.error(
+        LogComponent.PAIRING,
+        "[PairDialog] Error in pairing process",
+        error instanceof Error ? error : new Error(String(error))
+      );
+      await clientLogger.error(
         LogComponent.PAIRING,
         "Error in pairing process",
         error instanceof Error ? error : new Error(String(error))

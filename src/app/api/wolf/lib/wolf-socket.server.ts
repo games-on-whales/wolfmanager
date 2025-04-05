@@ -1,9 +1,10 @@
+import { LogComponent, logger } from "@/lib/logger";
 import fs from "fs";
 import http from "http";
 
 const WOLF_SOCKET_PATH = "/var/run/wolf/wolf.sock";
 
-function checkDevContainer() {
+async function checkDevContainer() {
   try {
     // Check if we're in a dev container
     const isDevContainer =
@@ -11,7 +12,7 @@ function checkDevContainer() {
       process.env.CODESPACES === "true" ||
       fs.existsSync("/.dockerenv");
 
-    console.log("[WOLF_SOCKET] Environment:", {
+    await logger.debug(LogComponent.API, "[WOLF_SOCKET] Environment", {
       isDevContainer,
       dockerEnv: fs.existsSync("/.dockerenv"),
       remoteContainers: process.env.REMOTE_CONTAINERS,
@@ -23,15 +24,19 @@ function checkDevContainer() {
 
     return isDevContainer;
   } catch (error) {
-    console.warn("[WOLF_SOCKET] Error checking dev container:", error);
+    await logger.warn(
+      LogComponent.API,
+      "[WOLF_SOCKET] Error checking dev container",
+      error instanceof Error ? error : new Error(String(error))
+    );
     return false;
   }
 }
 
-function checkSocketPermissions() {
+async function checkSocketPermissions() {
   try {
     const stats = fs.statSync(WOLF_SOCKET_PATH);
-    console.log("[WOLF_SOCKET] Socket permissions:", {
+    await logger.debug(LogComponent.API, "[WOLF_SOCKET] Socket permissions", {
       path: WOLF_SOCKET_PATH,
       mode: stats.mode.toString(8),
       uid: stats.uid,
@@ -40,7 +45,11 @@ function checkSocketPermissions() {
     });
     return true;
   } catch (error) {
-    console.error("[WOLF_SOCKET] Permission check failed:", error);
+    await logger.error(
+      LogComponent.API,
+      "[WOLF_SOCKET] Permission check failed",
+      error instanceof Error ? error : new Error(String(error))
+    );
     throw error;
   }
 }
@@ -86,55 +95,63 @@ export async function callWolfApi(
         data += chunk;
       });
 
-      res.on("end", () => {
+      res.on("end", async () => {
         try {
-          // Add logging for the raw data received before parsing
-          console.log("[WOLF_SOCKET_RAW_DATA]", {
+          await logger.debug(LogComponent.API, "[WOLF_SOCKET_RAW_DATA]", {
             endpoint,
             method,
             statusCode: res.statusCode,
             headers: res.headers,
-            rawData: data, // Log the raw string data
+            rawData: data,
           });
 
-          // Handle empty response
           if (!data) {
-            console.log("[WOLF_SOCKET_EMPTY_RESPONSE]", { endpoint, method });
+            await logger.debug(
+              LogComponent.API,
+              "[WOLF_SOCKET_EMPTY_RESPONSE]",
+              { endpoint, method }
+            );
             resolve({});
             return;
           }
 
           const jsonResponse = JSON.parse(data);
-          // Add logging for the parsed response before resolving
-          console.log("[WOLF_SOCKET_PARSED_RESPONSE]", {
-            endpoint,
-            method,
-            jsonResponse,
-          });
+          await logger.debug(
+            LogComponent.API,
+            "[WOLF_SOCKET_PARSED_RESPONSE]",
+            {
+              endpoint,
+              method,
+              jsonResponse,
+            }
+          );
           resolve(jsonResponse);
         } catch (error) {
-          console.error("[WOLF_SOCKET_PARSE_ERROR]", {
-            endpoint,
-            method,
-            rawData: data, // Include raw data in parse error log
-            error,
-          });
+          await logger.error(
+            LogComponent.API,
+            "[WOLF_SOCKET_PARSE_ERROR]",
+            error instanceof Error ? error : new Error(String(error)),
+            { endpoint, method, rawData: data }
+          );
           reject(new Error("Failed to parse Wolf API response"));
         }
       });
     });
 
-    req.on("error", (error: SystemError) => {
-      console.error("[WOLF_SOCKET_REQUEST_ERROR]", {
-        code: error.code,
-        message: error.message,
-        syscall: error.syscall,
-        address: error.address,
-      });
+    req.on("error", async (error: SystemError) => {
+      await logger.error(
+        LogComponent.API,
+        "[WOLF_SOCKET_REQUEST_ERROR]",
+        error,
+        {
+          code: error.code,
+          syscall: error.syscall,
+          address: error.address,
+        }
+      );
       reject(error);
     });
 
-    // Write request body if present
     if (body) {
       req.write(JSON.stringify(body));
     }

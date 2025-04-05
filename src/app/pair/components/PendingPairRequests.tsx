@@ -9,7 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { wolfPairApi, type PendingPairRequest } from "@/lib/api/wolf-pair";
-import { LogComponent, logger } from "@/lib/logger";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
 import { UserService } from "@/lib/services/user-service";
 import { ClientDevice } from "@/types/client";
 import { RefreshCw } from "lucide-react";
@@ -67,10 +68,10 @@ export function PendingPairRequests({
         });
       }
       // Log the actual error for debugging
-      logger.error(
+      await clientLogger.error(
         LogComponent.PAIRING,
         "Error fetching pending requests or paired clients",
-        { error: error instanceof Error ? error : new Error(String(error)) }
+        error instanceof Error ? error : new Error(String(error))
       );
     } finally {
       setIsRefreshing(false);
@@ -81,8 +82,8 @@ export function PendingPairRequests({
   useEffect(() => {
     fetchRequests();
 
-    // Poll every 5 seconds instead of 30
-    const pollInterval = setInterval(fetchRequests, 5000);
+    // Poll every 10 seconds instead of 30
+    const pollInterval = setInterval(fetchRequests, 10000);
 
     return () => {
       clearInterval(pollInterval);

@@ -19,6 +19,7 @@ export class Logger {
 
   private constructor(config: Partial<LoggerConfig> = {}) {
     this.config = loggerConfigSchema.parse(config);
+
     this.initializeTransports();
   }
 
@@ -74,19 +75,96 @@ export class Logger {
       return;
     }
 
-    const promises: Promise<void>[] = [];
+    // Map transports to their promises for identification later
+    const transportPromises = this.transports.map((transport) => ({
+      transport,
+      promise: transport.log(entry).catch((error) => error), // Catch errors here to allow allSettled to work
+    }));
 
-    // Log to all transports
-    for (const transport of this.transports) {
-      promises.push(transport.log(entry));
+    // Include plugin promises as well, assuming they return Promise<void>
+    const pluginPromises = this.plugins.map((plugin) => ({
+      plugin,
+      promise: plugin.onLog(entry).catch((error) => error),
+    }));
+
+    // Combine promises, we will handle results separately later
+    const allPromises = [
+      ...transportPromises.map((tp) => tp.promise),
+      ...pluginPromises.map((pp) => pp.promise),
+    ];
+
+    // Use Promise.allSettled to wait for all promises regardless of success/failure
+    const results = await Promise.allSettled(allPromises);
+
+    // Process results to find failed transports
+    const failedTransports: { transport: LogTransport; reason: any }[] = [];
+    results.slice(0, this.transports.length).forEach((result, index) => {
+      if (result.status === "rejected") {
+        failedTransports.push({
+          transport: this.transports[index],
+          reason: result.reason,
+        });
+      }
+    });
+
+    // Process results for failed plugins (optional logging)
+    results.slice(this.transports.length).forEach((result, index) => {
+      if (result.status === "rejected") {
+        // Handle plugin failures - perhaps log using console.error as fallback?
+        // Avoid sending plugin failures back through the main logger to prevent loops
+        console.error(
+          `Logger plugin '${this.plugins[index].name}' failed:`,
+          result.reason
+        );
+      }
+    });
+
+    // If any transports failed, log this failure using the transports that *succeeded*
+    if (failedTransports.length > 0) {
+      const successfulTransports = this.transports.filter(
+        (t, index) => results[index].status === "fulfilled"
+      );
+
+      // Avoid infinite loops: If all transports failed, log to console as a last resort
+      if (successfulTransports.length === 0 && this.transports.length > 0) {
+        failedTransports.forEach(({ transport, reason }) => {
+          console.error(
+            `Log transport '${transport.constructor.name}' failed and no other transports succeeded. Reason:`,
+            reason
+          );
+        });
+        return; // Stop here if no transports can report the failure
+      }
+
+      // Log each transport failure through the successful transports
+      for (const { transport, reason } of failedTransports) {
+        const failureEntry: LogEntry = {
+          timestamp: new Date(),
+          level: "error", // Reporting transport failure as error
+          component: LogComponent.SYSTEM, // Log component for logger system issues
+          message: `Log transport '${transport.constructor.name}' failed`,
+          raw: reason instanceof Error ? reason : new Error(String(reason)), // Ensure 'raw' is an Error
+          metadata: {
+            // Optionally add details from the original entry if needed
+            // originalLevel: entry.level,
+            // originalComponent: entry.component,
+            // originalMessage: entry.message.substring(0, 100) // Example: truncate original message
+          },
+        };
+
+        // Send the failure notice *only* to transports that didn't fail
+        const failurePromises = successfulTransports.map((t) =>
+          t.log(failureEntry).catch((err) => {
+            // Fallback for nested failure: If logging the failure itself fails, log to console
+            console.error(
+              `Failed to log transport failure via ${t.constructor.name}:`,
+              err
+            );
+          })
+        );
+        await Promise.allSettled(failurePromises); // Wait for failure logs to be attempted
+      }
     }
-
-    // Send to all plugins
-    for (const plugin of this.plugins) {
-      promises.push(plugin.onLog(entry));
-    }
-
-    await Promise.all(promises);
   }
 
   public async debug(

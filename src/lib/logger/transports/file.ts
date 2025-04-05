@@ -41,9 +41,11 @@ export class FileTransport implements LogTransport {
       const logLine =
         this.format === "json"
           ? JSON.stringify(entry) + "\n"
-          : `${entry.timestamp} [${entry.level}] ${entry.component}: ${
-              entry.message
-            } ${JSON.stringify(entry.metadata)}\n`;
+          : `${entry.timestamp.toISOString()} [${entry.level.toUpperCase()}] ${
+              entry.component
+            }: ${entry.message} ${
+              entry.metadata ? JSON.stringify(entry.metadata) : ""
+            }`.trim() + "\n";
 
       // Append to log file
       await fs.appendFile(this.filePath, logLine, "utf8");
@@ -51,7 +53,8 @@ export class FileTransport implements LogTransport {
       // Check file size and rotate if needed
       await this.rotateLogsIfNeeded();
     } catch (error) {
-      console.error("Failed to write to log file:", error);
+      // Re-throw error to signal failure
+      throw error;
     }
   }
 
@@ -63,8 +66,13 @@ export class FileTransport implements LogTransport {
       if (stats.size >= this.maxSize) {
         await this.rotateLogs();
       }
-    } catch (error) {
-      console.error("Failed to check log file size:", error);
+    } catch (error: any) {
+      // Handle file not found gracefully during stat check (e.g., first write)
+      if (error.code === "ENOENT") {
+        return; // File doesn't exist yet, no need to rotate or error
+      }
+      // Re-throw other errors to signal failure
+      throw error;
     }
   }
 
@@ -77,20 +85,25 @@ export class FileTransport implements LogTransport {
         const oldPath = `${this.filePath}.${i}`;
         const newPath = `${this.filePath}.${i + 1}`;
         try {
+          // Check if the old file exists before trying to rename
           await fs.access(oldPath);
           await fs.rename(oldPath, newPath);
-        } catch (error) {
-          // File doesn't exist, skip
+        } catch (error: any) {
+          // Ignore if the source file doesn't exist (ENOENT)
+          if (error.code !== "ENOENT") {
+            throw error; // Re-throw unexpected errors during rename
+          }
         }
       }
 
       // Rename current log file
       await fs.rename(this.filePath, `${this.filePath}.1`);
 
-      // Create new empty log file
-      await fs.writeFile(this.filePath, "", "utf8");
+      // NOTE: No need to explicitly create a new empty file,
+      // fs.appendFile in the next log call will create it.
     } catch (error) {
-      console.error("Failed to rotate log files:", error);
+      // Re-throw error to signal failure
+      throw error;
     }
   }
 }

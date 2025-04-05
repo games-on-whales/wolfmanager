@@ -7,7 +7,7 @@ const isClient = typeof window !== "undefined";
 const devConfig: LoggerConfig = {
   level: "debug",
   container: {
-    enabled: false,
+    enabled: true,
     serviceName: "wolf-ui-dev",
     includeMetadata: true,
     useJson: true,
@@ -84,7 +84,8 @@ export function getLoggerConfig(): LoggerConfig {
     ? containerConfig
     : prodConfig;
 
-  return {
+  // Construct the final config object
+  const finalConfig = {
     ...baseConfig,
     level: (process.env.LOG_LEVEL as LoggerConfig["level"]) || baseConfig.level,
     container: {
@@ -116,4 +117,6 @@ export function getLoggerConfig(): LoggerConfig {
         process.env.LOG_CONSOLE_COLOR === "true" || baseConfig.console.colorize,
     },
   };
+
+  return finalConfig;
 }
