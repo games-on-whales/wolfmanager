@@ -22,6 +22,8 @@ This is the technology stack being used to build the application, do not deviate
 - NextAuth for Authentication and Session Management [nextauth.mdc](mdc:.cursor/rules/nextauth.mdc)
 - Custom Logging implementation [logger.mdc](mdc:.cursor/rules/logger.mdc)
 - ShadCN for Component Library [shadcn.mdc](mdc:.cursor/rules/shadcn.mdc)
+- Databate is TOML [tomlconfig.mdc](mdc:.cursor/rules/tomlconfig.mdc)
+- Package Manager is pnpm
 
 # MCP
 - Use all available MCP tools configured where applicable to do.

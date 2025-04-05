@@ -1,10 +1,12 @@
 import { ClientDevice } from "@/types/client";
-import TOML from "@iarna/toml";
+import { TasksConfig, TaskState } from "@/types/task";
+import iarnaTOML from "@iarna/toml";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
-import toml from "toml";
+import TOML from "toml";
 import { decrypt, encrypt } from "./crypto";
 import { Logger } from "./logger/logger";
 import { LogComponent } from "./logger/types";
@@ -97,8 +99,10 @@ export async function getConfig(): Promise<Config> {
   }
 
   const configPath = path.join(process.cwd(), "config", "default.toml");
-  const configFile = await fsPromises.readFile(configPath, "utf-8");
-  const config = toml.parse(configFile) as Config;
+  const configFile = await fsPromises.readFile(configPath, {
+    encoding: "utf-8",
+  });
+  const config = TOML.parse(configFile) as unknown as Config;
 
   cachedConfig = config;
   return config;
@@ -111,7 +115,7 @@ export function loadConfig(decryptSensitiveData: boolean = false): Config {
     logger.debug(LogComponent.SYSTEM, "Reading config file", { configPath });
     const configFile = fs.readFileSync(configPath, "utf-8");
     logger.debug(LogComponent.SYSTEM, "Parsing config file");
-    const parsedConfig = TOML.parse(configFile);
+    const parsedConfig = TOML.parse(configFile) as unknown as Config;
     logger.debug(LogComponent.SYSTEM, "Parsed config object", {
       configStructure: {
         hasSystem: typeof parsedConfig.system === "object",
@@ -276,9 +280,7 @@ export function saveConfig(config: Config): void {
       "Stringifying configuration for saving.",
       { configPath }
     );
-    const configString = TOML.stringify(
-      encryptedConfig as unknown as TOML.JsonMap
-    );
+    const configString = iarnaTOML.stringify(encryptedConfig as any);
     logger.debug(LogComponent.SYSTEM, "Writing configuration file.", {
       configPath,
     });
@@ -567,4 +569,125 @@ export function verifyUserSteamCredentials(
 
   // Use standard string comparison against decrypted values
   return steamId === user.steam_id && steamApiKey === user.steam_api_key;
+}
+
+const TASKS_CONFIG_PATH = path.resolve(process.cwd(), "config/tasks.toml");
+
+export async function loadTasksConfig(): Promise<TasksConfig> {
+  try {
+    const fileContent = await fsPromises.readFile(TASKS_CONFIG_PATH, {
+      encoding: "utf-8",
+    });
+    const parsed = TOML.parse(fileContent) as unknown as TasksConfig;
+    // TODO: Add validation here (e.g., using Zod) to ensure structure matches TasksConfig
+    return parsed;
+  } catch (error: any) {
+    if (error.code === "ENOENT") {
+      // File doesn't exist, return default structure
+      return { tasks: [] };
+    }
+    // Log the error using the custom logger
+    console.error("Failed to load tasks config:", error);
+    // logger.error('Failed to load tasks config', { error });
+    throw new Error("Failed to load tasks configuration.");
+  }
+}
+
+export async function saveTasksConfig(config: TasksConfig): Promise<void> {
+  try {
+    // TODO: Add validation here before saving
+    const tomlString = iarnaTOML.stringify(config as any);
+    // Ensure config directory exists
+    await fsPromises.mkdir(path.dirname(TASKS_CONFIG_PATH), {
+      recursive: true,
+    });
+    await fsPromises.writeFile(TASKS_CONFIG_PATH, tomlString, {
+      encoding: "utf-8",
+    });
+    // logger.info('Tasks config saved successfully.');
+  } catch (error) {
+    // Log the error
+    console.error("Failed to save tasks config:", error);
+    // logger.error('Failed to save tasks config', { error });
+    throw new Error("Failed to save tasks configuration.");
+  }
+}
+
+// Utility function to update a specific task (handles read-modify-write)
+export async function updateTaskState(
+  taskId: string,
+  updates: Partial<Omit<TaskState, "id" | "name" | "created_at">>
+): Promise<void> {
+  // TODO: Acquire lock if implemented
+  try {
+    const config = await loadTasksConfig();
+    const taskIndex = config.tasks.findIndex((t: TaskState) => t.id === taskId);
+
+    if (taskIndex === -1) {
+      // logger.warn(`Task with id ${taskId} not found for update.`);
+      console.warn(`Task with id ${taskId} not found for update.`);
+      return; // Or throw an error
+    }
+
+    const updatedTask = {
+      ...config.tasks[taskIndex],
+      ...updates,
+      updated_at: new Date().toISOString(), // Update timestamp
+    };
+    config.tasks[taskIndex] = updatedTask;
+
+    await saveTasksConfig(config);
+  } finally {
+    // TODO: Release lock if implemented
+  }
+}
+
+// Utility function to add a new task definition or update an existing one by name
+export async function addOrUpdateTaskDefinition(
+  taskInfo: Omit<
+    TaskState,
+    | "id"
+    | "created_at"
+    | "updated_at"
+    | "status"
+    | "last_run_at"
+    | "next_run_at"
+  >
+): Promise<TaskState> {
+  // TODO: Acquire lock if implemented
+  try {
+    const config = await loadTasksConfig();
+    let task = config.tasks.find((t: TaskState) => t.name === taskInfo.name);
+    const now = new Date().toISOString();
+
+    if (task) {
+      // Update description and schedule if definition changed
+      if (
+        task.description !== taskInfo.description ||
+        task.schedule !== taskInfo.schedule
+      ) {
+        task.description = taskInfo.description;
+        task.schedule = taskInfo.schedule;
+        task.updated_at = now;
+      }
+    } else {
+      // Add new task
+      task = {
+        ...taskInfo,
+        id: crypto.randomUUID(), // Use crypto.randomUUID()
+        status: "IDLE",
+        is_enabled: true, // Default to enabled? Or based on definition?
+        last_run_at: null,
+        next_run_at: null, // Will be calculated by scheduler
+        created_at: now,
+        updated_at: now,
+      };
+      config.tasks.push(task);
+    }
+
+    await saveTasksConfig(config);
+    return task;
+  } finally {
+    // TODO: Release lock
+  }
 }
