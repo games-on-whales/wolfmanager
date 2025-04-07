@@ -1,11 +1,11 @@
 import { authOptions } from "@/lib/auth";
+import { Logger } from "@/lib/logger/logger";
+import { LogComponent } from "@/lib/logger/types";
 import { startTask } from "@/lib/scheduler";
-import { getServerSession } from "next-auth";
+import { getServerSession, Session } from "next-auth";
 import { NextResponse } from "next/server";
-// import { requireAuth } from '@/lib/auth'; // Placeholder
-// import { Logger } from '@/lib/logger'; // Placeholder
 
-// const logger = new Logger('api/tasks/start'); // Placeholder
+const logger = Logger.getInstance();
 
 interface RouteParams {
   params: {
@@ -15,43 +15,60 @@ interface RouteParams {
 
 export async function POST(request: Request, { params }: RouteParams) {
   const { taskId } = params;
+  const url = new URL(request.url);
+  logger.info(
+    LogComponent.WOLF_SERVER,
+    "Received POST request to start task.",
+    {
+      taskId,
+      pathname: url.pathname,
+    }
+  );
 
-  // try {
-  //     // TODO: Auth check
-  //     // logger.info(`Received request to start task: ${taskId}`);
-  //     await startTask(taskId);
-  //     // logger.info(`Successfully started task: ${taskId}`);
-  //     return NextResponse.json({ message: 'Task started successfully' });
-  // } catch (error: any) {
-  //     // logger.error(`Error starting task ${taskId}`, { error: error.message, stack: error.stack });
-  //     if (error.message.includes('not found')) {
-  //         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-  //     }
-  //     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  // }
+  let session: Session | null = null;
 
-  // Temporary implementation
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user) {
-      // logger.warn('Unauthorized attempt to start task: No session', { taskId });
+      logger.warn(LogComponent.AUTH, "Unauthorized attempt: No session.", {
+        taskId,
+        endpoint: "POST /api/tasks/[taskId]/start",
+      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (session.user.role !== "admin") {
-      // logger.warn('Forbidden attempt to start task', { userId: session.user.id, taskId });
+      logger.warn(LogComponent.AUTH, "Forbidden attempt: User is not admin.", {
+        userId: session.user.id,
+        userRole: session.user.role,
+        taskId,
+        endpoint: "POST /api/tasks/[taskId]/start",
+      });
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // logger.info(`Received request to start task: ${taskId}`, { userId: session.user.id });
-    console.log(`Received request to start task: ${taskId}`);
+    logger.debug(LogComponent.WOLF_SERVER, `Attempting to start task...`, {
+      userId: session.user.id,
+      taskId,
+    });
     await startTask(taskId);
-    console.log(`Successfully started task: ${taskId}`);
-    // logger.info(`Successfully started task: ${taskId}`, { userId: session.user.id });
+    logger.info(LogComponent.WOLF_SERVER, `Successfully started task.`, {
+      userId: session.user.id,
+      taskId,
+    });
     return NextResponse.json({ message: "Task started successfully" });
   } catch (error: any) {
-    // logger.error(`Error starting task ${taskId}`, { userId: session?.user?.id, error: error.message, stack: error.stack });
-    console.error(`Error starting task ${taskId}:`, error);
-    if (error.message.includes("not found")) {
+    logger.error(
+      LogComponent.WOLF_SERVER,
+      `Error starting task ${taskId}`,
+      error instanceof Error ? error : new Error(String(error)),
+      { userId: session?.user?.id, taskId }
+    );
+    if (error.message.toLowerCase().includes("not found")) {
+      logger.warn(
+        LogComponent.WOLF_SERVER,
+        `Task not found during start request.`,
+        { taskId }
+      );
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
     return NextResponse.json(

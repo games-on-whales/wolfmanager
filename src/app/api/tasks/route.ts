@@ -7,9 +7,23 @@ import { NextResponse } from "next/server";
 
 // Add auth imports
 import { authOptions } from "@/lib/auth";
+import { Logger } from "@/lib/logger/logger"; // Import Logger
+import { LogComponent } from "@/lib/logger/types"; // Import LogComponent
 import { getServerSession } from "next-auth";
 
+const logger = Logger.getInstance(); // Initialize logger
+
 export async function GET(request: Request) {
+  const url = new URL(request.url);
+  logger.info(
+    LogComponent.WOLF_SERVER,
+    "Received GET request for tasks status.",
+    {
+      pathname: url.pathname,
+      searchParams: url.searchParams.toString(),
+    }
+  );
+
   // try {
   //     // TODO: Implement authentication/authorization check
   //     // const session = await requireAuth();
@@ -31,21 +45,49 @@ export async function GET(request: Request) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
-      // logger.warn('Unauthorized access attempt to get tasks status: No session');
+      logger.warn(
+        LogComponent.AUTH,
+        "Unauthorized access attempt: No session.",
+        {
+          endpoint: "GET /api/tasks",
+        }
+      );
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     if (session.user.role !== "admin") {
-      // logger.warn('Forbidden access attempt to get tasks status', { userId: session.user.id });
+      logger.warn(
+        LogComponent.AUTH,
+        "Forbidden access attempt: User is not admin.",
+        {
+          userId: session.user.id,
+          userRole: session.user.role,
+          endpoint: "GET /api/tasks",
+        }
+      );
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // logger.info('Fetching tasks status', { userId: session.user.id });
+    logger.debug(LogComponent.WOLF_SERVER, "Fetching tasks status...", {
+      userId: session.user.id,
+    });
     const tasksConfig = await getTasksStatus();
+    logger.info(
+      LogComponent.WOLF_SERVER,
+      "Successfully fetched tasks status.",
+      {
+        userId: session.user.id,
+        taskCount: tasksConfig.tasks?.length ?? 0,
+      }
+    );
     return NextResponse.json(tasksConfig);
   } catch (error: any) {
-    // logger.error('Error fetching tasks status', { error: error.message, stack: error.stack });
-    console.error("Error fetching tasks status:", error);
+    logger.error(
+      LogComponent.WOLF_SERVER,
+      "Error fetching tasks status",
+      error instanceof Error ? error : new Error(String(error)),
+      { endpoint: "GET /api/tasks" }
+    );
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

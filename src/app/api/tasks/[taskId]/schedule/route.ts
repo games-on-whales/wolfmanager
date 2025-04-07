@@ -1,11 +1,12 @@
 import { authOptions } from "@/lib/auth";
+import { Logger } from "@/lib/logger/logger";
+import { LogComponent } from "@/lib/logger/types";
 import { updateTaskSchedule } from "@/lib/scheduler";
-import { getServerSession } from "next-auth";
+import { getServerSession, Session } from "next-auth";
 import { NextResponse } from "next/server";
-// import { Logger } from '@/lib/logger'; // Placeholder
 import { z } from "zod";
 
-// const logger = new Logger('api/tasks/schedule'); // Placeholder
+const logger = Logger.getInstance();
 
 interface RouteParams {
   params: {
@@ -14,58 +15,83 @@ interface RouteParams {
 }
 
 const updateScheduleSchema = z.object({
-  schedule: z.string().min(1), // Basic validation, could add cron validation
+  schedule: z
+    .string()
+    .min(1, "Schedule cannot be empty.")
+    .regex(
+      /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/,
+      "Invalid cron schedule format."
+    ),
 });
 
 export async function PUT(request: Request, { params }: RouteParams) {
   const { taskId } = params;
+  const url = new URL(request.url);
+  logger.info(
+    LogComponent.WOLF_SERVER,
+    "Received PUT request to update task schedule.",
+    {
+      taskId,
+      pathname: url.pathname,
+    }
+  );
 
-  // try {
-  //     // TODO: Auth check
-  //     const body = await request.json();
-  //     const validation = updateScheduleSchema.safeParse(body);
+  let session: Session | null = null;
 
-  //     if (!validation.success) {
-  //         // logger.warn(`Invalid schedule update request for task ${taskId}`, { errors: validation.error.errors });
-  //         return NextResponse.json({ error: 'Invalid input', details: validation.error.flatten() }, { status: 400 });
-  //     }
-
-  //     const { schedule } = validation.data;
-  //     // logger.info(`Received request to update schedule for task ${taskId} to: ${schedule}`);
-  //     await updateTaskSchedule(taskId, schedule);
-  //     // logger.info(`Successfully updated schedule for task: ${taskId}`);
-  //     return NextResponse.json({ message: 'Task schedule updated successfully' });
-  // } catch (error: any) {
-  //     // logger.error(`Error updating schedule for task ${taskId}`, { error: error.message, stack: error.stack });
-  //     if (error.message.includes('not found')) {
-  //         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-  //     }
-  //     if (error.message.includes('Invalid cron schedule')) {
-  //         return NextResponse.json({ error: 'Invalid cron schedule format' }, { status: 400 });
-  //     }
-  //     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  // }
-
-  // Temporary implementation
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user) {
-      // logger.warn('Unauthorized attempt to update schedule: No session', { taskId });
+      logger.warn(LogComponent.AUTH, "Unauthorized attempt: No session.", {
+        taskId,
+        endpoint: "PUT /api/tasks/[taskId]/schedule",
+      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (session.user.role !== "admin") {
-      // logger.warn('Forbidden attempt to update schedule', { userId: session.user.id, taskId });
+      logger.warn(LogComponent.AUTH, "Forbidden attempt: User is not admin.", {
+        userId: session.user.id,
+        userRole: session.user.role,
+        taskId,
+        endpoint: "PUT /api/tasks/[taskId]/schedule",
+      });
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+      logger.debug(LogComponent.WOLF_SERVER, "Parsed request body.", {
+        taskId,
+        body,
+      });
+    } catch (parseError) {
+      logger.error(
+        LogComponent.WOLF_SERVER,
+        "Failed to parse request body as JSON.",
+        parseError instanceof Error
+          ? parseError
+          : new Error(String(parseError)),
+        {
+          taskId,
+        }
+      );
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+
     const validation = updateScheduleSchema.safeParse(body);
 
     if (!validation.success) {
-      // logger.warn(`Invalid schedule update request for task ${taskId}`, { userId: session.user.id, errors: validation.error.errors });
-      console.error(
-        `Invalid schedule update request for task ${taskId}`,
-        validation.error.flatten()
+      logger.warn(
+        LogComponent.WOLF_SERVER,
+        `Invalid schedule update request body.`,
+        {
+          userId: session.user.id,
+          taskId,
+          errors: validation.error.flatten(),
+        }
       );
       return NextResponse.json(
         { error: "Invalid input", details: validation.error.flatten() },
@@ -74,21 +100,47 @@ export async function PUT(request: Request, { params }: RouteParams) {
     }
 
     const { schedule } = validation.data;
-    // logger.info(`Received request to update schedule for task ${taskId} to: ${schedule}`, { userId: session.user.id });
-    console.log(
-      `Received request to update schedule for task ${taskId} to: ${schedule}`
+    logger.debug(
+      LogComponent.WOLF_SERVER,
+      `Attempting to update schedule for task...`,
+      {
+        userId: session.user.id,
+        taskId,
+        newSchedule: schedule,
+      }
     );
     await updateTaskSchedule(taskId, schedule);
-    console.log(`Successfully updated schedule for task: ${taskId}`);
-    // logger.info(`Successfully updated schedule for task: ${taskId}`, { userId: session.user.id });
+    logger.info(
+      LogComponent.WOLF_SERVER,
+      `Successfully updated schedule for task.`,
+      {
+        userId: session.user.id,
+        taskId,
+        newSchedule: schedule,
+      }
+    );
     return NextResponse.json({ message: "Task schedule updated successfully" });
   } catch (error: any) {
-    // logger.error(`Error updating schedule for task ${taskId}`, { userId: session?.user?.id, error: error.message, stack: error.stack });
-    console.error(`Error updating schedule for task ${taskId}:`, error);
-    if (error.message.includes("not found")) {
+    logger.error(
+      LogComponent.WOLF_SERVER,
+      `Error updating schedule for task ${taskId}`,
+      error instanceof Error ? error : new Error(String(error)),
+      { userId: session?.user?.id, taskId }
+    );
+    if (error.message.toLowerCase().includes("not found")) {
+      logger.warn(
+        LogComponent.WOLF_SERVER,
+        `Task not found during schedule update request.`,
+        { taskId }
+      );
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
-    if (error.message.includes("Invalid cron schedule")) {
+    if (error.message.toLowerCase().includes("invalid cron schedule")) {
+      logger.warn(
+        LogComponent.WOLF_SERVER,
+        `Invalid cron schedule format provided.`,
+        { taskId, schedule: (error as any)?.schedule }
+      );
       return NextResponse.json(
         { error: "Invalid cron schedule format" },
         { status: 400 }

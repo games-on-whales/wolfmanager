@@ -14,15 +14,15 @@ This plan outlines the steps to implement a background task runner feature withi
 - Basic UI page (`/settings/tasks`) and client component for task listing and interaction.
 - Page layout consistency using `PageLayout`.
 - Authentication checks on the page and API routes.
+- Custom logger integrated into Config, Scheduler, API routes, and Task execution.
+- Added "Background Tasks" link to the main settings page under Admin Settings.
 
 **Remaining / Partially Done:**
 
-- [ ] Integrate custom logger (`logger.mdc`) throughout the implementation (Scheduler, Config, Tasks, API).
 - [ ] Create documentation for adding new tasks (`docs/adding-background-tasks.md`).
 - [ ] Address TOML concurrency (consider file locking in `config.ts`).
-- [ ] Add more robust validation (e.g., Zod for TOML config structure, cron string validation in API).
+- [ ] Add more robust validation (e.g., Zod for TOML config structure, improved cron validation in API schedule endpoint).
 - [ ] Decide on and implement the scheduler startup mechanism (`startScheduler()` call location).
-- [ ] Ensure necessary UI dependencies (`shadcn`, `sonner`) are installed and configured.
 
 ---
 
@@ -78,7 +78,7 @@ export interface TasksConfig {
 
 ## 2. TOML Configuration Utilities [x]
 
-As per `tomlconfig.mdc`, we need utilities to read and write TOML data. We'll use `toml` for parsing and `@iarna/toml` for writing.
+As per `tomlconfig.mdc`, we need utilities to read and write TOML data. We'll use `toml` for parsing and `@iarna/toml` for writing. Custom logger integrated.
 
 - **[x] Verify Dependencies:** Ensure `toml` and `@iarna/toml` are listed in your `package.json` and installed. Used `crypto.randomUUID()` instead of `cuid`.
 - **[x] Location:** `src/lib/config.ts` (or similar, based on `tomlconfig.mdc`)
@@ -90,48 +90,74 @@ import path from "path";
 import TOML from "toml"; // For parsing
 import iarnaTOML from "@iarna/toml"; // For stringifying/writing
 import crypto from "crypto"; // For UUID generation
-// import { Logger } from '@/lib/logger'; // Assuming logger path - [ ] TODO: Integrate Logger
+import { Logger } from "@/lib/logger/logger"; // Assuming logger path
+import { LogComponent } from "@/lib/logger/types";
 import { TasksConfig, TaskState } from "@/types/task"; // Assuming type path
 
 const TASKS_CONFIG_PATH = path.resolve(process.cwd(), "config/tasks.toml");
 
-// Initialize logger instance here if needed
+const logger = Logger.getInstance();
 
 // [ ] TODO: Consider adding a simple file lock mechanism here if concurrent writes are expected
 // E.g., using a library like 'proper-lockfile'
 
 export async function loadTasksConfig(): Promise<TasksConfig> {
+  logger.debug(LogComponent.SYSTEM, "Attempting to load tasks configuration.", {
+    path: TASKS_CONFIG_PATH,
+  });
   try {
     const fileContent = await fs.readFile(TASKS_CONFIG_PATH, {
       encoding: "utf-8",
     });
     const parsed = TOML.parse(fileContent) as unknown as TasksConfig;
     // [ ] TODO: Add validation here (e.g., using Zod) to ensure structure matches TasksConfig
+    logger.info(
+      LogComponent.SYSTEM,
+      "Tasks configuration loaded successfully.",
+      { path: TASKS_CONFIG_PATH, taskCount: parsed.tasks?.length ?? 0 }
+    );
     return parsed;
   } catch (error: any) {
     if (error.code === "ENOENT") {
-      // File doesn't exist, return default structure
+      logger.warn(
+        LogComponent.SYSTEM,
+        "Tasks config file not found, returning default empty structure.",
+        { path: TASKS_CONFIG_PATH }
+      );
       return { tasks: [] };
     }
-    // Log the error using the custom logger
-    console.error("Failed to load tasks config:", error); // [ ] TODO: Replace with logger
-    // logger.error('Failed to load tasks config', { error });
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to load tasks configuration.",
+      error instanceof Error ? error : new Error(String(error)),
+      { path: TASKS_CONFIG_PATH }
+    );
     throw new Error("Failed to load tasks configuration.");
   }
 }
 
 export async function saveTasksConfig(config: TasksConfig): Promise<void> {
+  logger.debug(LogComponent.SYSTEM, "Attempting to save tasks configuration.", {
+    path: TASKS_CONFIG_PATH,
+    taskCount: config.tasks?.length ?? 0,
+  });
   try {
     // [ ] TODO: Add validation here before saving
     const tomlString = iarnaTOML.stringify(config as any);
-    // Ensure config directory exists
     await fs.mkdir(path.dirname(TASKS_CONFIG_PATH), { recursive: true });
     await fs.writeFile(TASKS_CONFIG_PATH, tomlString, { encoding: "utf-8" });
-    // logger.info('Tasks config saved successfully.'); // [ ] TODO: Add logging
+    logger.info(
+      LogComponent.SYSTEM,
+      "Tasks configuration saved successfully.",
+      { path: TASKS_CONFIG_PATH }
+    );
   } catch (error) {
-    // Log the error
-    console.error("Failed to save tasks config:", error); // [ ] TODO: Replace with logger
-    // logger.error('Failed to save tasks config', { error });
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to save tasks configuration.",
+      error instanceof Error ? error : new Error(String(error)),
+      { path: TASKS_CONFIG_PATH }
+    );
     throw new Error("Failed to save tasks configuration.");
   }
 }
@@ -141,15 +167,21 @@ export async function updateTaskState(
   taskId: string,
   updates: Partial<Omit<TaskState, "id" | "name" | "created_at">>
 ): Promise<void> {
+  logger.debug(LogComponent.SYSTEM, "Attempting to update task state.", {
+    taskId,
+    updates,
+  });
   // Acquire lock if implemented
   try {
     const config = await loadTasksConfig();
     const taskIndex = config.tasks.findIndex((t) => t.id === taskId);
 
     if (taskIndex === -1) {
-      // logger.warn(`Task with id ${taskId} not found for update.`); // [ ] TODO: Add logging
-      console.warn(`Task with id ${taskId} not found for update.`); // [ ] TODO: Replace with logger
-      throw new Error(`Task with id ${taskId} not found for update.`); // Throw error to signal failure
+      logger.warn(
+        LogComponent.SYSTEM,
+        `Task with id ${taskId} not found for update.`
+      );
+      return;
     }
 
     const updatedTask = {
@@ -160,6 +192,17 @@ export async function updateTaskState(
     config.tasks[taskIndex] = updatedTask;
 
     await saveTasksConfig(config);
+    logger.info(LogComponent.SYSTEM, "Task state updated successfully.", {
+      taskId,
+    });
+  } catch (error) {
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to update task state.",
+      error instanceof Error ? error : new Error(String(error)),
+      { taskId, updates }
+    );
+    throw error;
   } finally {
     // Release lock if implemented
   }
@@ -177,46 +220,86 @@ export async function addOrUpdateTaskDefinition(
     | "next_run_at"
   >
 ): Promise<TaskState> {
+  logger.debug(
+    LogComponent.SYSTEM,
+    "Attempting to add or update task definition.",
+    { taskName: taskInfo.name }
+  );
   // Acquire lock if implemented
   try {
     const config = await loadTasksConfig();
     let task = config.tasks.find((t) => t.name === taskInfo.name);
     const now = new Date().toISOString();
     let updated = false;
+    let action: "added" | "updated" | "nochange" = "nochange";
 
     if (task) {
-      // Update description and schedule if definition changed
+      logger.debug(LogComponent.SYSTEM, "Found existing task definition.", {
+        taskName: taskInfo.name,
+        taskId: task.id,
+      });
       if (
         task.description !== taskInfo.description ||
         task.schedule !== taskInfo.schedule ||
         task.is_enabled !== taskInfo.is_enabled
       ) {
+        logger.info(LogComponent.SYSTEM, "Updating task definition.", {
+          /* changes */
+        });
         task.description = taskInfo.description;
         task.schedule = taskInfo.schedule;
         task.is_enabled = taskInfo.is_enabled;
         task.updated_at = now;
         updated = true;
+        action = "updated";
+      } else {
+        logger.debug(
+          LogComponent.SYSTEM,
+          "No changes detected in existing task definition.",
+          { taskName: taskInfo.name }
+        );
       }
     } else {
-      // Add new task
+      const newTaskId = crypto.randomUUID();
+      logger.info(LogComponent.SYSTEM, "Adding new task definition.", {
+        taskName: taskInfo.name,
+        newTaskId,
+      });
       task = {
         ...taskInfo,
-        id: crypto.randomUUID(), // Use crypto.randomUUID()
+        id: newTaskId,
         status: "IDLE",
-        // is_enabled is part of taskInfo now
         last_run_at: null,
-        next_run_at: null, // Will be calculated by scheduler
+        next_run_at: null,
         created_at: now,
         updated_at: now,
       };
       config.tasks.push(task);
       updated = true;
+      action = "added";
     }
 
     if (updated) {
       await saveTasksConfig(config);
+      logger.info(
+        LogComponent.SYSTEM,
+        `Task definition ${action} and config saved.`,
+        { taskName: taskInfo.name, taskId: task.id }
+      );
     }
+    if (!task)
+      throw new Error(
+        `Failed to retrieve task object after ${action} operation for ${taskInfo.name}`
+      );
     return task;
+  } catch (error) {
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to add or update task definition.",
+      error instanceof Error ? error : new Error(String(error)),
+      { taskName: taskInfo.name }
+    );
+    throw error;
   } finally {
     // Release lock
   }
@@ -226,19 +309,19 @@ export async function addOrUpdateTaskDefinition(
 ## 3. Task Definition and Discovery [x]
 
 - **[x] Location:** `src/lib/tasks`.
-- **[x] Interface:** Defined a standard structure for tasks in `src/lib/tasks/task.interface.ts`.
+- **[x] Interface:** Defined a standard structure for tasks in `src/lib/tasks/task.interface.ts`. Logger added to signature.
 
   ```typescript
   // src/lib/tasks/task.interface.ts
-  // import { Logger } from '@/lib/logger'; // [ ] TODO: Integrate Logger
+  import { Logger } from "@/lib/logger/logger";
   import { TaskState } from "@/types/task";
 
   export interface TaskDefinition {
-    name: string; // Must match the 'name' in tasks.toml
+    name: string;
     description: string;
-    defaultSchedule: string; // Default cron schedule if not in TOML
-    is_enabled: boolean; // Default enabled state on discovery
-    execute: (/* logger: Logger, */ taskState: TaskState) => Promise<void>; // [ ] TODO: Pass Logger
+    defaultSchedule: string;
+    is_enabled: boolean;
+    execute: (logger: Logger, taskState: TaskState) => Promise<void>; // Logger passed
   }
   ```
 
@@ -255,8 +338,8 @@ export async function addOrUpdateTaskDefinition(
   - [x] Load the complete task list from `config/tasks.toml` using `loadTasksConfig`.
   - [x] Schedule enabled tasks using `node-cron` and `cron-parser` for next run calculation.
   - [x] Store/manage active cron job instances.
-  - **[x] Execution Wrapper:** Handles logging (placeholders), status updates (`RUNNING`, `IDLE`, `ERROR`), error catching, `last_run_at`, `next_run_at` updates via `updateTaskState`.
-  - **[ ] Logging:** Needs integration of the custom logger.
+  - **[x] Execution Wrapper:** Handles logging, status updates (`RUNNING`, `IDLE`, `ERROR`), error catching, `last_run_at`, `next_run_at` updates via `updateTaskState`. Logger is passed to task `execute` function.
+  - **[x] Logging:** Integrated custom logger.
 - **[x] Management Functions:** Exposed functions:
   - `startScheduler()`
   - `stopScheduler()`
@@ -265,7 +348,7 @@ export async function addOrUpdateTaskDefinition(
   - `updateTaskSchedule(taskId: string, schedule: string)`
   - `getTasksStatus()`
 
-## 5. API Endpoints [x/]
+## 5. API Endpoints [x]
 
 - **[x] Location:** `src/app/api/tasks/...`
 - **[x] Endpoints:**
@@ -274,7 +357,7 @@ export async function addOrUpdateTaskDefinition(
   - `POST /api/tasks/[taskId]/stop`
   - `PUT /api/tasks/[taskId]/schedule`
 - **[x] Security:** Implemented authentication/authorization checks using `getServerSession` and admin role verification.
-- **[ ] Logging:** Needs integration of the custom logger (placeholders added).
+- **[x] Logging:** Integrated custom logger.
 
 ## 6. User Interface [x]
 
@@ -283,12 +366,12 @@ export async function addOrUpdateTaskDefinition(
 - **[x] Layout:** Integrated with `PageLayout`.
 - **[ ] Dependencies:** Requires confirmation that `shadcn/ui` components and `sonner` are installed/configured.
 
-## 7. Logging Integration (`logger.mdc`) [ ]
+## 7. Logging Integration (`logger.mdc`) [x]
 
-- **[ ] TODO:** Ensure the custom logger is implemented and integrated in:
+- **[x] Integrated:** Custom logger implemented and integrated in:
   - The Scheduler Service (`scheduler.ts`).
   - TOML utility functions (`config.ts`).
-  - Individual task `execute` functions.
+  - Individual task `execute` functions (via signature update and scheduler pass-through).
   - API route handlers.
 
 ## 8. Extensibility [x]
@@ -302,24 +385,45 @@ export async function addOrUpdateTaskDefinition(
 
 ## 10. Initial Task (Placeholder) [x]
 
-- **[x]** Created `src/lib/tasks/placeholder-task.ts` implementing `TaskDefinition`.
+- **[x]** Created `src/lib/tasks/placeholder-task.ts` implementing `TaskDefinition`. Logger integrated.
 
 ```typescript
 // src/lib/tasks/placeholder-task.ts
-// import { Logger } from "@/lib/logger"; // [ ] TODO: Integrate Logger
-import { TaskDefinition } from "./task.interface";
+import { Logger } from "@/lib/logger/logger";
+import { LogComponent } from "@/lib/logger/types";
 import { TaskState } from "@/types/task";
+import { TaskDefinition } from "./task.interface";
 
 export const placeholderTask: TaskDefinition = {
   name: "placeholder-task",
   description: "A simple placeholder task that logs a message.",
-  defaultSchedule: "*/5 * * * *", // Every 5 minutes
-  is_enabled: true, // Default enabled state
-  execute: async (/* logger: Logger, */ taskState: TaskState) => {
-    // [ ] TODO: Use Logger
-    console.log(`Placeholder task (${taskState.id}) executed successfully.`); // [ ] TODO: Replace with logger
-    // Simulate work
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  defaultSchedule: "*/5 * * * *",
+  is_enabled: true,
+  execute: async (logger: Logger, taskState: TaskState) => {
+    logger.info(
+      LogComponent.WOLF_SERVER,
+      `Placeholder task starting execution.`,
+      { taskId: taskState.id }
+    );
+    try {
+      logger.debug(LogComponent.WOLF_SERVER, `Simulating work...`, {
+        taskId: taskState.id,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      logger.info(
+        LogComponent.WOLF_SERVER,
+        `Placeholder task finished successfully.`,
+        { taskId: taskState.id }
+      );
+    } catch (error) {
+      logger.error(
+        LogComponent.WOLF_SERVER,
+        `Placeholder task failed during execution.`,
+        error instanceof Error ? error : new Error(String(error)),
+        { taskId: taskState.id }
+      );
+      throw error;
+    }
   },
 };
 

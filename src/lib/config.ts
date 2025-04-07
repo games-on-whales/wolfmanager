@@ -574,26 +574,54 @@ export function verifyUserSteamCredentials(
 const TASKS_CONFIG_PATH = path.resolve(process.cwd(), "config/tasks.toml");
 
 export async function loadTasksConfig(): Promise<TasksConfig> {
+  const logger = Logger.getInstance();
+  logger.debug(LogComponent.SYSTEM, "Attempting to load tasks configuration.", {
+    path: TASKS_CONFIG_PATH,
+  });
   try {
     const fileContent = await fsPromises.readFile(TASKS_CONFIG_PATH, {
       encoding: "utf-8",
     });
     const parsed = TOML.parse(fileContent) as unknown as TasksConfig;
     // TODO: Add validation here (e.g., using Zod) to ensure structure matches TasksConfig
+    logger.info(
+      LogComponent.SYSTEM,
+      "Tasks configuration loaded successfully.",
+      {
+        path: TASKS_CONFIG_PATH,
+        taskCount: parsed.tasks?.length ?? 0,
+      }
+    );
     return parsed;
   } catch (error: any) {
     if (error.code === "ENOENT") {
       // File doesn't exist, return default structure
+      logger.warn(
+        LogComponent.SYSTEM,
+        "Tasks config file not found, returning default empty structure.",
+        { path: TASKS_CONFIG_PATH }
+      );
       return { tasks: [] };
     }
     // Log the error using the custom logger
-    console.error("Failed to load tasks config:", error);
-    // logger.error('Failed to load tasks config', { error });
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to load tasks configuration.",
+      error instanceof Error ? error : new Error(String(error)),
+      { path: TASKS_CONFIG_PATH }
+    );
+    // Re-throw a more generic error to the caller
     throw new Error("Failed to load tasks configuration.");
   }
 }
 
 export async function saveTasksConfig(config: TasksConfig): Promise<void> {
+  const logger = Logger.getInstance();
+  const TASKS_CONFIG_PATH = path.resolve(process.cwd(), "config/tasks.toml");
+  logger.debug(LogComponent.SYSTEM, "Attempting to save tasks configuration.", {
+    path: TASKS_CONFIG_PATH,
+    taskCount: config.tasks?.length ?? 0,
+  });
   try {
     // TODO: Add validation here before saving
     const tomlString = iarnaTOML.stringify(config as any);
@@ -604,11 +632,21 @@ export async function saveTasksConfig(config: TasksConfig): Promise<void> {
     await fsPromises.writeFile(TASKS_CONFIG_PATH, tomlString, {
       encoding: "utf-8",
     });
-    // logger.info('Tasks config saved successfully.');
+    logger.info(
+      LogComponent.SYSTEM,
+      "Tasks configuration saved successfully.",
+      {
+        path: TASKS_CONFIG_PATH,
+      }
+    );
   } catch (error) {
     // Log the error
-    console.error("Failed to save tasks config:", error);
-    // logger.error('Failed to save tasks config', { error });
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to save tasks configuration.",
+      error instanceof Error ? error : new Error(String(error)),
+      { path: TASKS_CONFIG_PATH }
+    );
     throw new Error("Failed to save tasks configuration.");
   }
 }
@@ -618,15 +656,24 @@ export async function updateTaskState(
   taskId: string,
   updates: Partial<Omit<TaskState, "id" | "name" | "created_at">>
 ): Promise<void> {
-  // TODO: Acquire lock if implemented
+  const logger = Logger.getInstance();
+  logger.debug(LogComponent.SYSTEM, "Attempting to update task state.", {
+    taskId,
+    updates,
+  });
+  // Acquire lock if implemented
   try {
     const config = await loadTasksConfig();
-    const taskIndex = config.tasks.findIndex((t: TaskState) => t.id === taskId);
+    const taskIndex = config.tasks.findIndex((t) => t.id === taskId);
 
     if (taskIndex === -1) {
-      // logger.warn(`Task with id ${taskId} not found for update.`);
-      console.warn(`Task with id ${taskId} not found for update.`);
-      return; // Or throw an error
+      logger.warn(
+        LogComponent.SYSTEM,
+        `Task with id ${taskId} not found for update.`
+      );
+      // Optionally throw an error if task not found is critical
+      // throw new Error(`Task with id ${taskId} not found for update.`);
+      return; // Or simply return if not finding the task is acceptable
     }
 
     const updatedTask = {
@@ -637,8 +684,21 @@ export async function updateTaskState(
     config.tasks[taskIndex] = updatedTask;
 
     await saveTasksConfig(config);
+    logger.info(LogComponent.SYSTEM, "Task state updated successfully.", {
+      taskId,
+    });
+  } catch (error) {
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to update task state.",
+      error instanceof Error ? error : new Error(String(error)),
+      { taskId, updates }
+    );
+    // Re-throw or handle error as appropriate
+    throw error;
   } finally {
-    // TODO: Release lock if implemented
+    // Release lock if implemented
+    // logger.debug(LogComponent.SYSTEM, "Released lock for updateTaskState", { taskId });
   }
 }
 
@@ -654,40 +714,101 @@ export async function addOrUpdateTaskDefinition(
     | "next_run_at"
   >
 ): Promise<TaskState> {
-  // TODO: Acquire lock if implemented
+  const logger = Logger.getInstance();
+  logger.debug(
+    LogComponent.SYSTEM,
+    "Attempting to add or update task definition.",
+    { taskName: taskInfo.name }
+  );
+  // Acquire lock if implemented
   try {
     const config = await loadTasksConfig();
-    let task = config.tasks.find((t: TaskState) => t.name === taskInfo.name);
+    let task = config.tasks.find((t) => t.name === taskInfo.name);
     const now = new Date().toISOString();
+    let updated = false;
+    let action: "added" | "updated" | "nochange" = "nochange";
 
     if (task) {
-      // Update description and schedule if definition changed
+      logger.debug(LogComponent.SYSTEM, "Found existing task definition.", {
+        taskName: taskInfo.name,
+        taskId: task.id,
+      });
+      // Update description, schedule, and enabled status if definition changed
       if (
         task.description !== taskInfo.description ||
-        task.schedule !== taskInfo.schedule
+        task.schedule !== taskInfo.schedule ||
+        task.is_enabled !== taskInfo.is_enabled // Ensure is_enabled is compared
       ) {
+        logger.info(LogComponent.SYSTEM, "Updating task definition.", {
+          taskName: taskInfo.name,
+          changes: {
+            description: task.description !== taskInfo.description,
+            schedule: task.schedule !== taskInfo.schedule,
+            is_enabled: task.is_enabled !== taskInfo.is_enabled,
+          },
+        });
         task.description = taskInfo.description;
         task.schedule = taskInfo.schedule;
+        task.is_enabled = taskInfo.is_enabled; // Update is_enabled status
         task.updated_at = now;
+        updated = true;
+        action = "updated";
+      } else {
+        logger.debug(
+          LogComponent.SYSTEM,
+          "No changes detected in existing task definition.",
+          { taskName: taskInfo.name }
+        );
       }
     } else {
       // Add new task
+      const newTaskId = crypto.randomUUID();
+      logger.info(LogComponent.SYSTEM, "Adding new task definition.", {
+        taskName: taskInfo.name,
+        newTaskId,
+      });
       task = {
         ...taskInfo,
-        id: crypto.randomUUID(), // Use crypto.randomUUID()
+        id: newTaskId,
         status: "IDLE",
-        is_enabled: true, // Default to enabled? Or based on definition?
+        // is_enabled is part of taskInfo now
         last_run_at: null,
         next_run_at: null, // Will be calculated by scheduler
         created_at: now,
         updated_at: now,
       };
       config.tasks.push(task);
+      updated = true;
+      action = "added";
     }
 
-    await saveTasksConfig(config);
+    if (updated) {
+      await saveTasksConfig(config);
+      logger.info(
+        LogComponent.SYSTEM,
+        `Task definition ${action} and config saved.`,
+        { taskName: taskInfo.name, taskId: task.id }
+      );
+    }
+    // Ensure we return the task object (either existing/updated or newly added)
+    if (!task) {
+      // This case should logically not happen if action is 'added', but satisfies TS
+      throw new Error(
+        `Failed to retrieve task object after ${action} operation for ${taskInfo.name}`
+      );
+    }
     return task;
+  } catch (error) {
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to add or update task definition.",
+      error instanceof Error ? error : new Error(String(error)),
+      { taskName: taskInfo.name }
+    );
+    // Re-throw or handle error as appropriate
+    throw error;
   } finally {
-    // TODO: Release lock
+    // Release lock
+    // logger.debug(LogComponent.SYSTEM, "Released lock for addOrUpdateTaskDefinition", { taskName: taskInfo.name });
   }
 }
