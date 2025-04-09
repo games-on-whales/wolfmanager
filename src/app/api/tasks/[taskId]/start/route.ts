@@ -1,11 +1,11 @@
 import { authOptions } from "@/lib/auth";
-import { Logger } from "@/lib/logger/logger";
+import { logger } from "@/lib/logger"; // Import the singleton instance
 import { LogComponent } from "@/lib/logger/types";
 import { startTask } from "@/lib/scheduler";
 import { getServerSession, Session } from "next-auth";
 import { NextResponse } from "next/server";
 
-const logger = Logger.getInstance();
+// Use the imported singleton logger instance directly
 
 interface RouteParams {
   params: {

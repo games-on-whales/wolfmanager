@@ -21,7 +21,7 @@ This plan outlines the steps to implement a background task runner feature withi
 
 - [ ] Create documentation for adding new tasks (`docs/adding-background-tasks.md`).
 - [ ] Address TOML concurrency (consider file locking in `config.ts`).
-- [ ] Add more robust validation (e.g., Zod for TOML config structure, improved cron validation in API schedule endpoint).
+- [x] Add more robust validation (e.g., Zod for TOML config structure, improved cron validation in API schedule endpoint).
 - [ ] Decide on and implement the scheduler startup mechanism (`startScheduler()` call location).
 
 ---
@@ -110,7 +110,7 @@ export async function loadTasksConfig(): Promise<TasksConfig> {
       encoding: "utf-8",
     });
     const parsed = TOML.parse(fileContent) as unknown as TasksConfig;
-    // [ ] TODO: Add validation here (e.g., using Zod) to ensure structure matches TasksConfig
+    // [x] DONE: Added Zod validation using TasksConfigSchema
     logger.info(
       LogComponent.SYSTEM,
       "Tasks configuration loaded successfully.",
@@ -142,7 +142,7 @@ export async function saveTasksConfig(config: TasksConfig): Promise<void> {
     taskCount: config.tasks?.length ?? 0,
   });
   try {
-    // [ ] TODO: Add validation here before saving
+    // [x] DONE: Added Zod validation using TasksConfigSchema before saving
     const tomlString = iarnaTOML.stringify(config as any);
     await fs.mkdir(path.dirname(TASKS_CONFIG_PATH), { recursive: true });
     await fs.writeFile(TASKS_CONFIG_PATH, tomlString, { encoding: "utf-8" });
@@ -434,7 +434,7 @@ export default placeholderTask;
 
 - **[ ] Serverless Environments:** Needs evaluation. `node-cron` is not suitable. Vercel Cron Jobs or alternatives might be needed.
 - **[ ] TOML Writes & Concurrency:** Potential race conditions exist. **TODO:** Implement file locking (e.g., `proper-lockfile`) in `config.ts` or accept risk.
-- **[ ] Error Handling & Validation:** **TODO:** Add more robust validation (Zod for `loadTasksConfig`/`saveTasksConfig`, cron validation in API?).
+- **[x] Error Handling & Validation:** Added Zod validation for `loadTasksConfig`/`saveTasksConfig` and improved cron validation in API schedule endpoint using `cron-parser`.
 - **[x] Security:** API endpoints secured via session/role checks.
 - **[ ] Scheduler Startup:** **TODO:** Decide where to call `startScheduler()` in the Next.js lifecycle.
 

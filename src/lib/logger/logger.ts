@@ -19,7 +19,6 @@ export class Logger {
 
   private constructor(config: Partial<LoggerConfig> = {}) {
     this.config = loggerConfigSchema.parse(config);
-
     this.initializeTransports();
   }
 
@@ -43,6 +42,7 @@ export class Logger {
           this.config.file.path,
           this.config.file.maxSize,
           this.config.file.maxFiles
+          // Assuming format defaults to 'json' in FileTransport constructor
         )
       );
     }

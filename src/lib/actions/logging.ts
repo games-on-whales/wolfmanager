@@ -1,14 +1,14 @@
 "use server";
 
 import { authOptions } from "@/lib/auth";
-import { Logger } from "@/lib/logger/logger";
+import { logger } from "@/lib/logger"; // Import the singleton instance
 import { LogComponent, LogEntry } from "@/lib/logger/types";
 import { promises as fs } from "fs";
 import { getServerSession } from "next-auth";
 import path from "path";
 import { z } from "zod";
 
-const logger = Logger.getInstance();
+// Use the imported singleton logger instance directly
 
 // Schema for validating log entries
 const logEntrySchema = z.object({
@@ -45,32 +45,38 @@ export async function createLogEntry(entry: LogEntry) {
     };
 
     // Forward to appropriate logger based on level
+    // Pass raw as 3rd arg, metadata as 4th, matching logger.ts signature
     switch (enrichedEntry.level) {
       case "debug":
-        await logger.debug(enrichedEntry.component, enrichedEntry.message, {
-          ...enrichedEntry.metadata,
-          raw: enrichedEntry.raw,
-        });
+        await logger.debug(
+          enrichedEntry.component,
+          enrichedEntry.message,
+          enrichedEntry.raw,
+          enrichedEntry.metadata
+        );
         break;
       case "info":
-        await logger.info(enrichedEntry.component, enrichedEntry.message, {
-          ...enrichedEntry.metadata,
-          raw: enrichedEntry.raw,
-        });
+        await logger.info(
+          enrichedEntry.component,
+          enrichedEntry.message,
+          enrichedEntry.raw,
+          enrichedEntry.metadata
+        );
         break;
       case "warn":
-        await logger.warn(enrichedEntry.component, enrichedEntry.message, {
-          ...enrichedEntry.metadata,
-          raw: enrichedEntry.raw,
-        });
+        await logger.warn(
+          enrichedEntry.component,
+          enrichedEntry.message,
+          enrichedEntry.raw,
+          enrichedEntry.metadata
+        );
         break;
       case "error":
         await logger.error(
           enrichedEntry.component,
           enrichedEntry.message,
-          enrichedEntry.raw instanceof Error
-            ? enrichedEntry.raw
-            : new Error(String(enrichedEntry.raw)),
+          // Ensure raw is an Error object if passed
+          enrichedEntry.raw,
           enrichedEntry.metadata
         );
         break;

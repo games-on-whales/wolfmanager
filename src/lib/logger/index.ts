@@ -5,12 +5,15 @@
 
 // Export types and enums
 export { LogComponent } from "./types";
-export type { LogEntry, LogLevel, LoggerConfig } from "./types";
+export type { LogEntry, LoggerConfig, LogLevel } from "./types";
 export { logger };
 
 // Create and export server singleton instance
+import { getLoggerConfig } from "./config"; // Import config loader
 import { Logger } from "./logger";
-const logger = Logger.getInstance();
+
+const config = getLoggerConfig(); // Load the configuration
+const logger = Logger.getInstance(config); // Pass config to getInstance
 
 // Re-export types and components
 export * from "./plugins/wolf-server";

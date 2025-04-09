@@ -1,10 +1,10 @@
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { checkAdminRole } from "./api-utils";
-import { Logger } from "./logger/logger";
+import { logger } from "./logger"; // Import the singleton instance
 import { LogComponent } from "./logger/types";
 
-const logger = Logger.getInstance();
+// Use the imported singleton logger instance directly
 
 export type ActionResponse<T> = {
   success: boolean;

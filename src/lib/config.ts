@@ -8,8 +8,9 @@ import fsPromises from "fs/promises";
 import path from "path";
 import TOML from "toml";
 import { decrypt, encrypt } from "./crypto";
-import { Logger } from "./logger/logger";
+import { logger } from "./logger"; // Import the singleton instance
 import { LogComponent } from "./logger/types";
+import { TasksConfigSchema } from "./validation/task-schemas"; // Import Zod schema
 
 export interface SystemConfig {
   name: string;
@@ -73,10 +74,15 @@ export function isValidConfig(config: unknown): config is Config {
 }
 
 const configPath = path.join(process.cwd(), "config", "default.toml");
+const TASKS_CONFIG_PATH = path.resolve(process.cwd(), "config/tasks.toml"); // Define tasks config path
 
 // Ensure config directory exists
 if (!fs.existsSync(path.dirname(configPath))) {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
+}
+// Ensure tasks config directory exists (might be the same, but good practice)
+if (!fs.existsSync(path.dirname(TASKS_CONFIG_PATH))) {
+  fs.mkdirSync(path.dirname(TASKS_CONFIG_PATH), { recursive: true });
 }
 
 // Generate a hash for password "admin"
@@ -108,7 +114,7 @@ export async function getConfig(): Promise<Config> {
   return config;
 }
 
-const logger = Logger.getInstance();
+// Use the imported singleton logger instance directly
 
 export function loadConfig(decryptSensitiveData: boolean = false): Config {
   try {
@@ -500,81 +506,58 @@ export function validateUser(username: string, password: string) {
       return null;
     }
 
-    // Change to DEBUG for visibility
-    logger.debug(LogComponent.AUTH, "Values *just* before bcrypt comparison", {
-      receivedPassword: `"${password}"`,
-      storedHash: `"${user.password_hash}"`,
-    });
+    const isMatch = bcrypt.compareSync(password, user.password_hash);
 
-    // Verify the password using bcrypt
-    const passwordValid = bcrypt.compareSync(password, user.password_hash);
-    // --- End of Enhanced Logging ---
-
-    logger.debug(LogComponent.AUTH, "Password validation result", {
-      username,
-      isValid: passwordValid,
-    });
-
-    if (!passwordValid) {
-      logger.warn(LogComponent.AUTH, "Invalid password comparison result", {
+    if (isMatch) {
+      logger.info(LogComponent.AUTH, "User validation successful", {
         username,
-        hashType: user.password_hash.substring(0, 4),
       });
+      // Return a copy of the user object without the password hash
+      const { password_hash, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    } else {
+      logger.warn(
+        LogComponent.AUTH,
+        "User validation failed (password mismatch)",
+        {
+          username,
+        }
+      );
       return null;
     }
-
-    logger.info(LogComponent.AUTH, "User validated successfully", {
-      username,
-      userId: user.id,
-      isAdmin: user.is_admin,
-      hasChangedPassword: user.has_changed_password,
-    });
-
-    return {
-      id: user.id,
-      username: user.username,
-      is_admin: user.is_admin,
-      has_changed_password: user.has_changed_password,
-    };
   } catch (error) {
-    // Log the actual error object and its stack trace
     logger.error(
       LogComponent.AUTH,
-      "Error caught during user validation process", // More specific message
-      error instanceof Error ? error : new Error(String(error)), // Pass the error object itself
-      {
-        username,
-        // Add stack trace if available
-        stack: error instanceof Error ? error.stack : "N/A",
-      }
+      "Error during user validation",
+      error instanceof Error ? error : new Error(String(error)),
+      { username }
     );
-    return null;
+    return null; // Return null on any error during validation
   }
 }
 
-// Add a new function to verify Steam credentials
 export function verifyUserSteamCredentials(
   username: string,
   steamId: string,
   steamApiKey: string
 ): boolean {
-  // Load config WITH decryption
-  const config = loadConfig(true);
+  const config = loadConfig(true); // Decrypt sensitive data
   const user = config.users[username];
 
-  // Check if user and stored credentials exist
-  if (!user || !user.steam_id || !user.steam_api_key) {
-    return false;
+  if (!user) {
+    return false; // User not found
   }
 
-  // Use standard string comparison against decrypted values
-  return steamId === user.steam_id && steamApiKey === user.steam_api_key;
+  // Compare provided credentials with decrypted stored credentials
+  return user.steam_id === steamId && user.steam_api_key === steamApiKey;
 }
 
-const TASKS_CONFIG_PATH = path.resolve(process.cwd(), "config/tasks.toml");
+// --- Task Configuration Functions ---
+
+// [ ] TODO: Consider adding a simple file lock mechanism here if concurrent writes are expected
+// E.g., using a library like 'proper-lockfile'
 
 export async function loadTasksConfig(): Promise<TasksConfig> {
-  const logger = Logger.getInstance();
   logger.debug(LogComponent.SYSTEM, "Attempting to load tasks configuration.", {
     path: TASKS_CONFIG_PATH,
   });
@@ -582,20 +565,31 @@ export async function loadTasksConfig(): Promise<TasksConfig> {
     const fileContent = await fsPromises.readFile(TASKS_CONFIG_PATH, {
       encoding: "utf-8",
     });
-    const parsed = TOML.parse(fileContent) as unknown as TasksConfig;
-    // TODO: Add validation here (e.g., using Zod) to ensure structure matches TasksConfig
+    const rawParsed = TOML.parse(fileContent);
+    // Validate the parsed TOML content
+    const validationResult = TasksConfigSchema.safeParse(rawParsed);
+
+    if (!validationResult.success) {
+      logger.error(
+        LogComponent.SYSTEM,
+        "Invalid tasks configuration structure after parsing TOML.",
+        new Error("TOML validation failed"),
+        { path: TASKS_CONFIG_PATH, errors: validationResult.error.format() }
+      );
+      // Return default empty structure on validation failure to prevent crashes downstream
+      return { tasks: [] };
+    }
+
+    // Use the validated data
+    const validatedConfig = validationResult.data;
     logger.info(
       LogComponent.SYSTEM,
-      "Tasks configuration loaded successfully.",
-      {
-        path: TASKS_CONFIG_PATH,
-        taskCount: parsed.tasks?.length ?? 0,
-      }
+      "Tasks configuration loaded and validated successfully.",
+      { path: TASKS_CONFIG_PATH, taskCount: validatedConfig.tasks?.length ?? 0 }
     );
-    return parsed;
+    return validatedConfig;
   } catch (error: any) {
     if (error.code === "ENOENT") {
-      // File doesn't exist, return default structure
       logger.warn(
         LogComponent.SYSTEM,
         "Tasks config file not found, returning default empty structure.",
@@ -603,44 +597,56 @@ export async function loadTasksConfig(): Promise<TasksConfig> {
       );
       return { tasks: [] };
     }
-    // Log the error using the custom logger
     logger.error(
       LogComponent.SYSTEM,
       "Failed to load tasks configuration.",
       error instanceof Error ? error : new Error(String(error)),
       { path: TASKS_CONFIG_PATH }
     );
-    // Re-throw a more generic error to the caller
     throw new Error("Failed to load tasks configuration.");
   }
 }
 
 export async function saveTasksConfig(config: TasksConfig): Promise<void> {
-  const logger = Logger.getInstance();
-  const TASKS_CONFIG_PATH = path.resolve(process.cwd(), "config/tasks.toml");
   logger.debug(LogComponent.SYSTEM, "Attempting to save tasks configuration.", {
     path: TASKS_CONFIG_PATH,
     taskCount: config.tasks?.length ?? 0,
   });
   try {
-    // TODO: Add validation here before saving
-    const tomlString = iarnaTOML.stringify(config as any);
-    // Ensure config directory exists
+    // Validate the config object before saving
+    // --- Roo Debug Start ---
+    logger.debug(
+      LogComponent.SYSTEM,
+      `Attempting to write tasks config to: ${TASKS_CONFIG_PATH}`
+    );
+    // --- Roo Debug End ---
+    const validationResult = TasksConfigSchema.safeParse(config);
+    if (!validationResult.success) {
+      logger.error(
+        LogComponent.SYSTEM,
+        "Invalid tasks configuration object provided for saving.",
+        new Error("Configuration validation failed before save"),
+        { path: TASKS_CONFIG_PATH, errors: validationResult.error.format() }
+      );
+      // Prevent saving invalid data
+      throw new Error(
+        "Attempted to save invalid tasks configuration. Check logs for details."
+      );
+    }
+    // Use the validated data for stringification
+    const tomlString = iarnaTOML.stringify(validationResult.data as any);
     await fsPromises.mkdir(path.dirname(TASKS_CONFIG_PATH), {
       recursive: true,
-    });
+    }); // Ensure directory exists
     await fsPromises.writeFile(TASKS_CONFIG_PATH, tomlString, {
       encoding: "utf-8",
     });
     logger.info(
       LogComponent.SYSTEM,
       "Tasks configuration saved successfully.",
-      {
-        path: TASKS_CONFIG_PATH,
-      }
+      { path: TASKS_CONFIG_PATH }
     );
   } catch (error) {
-    // Log the error
     logger.error(
       LogComponent.SYSTEM,
       "Failed to save tasks configuration.",
@@ -656,7 +662,6 @@ export async function updateTaskState(
   taskId: string,
   updates: Partial<Omit<TaskState, "id" | "name" | "created_at">>
 ): Promise<void> {
-  const logger = Logger.getInstance();
   logger.debug(LogComponent.SYSTEM, "Attempting to update task state.", {
     taskId,
     updates,
@@ -671,9 +676,7 @@ export async function updateTaskState(
         LogComponent.SYSTEM,
         `Task with id ${taskId} not found for update.`
       );
-      // Optionally throw an error if task not found is critical
-      // throw new Error(`Task with id ${taskId} not found for update.`);
-      return; // Or simply return if not finding the task is acceptable
+      return;
     }
 
     const updatedTask = {
@@ -683,6 +686,7 @@ export async function updateTaskState(
     };
     config.tasks[taskIndex] = updatedTask;
 
+    // Save the entire config back (which now includes validation)
     await saveTasksConfig(config);
     logger.info(LogComponent.SYSTEM, "Task state updated successfully.", {
       taskId,
@@ -694,11 +698,9 @@ export async function updateTaskState(
       error instanceof Error ? error : new Error(String(error)),
       { taskId, updates }
     );
-    // Re-throw or handle error as appropriate
     throw error;
   } finally {
     // Release lock if implemented
-    // logger.debug(LogComponent.SYSTEM, "Released lock for updateTaskState", { taskId });
   }
 }
 
@@ -714,7 +716,6 @@ export async function addOrUpdateTaskDefinition(
     | "next_run_at"
   >
 ): Promise<TaskState> {
-  const logger = Logger.getInstance();
   logger.debug(
     LogComponent.SYSTEM,
     "Attempting to add or update task definition.",
@@ -733,13 +734,14 @@ export async function addOrUpdateTaskDefinition(
         taskName: taskInfo.name,
         taskId: task.id,
       });
-      // Update description, schedule, and enabled status if definition changed
+      // Check if relevant definition fields changed
       if (
         task.description !== taskInfo.description ||
         task.schedule !== taskInfo.schedule ||
-        task.is_enabled !== taskInfo.is_enabled // Ensure is_enabled is compared
+        task.is_enabled !== taskInfo.is_enabled
       ) {
-        logger.info(LogComponent.SYSTEM, "Updating task definition.", {
+        logger.info(LogComponent.SYSTEM, "Updating task definition fields.", {
+          taskId: task.id,
           taskName: taskInfo.name,
           changes: {
             description: task.description !== taskInfo.description,
@@ -749,7 +751,7 @@ export async function addOrUpdateTaskDefinition(
         });
         task.description = taskInfo.description;
         task.schedule = taskInfo.schedule;
-        task.is_enabled = taskInfo.is_enabled; // Update is_enabled status
+        task.is_enabled = taskInfo.is_enabled;
         task.updated_at = now;
         updated = true;
         action = "updated";
@@ -761,7 +763,6 @@ export async function addOrUpdateTaskDefinition(
         );
       }
     } else {
-      // Add new task
       const newTaskId = crypto.randomUUID();
       logger.info(LogComponent.SYSTEM, "Adding new task definition.", {
         taskName: taskInfo.name,
@@ -771,9 +772,8 @@ export async function addOrUpdateTaskDefinition(
         ...taskInfo,
         id: newTaskId,
         status: "IDLE",
-        // is_enabled is part of taskInfo now
         last_run_at: null,
-        next_run_at: null, // Will be calculated by scheduler
+        next_run_at: null,
         created_at: now,
         updated_at: now,
       };
@@ -783,6 +783,15 @@ export async function addOrUpdateTaskDefinition(
     }
 
     if (updated) {
+      // --- Roo Debug Start ---
+      if (action === "added") {
+        logger.debug(
+          LogComponent.SYSTEM,
+          `Calling saveTasksConfig after adding task: ${taskInfo.name}`
+        );
+      }
+      // --- Roo Debug End ---
+      // Save the entire config back (which now includes validation)
       await saveTasksConfig(config);
       logger.info(
         LogComponent.SYSTEM,
@@ -790,13 +799,10 @@ export async function addOrUpdateTaskDefinition(
         { taskName: taskInfo.name, taskId: task.id }
       );
     }
-    // Ensure we return the task object (either existing/updated or newly added)
-    if (!task) {
-      // This case should logically not happen if action is 'added', but satisfies TS
+    if (!task)
       throw new Error(
         `Failed to retrieve task object after ${action} operation for ${taskInfo.name}`
       );
-    }
     return task;
   } catch (error) {
     logger.error(
@@ -805,10 +811,8 @@ export async function addOrUpdateTaskDefinition(
       error instanceof Error ? error : new Error(String(error)),
       { taskName: taskInfo.name }
     );
-    // Re-throw or handle error as appropriate
     throw error;
   } finally {
     // Release lock
-    // logger.debug(LogComponent.SYSTEM, "Released lock for addOrUpdateTaskDefinition", { taskName: taskInfo.name });
   }
 }

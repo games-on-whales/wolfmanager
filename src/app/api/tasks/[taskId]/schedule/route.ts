@@ -1,12 +1,12 @@
 import { authOptions } from "@/lib/auth";
-import { Logger } from "@/lib/logger/logger";
+import { logger } from "@/lib/logger"; // Import the singleton instance
 import { LogComponent } from "@/lib/logger/types";
 import { updateTaskSchedule } from "@/lib/scheduler";
+import { UpdateTaskScheduleSchema } from "@/lib/validation/task-schemas"; // Import central schema
 import { getServerSession, Session } from "next-auth";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
-const logger = Logger.getInstance();
+// Use the imported singleton logger instance directly
 
 interface RouteParams {
   params: {
@@ -14,15 +14,7 @@ interface RouteParams {
   };
 }
 
-const updateScheduleSchema = z.object({
-  schedule: z
-    .string()
-    .min(1, "Schedule cannot be empty.")
-    .regex(
-      /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/,
-      "Invalid cron schedule format."
-    ),
-});
+// Removed local schema definition, using imported UpdateTaskScheduleSchema
 
 export async function PUT(request: Request, { params }: RouteParams) {
   const { taskId } = params;
@@ -81,7 +73,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
       );
     }
 
-    const validation = updateScheduleSchema.safeParse(body);
+    const validation = UpdateTaskScheduleSchema.safeParse(body); // Use imported schema
 
     if (!validation.success) {
       logger.warn(

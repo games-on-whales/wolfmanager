@@ -1,9 +1,9 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
-import { Logger } from "./lib/logger/logger";
+import { logger } from "./lib/logger"; // Import the singleton instance
 import { LogComponent } from "./lib/logger/types";
 
-const logger = Logger.getInstance();
+// Use the imported singleton logger instance directly
 
 // Define paths that don't require authentication
 const publicPaths = [

@@ -1,19 +1,16 @@
 import { TaskState, TasksConfig } from "@/types/task";
 import { CronExpressionParser } from "cron-parser";
-import fs from "fs/promises";
 import cron from "node-cron";
-import path from "path";
+// Removed fs and path imports
 import {
   addOrUpdateTaskDefinition,
   loadTasksConfig,
   updateTaskState,
 } from "./config";
-import { Logger } from "./logger/logger"; // Import Logger
+import { logger } from "./logger"; // Import the singleton instance
 import { LogComponent } from "./logger/types"; // Import LogComponent
+import { taskDefinitionMap } from "./tasks"; // Import the task map
 import { TaskDefinition } from "./tasks/task.interface";
-
-const logger = Logger.getInstance(); // Initialize logger instance
-const TASKS_DIR = path.resolve(process.cwd(), "src/lib/tasks");
 
 interface ScheduledJob {
   job: cron.ScheduledTask;
@@ -26,44 +23,36 @@ const activeJobs = new Map<string, ScheduledJob>();
 async function discoverAndInitializeTasks(): Promise<void> {
   logger.info(
     LogComponent.WOLF_SERVER,
-    "Discovering and initializing tasks..."
+    "Initializing tasks from static map..."
   );
   try {
-    const files = await fs.readdir(TASKS_DIR);
-    const taskModules = files.filter(
-      (file) => file.endsWith(".ts") && !file.endsWith(".interface.ts")
-    );
-
+    const discoveredTaskNames = Object.keys(taskDefinitionMap);
     logger.debug(
       LogComponent.WOLF_SERVER,
-      `Found ${taskModules.length} potential task files.`
+      `Found ${discoveredTaskNames.length} tasks in the definition map.`
     );
 
-    for (const file of taskModules) {
-      const filePath = path.join(TASKS_DIR, file);
+    for (const taskName of discoveredTaskNames) {
+      const taskDefinition = taskDefinitionMap[taskName];
       try {
-        const module = await import(filePath); // Dynamic import
-        const taskDefinition = module.default as TaskDefinition; // Assuming default export
-
         if (taskDefinition && typeof taskDefinition.execute === "function") {
           logger.debug(
             LogComponent.WOLF_SERVER,
-            `Discovered task definition: ${taskDefinition.name}`,
-            { file }
+            `Processing task definition: ${taskDefinition.name}`
           );
 
           // Ensure task exists in TOML config, add/update if needed
           const taskState = await addOrUpdateTaskDefinition({
-            name: taskDefinition.name,
+            name: taskDefinition.name, // Use name as the key identifier now
             description: taskDefinition.description,
-            schedule: taskDefinition.defaultSchedule, // Use default schedule from definition
-            is_enabled: taskDefinition.is_enabled, // Use default enabled state from definition
+            schedule: taskDefinition.defaultSchedule,
+            is_enabled: taskDefinition.is_enabled,
           });
 
           logger.debug(
             LogComponent.WOLF_SERVER,
             `Synchronized task definition "${taskState.name}" with config.`,
-            { taskId: taskState.id, isEnabled: taskState.is_enabled }
+            { taskId: taskState.id, isEnabled: taskState.is_enabled } // taskState.id is UUID from config
           );
 
           // Schedule if enabled
@@ -78,28 +67,28 @@ async function discoverAndInitializeTasks(): Promise<void> {
         } else {
           logger.warn(
             LogComponent.WOLF_SERVER,
-            `Invalid or incomplete task definition found in file. Skipping.`,
-            { file }
+            `Invalid or incomplete task definition found in map for key. Skipping.`,
+            { taskName }
           );
         }
       } catch (error) {
         logger.error(
           LogComponent.WOLF_SERVER,
-          `Failed to load or process task definition module.`,
+          `Failed to process task definition from map.`,
           error instanceof Error ? error : new Error(String(error)),
-          { file }
+          { taskName }
         );
       }
     }
 
     logger.info(
       LogComponent.WOLF_SERVER,
-      "Task discovery and initialization complete."
+      "Task initialization from map complete."
     );
   } catch (error) {
     logger.error(
       LogComponent.WOLF_SERVER,
-      "Failed during task discovery process.",
+      "Failed during task initialization process.",
       error instanceof Error ? error : new Error(String(error))
     );
     // Consider if the app should fail to start here
@@ -172,7 +161,6 @@ function scheduleTask(taskState: TaskState, definition: TaskDefinition): void {
       );
 
       // Fetch the *latest* state before executing, in case it changed
-      // This avoids race conditions where a task might be disabled between trigger and execution start
       const currentConfig = await loadTasksConfig();
       const currentState = currentConfig.tasks.find(
         (t) => t.id === taskState.id
@@ -185,8 +173,6 @@ function scheduleTask(taskState: TaskState, definition: TaskDefinition): void {
           null,
           { taskId: taskState.id }
         );
-        // Throwing an error here might stop the cron job permanently depending on node-cron version/config
-        // Consider just logging and returning to allow future runs?
         return;
       }
       if (!currentState.is_enabled) {
@@ -195,12 +181,7 @@ function scheduleTask(taskState: TaskState, definition: TaskDefinition): void {
           `Task was disabled between cron trigger and execution start. Skipping run.`,
           { taskId: taskState.id, taskName: currentState.name }
         );
-        // Update status back to STOPPED or IDLE? Let the API handle the state, just don't run.
-        // We need to ensure the job doesn't run again until re-enabled via API.
-        // The current logic in scheduleTask/stopScheduledTask handles this.
         stopScheduledTask(taskState.id); // Ensure the cron job itself is stopped
-        // Update state to reflect it's stopped? The API should have already done this.
-        // Maybe set to IDLE? Let's leave it as whatever the disabling action set it to.
         return;
       }
       if (currentState.status !== "RUNNING") {
@@ -209,7 +190,6 @@ function scheduleTask(taskState: TaskState, definition: TaskDefinition): void {
           `Task status was not RUNNING at execution start, possible race condition or manual override. Proceeding with execution.`,
           { taskId: taskState.id, currentStatus: currentState.status }
         );
-        // Force status back to RUNNING? Or trust the execute logic? Let's proceed.
       }
 
       // Execute the actual task logic - PASS THE LOGGER INSTANCE
@@ -355,18 +335,16 @@ export async function startTask(taskId: string): Promise<void> {
   // Update config first
   await updateTaskState(taskId, { is_enabled: true, status: "IDLE" }); // Set to IDLE when manually starting
 
-  // Find definition (required for scheduling)
-  const definition = await findTaskDefinition(taskState.name);
+  // Find definition from the map
+  const definition = taskDefinitionMap[taskState.name];
   if (!definition) {
-    // Log error and potentially revert the state update?
     logger.error(
       LogComponent.WOLF_SERVER,
-      `Task definition module not found, cannot schedule task. State was set to enabled, but job won't run.`,
+      `Task definition not found in map for task name, cannot schedule task.`,
       null,
       { taskId, taskName: taskState.name }
     );
-    // Consider updating state back to disabled/error? For now, leave enabled but unscheduled.
-    throw new Error(`Task definition for ${taskState.name} not found.`);
+    throw new Error(`Task definition for ${taskState.name} not found in map.`);
   }
 
   // Get the *updated* task state after setting is_enabled=true
@@ -480,16 +458,16 @@ export async function updateTaskSchedule(
     throw new Error(`Task with ID ${taskId} not found after update.`);
   }
 
-  // Find the definition again
-  const definition = await findTaskDefinition(taskState.name);
+  // Find the definition again from the map
+  const definition = taskDefinitionMap[taskState.name];
   if (!definition) {
     logger.error(
       LogComponent.WOLF_SERVER,
-      `Task definition not found, cannot reschedule with new schedule.`,
+      `Task definition not found in map, cannot reschedule with new schedule.`,
       null,
       { taskId, taskName: taskState.name }
     );
-    throw new Error(`Task definition for ${taskState.name} not found.`);
+    throw new Error(`Task definition for ${taskState.name} not found in map.`);
   }
 
   // Reschedule *only* if the task is currently enabled
@@ -503,56 +481,99 @@ export async function updateTaskSchedule(
   } else {
     logger.info(
       LogComponent.WOLF_SERVER,
-      `Task is currently disabled, schedule updated in config but not rescheduling active job.`,
-      { taskId }
+      `Task is disabled, schedule updated in config but job not started.`,
+      { taskId, newSchedule }
     );
   }
 }
+// Removed findTaskDefinition helper function
 
-// Helper function to dynamically load a task definition by name
-async function findTaskDefinition(
-  taskName: string
-): Promise<TaskDefinition | null> {
-  logger.debug(
+/**
+ * Manually triggers a task run.
+ * @param taskId The ID of the task to run
+ * @returns A promise that resolves when the task execution is complete
+ * @throws Error if the task is not found or already running
+ */
+export async function triggerTaskRun(taskId: string): Promise<void> {
+  logger.info(
     LogComponent.WOLF_SERVER,
-    `Attempting to find task definition module by name.`,
-    { taskName }
-  );
-  const expectedFileName = `${taskName}.ts`; // Assuming file name matches task name
-  const filePath = path.join(TASKS_DIR, expectedFileName);
-
-  try {
-    await fs.access(filePath); // Check if file exists
-    const module = await import(filePath);
-    const definition = module.default as TaskDefinition;
-    if (definition && definition.name === taskName) {
-      logger.debug(
-        LogComponent.WOLF_SERVER,
-        `Successfully found and loaded task definition module.`,
-        { taskName, filePath }
-      );
-      return definition;
-    } else {
-      logger.warn(
-        LogComponent.WOLF_SERVER,
-        `File found, but default export is missing, invalid, or name mismatch.`,
-        { taskName, filePath, definitionName: definition?.name }
-      );
-      return null;
+    `Received request to manually trigger task run.`,
+    {
+      taskId,
     }
-  } catch (error) {
-    // Log file access errors or import errors
+  );
+
+  // Load the current task configuration
+  const config = await loadTasksConfig();
+  const taskState = config.tasks.find((t) => t.id === taskId);
+
+  if (!taskState) {
     logger.error(
       LogComponent.WOLF_SERVER,
-      `Failed to access or import task definition module.`,
-      error instanceof Error ? error : new Error(String(error)),
-      { taskName, filePath }
+      `Cannot trigger task: Task ID not found in configuration.`,
+      null,
+      { taskId }
     );
-    return null;
+    throw new Error(`Task with id ${taskId} not found.`);
+  }
+
+  // Find the corresponding task definition
+  const definition = taskDefinitionMap[taskState.name];
+  if (!definition) {
+    logger.error(
+      LogComponent.WOLF_SERVER,
+      `Task definition not found in map for task name, cannot execute task.`,
+      null,
+      { taskId, taskName: taskState.name }
+    );
+    throw new Error(`Task definition for ${taskState.name} not found in map.`);
+  }
+
+  // Check if the task is already running
+  if (taskState.status === "RUNNING") {
+    logger.warn(
+      LogComponent.WOLF_SERVER,
+      `Task is already running, cannot trigger manual run.`,
+      { taskId, taskName: taskState.name }
+    );
+    throw new Error(`Task ${taskState.name} is already running.`);
+  }
+
+  // Update the task state to RUNNING
+  await updateTaskState(taskId, {
+    status: "RUNNING",
+    last_run_at: new Date().toISOString(),
+  });
+
+  logger.info(LogComponent.WOLF_SERVER, `Starting manual execution of task.`, {
+    taskId,
+    taskName: taskState.name,
+  });
+
+  try {
+    // Execute the task
+    await definition.execute(logger, taskState);
+
+    // Update the task state to IDLE after successful execution
+    await updateTaskState(taskId, { status: "IDLE" });
+
+    logger.info(
+      LogComponent.WOLF_SERVER,
+      `Manual task execution completed successfully.`,
+      { taskId, taskName: taskState.name }
+    );
+  } catch (error) {
+    logger.error(
+      LogComponent.WOLF_SERVER,
+      `Manual task execution failed.`,
+      error instanceof Error ? error : new Error(String(error)),
+      { taskId, taskName: taskState.name }
+    );
+
+    // Update the task state to ERROR
+    await updateTaskState(taskId, { status: "ERROR" });
+
+    // Re-throw the error
+    throw error;
   }
 }
-
-// TODO: Consider how and where to call startScheduler()
-// Typically, this would be called once when the application server starts.
-// In Next.js, this might be in a custom server file or an initialization script.
-// For serverless, a different approach (like Vercel Cron Jobs) is needed.

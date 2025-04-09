@@ -2,11 +2,11 @@ import { validateUser } from "@/lib/config";
 import { AuthOptions } from "next-auth";
 import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { Logger } from "./logger/logger";
+import { logger } from "./logger"; // Import the singleton instance
 import { LogComponent } from "./logger/types";
 
 // Initialize logger
-const logger = Logger.getInstance();
+// Use the imported singleton logger instance directly
 
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("Please provide process.env.NEXTAUTH_SECRET");

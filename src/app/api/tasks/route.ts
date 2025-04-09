@@ -7,11 +7,11 @@ import { NextResponse } from "next/server";
 
 // Add auth imports
 import { authOptions } from "@/lib/auth";
-import { Logger } from "@/lib/logger/logger"; // Import Logger
+import { logger } from "@/lib/logger"; // Import the singleton instance
 import { LogComponent } from "@/lib/logger/types"; // Import LogComponent
 import { getServerSession } from "next-auth";
 
-const logger = Logger.getInstance(); // Initialize logger
+// Use the imported singleton logger instance directly
 
 export async function GET(request: Request) {
   const url = new URL(request.url);

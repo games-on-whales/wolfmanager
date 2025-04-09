@@ -1,4 +1,3 @@
-import path from "path";
 import { LoggerConfig } from "./types";
 
 const isClient = typeof window !== "undefined";
@@ -14,7 +13,8 @@ const devConfig: LoggerConfig = {
   },
   file: {
     enabled: !isClient, // Disable file transport in client
-    path: path.join(process.cwd(), "config", "logs", "wolf-ui.log"),
+    // Path will be calculated conditionally within getLoggerConfig
+    path: undefined,
     maxSize: 5 * 1024 * 1024, // 5MB
     maxFiles: 5,
     format: "json",
@@ -37,7 +37,7 @@ const containerConfig: LoggerConfig = {
   },
   file: {
     enabled: !isClient, // Disable file transport in client
-    path: "/config/logs/wolf-ui.log",
+    path: "/config/logs/wolf-ui.log", // Absolute path for container
     maxSize: 10 * 1024 * 1024,
     maxFiles: 5,
     format: "json",
@@ -60,7 +60,7 @@ const prodConfig: LoggerConfig = {
   },
   file: {
     enabled: !isClient, // Disable file transport in client
-    path: "/config/logs/wolf-ui.log",
+    path: "/config/logs/wolf-ui.log", // Assume standard path if not container
     maxSize: 10 * 1024 * 1024, // 10MB
     maxFiles: 10,
     format: "json",
@@ -77,15 +77,35 @@ export function getLoggerConfig(): LoggerConfig {
   const isDevelopment = process.env.NODE_ENV !== "production";
   const isContainer = process.env.CONTAINER === "true";
 
-  // Select base configuration
-  const baseConfig = isDevelopment
-    ? devConfig
-    : isContainer
-    ? containerConfig
-    : prodConfig;
+  // Select base configuration - use structuredClone for deep copy to avoid mutation issues
+  const baseConfig = structuredClone(
+    isDevelopment ? devConfig : isContainer ? containerConfig : prodConfig
+  );
 
-  // Construct the final config object
-  const finalConfig = {
+  // Conditionally calculate and set the development file path only in Node.js
+  if (
+    isDevelopment &&
+    typeof process !== "undefined" &&
+    process.versions?.node
+  ) {
+    try {
+      // Dynamically require 'path' only when needed and possible
+      const pathModule = require("path");
+      baseConfig.file.path = pathModule.join(
+        process.cwd(),
+        "config",
+        "logs",
+        "wolf-ui.log"
+      );
+    } catch (error) {
+      console.error("Failed to require 'path' module for dev log path:", error);
+      // Keep path undefined if 'path' module fails (e.g., unexpected environment)
+      baseConfig.file.path = undefined;
+    }
+  }
+
+  // Construct the final config object, merging base and environment overrides
+  const finalConfig: LoggerConfig = {
     ...baseConfig,
     level: (process.env.LOG_LEVEL as LoggerConfig["level"]) || baseConfig.level,
     container: {
@@ -98,15 +118,20 @@ export function getLoggerConfig(): LoggerConfig {
     },
     file: {
       ...baseConfig.file,
+      // Ensure file logging is enabled only on server-side
+      // and either explicitly enabled via env var or enabled in base config
       enabled:
         !isClient &&
         (process.env.LOG_FILE_ENABLED === "true" || baseConfig.file.enabled),
+      // Use env var path override if provided, otherwise use the (potentially calculated) base path
       path: process.env.LOG_FILE_PATH || baseConfig.file.path,
       maxSize:
         parseInt(process.env.LOG_MAX_FILE_SIZE || "") ||
         baseConfig.file.maxSize,
       maxFiles:
         parseInt(process.env.LOG_MAX_FILES || "") || baseConfig.file.maxFiles,
+      // Ensure format is correctly inherited or defaulted
+      format: baseConfig.file.format || "json",
     },
     console: {
       ...baseConfig.console,
@@ -117,6 +142,11 @@ export function getLoggerConfig(): LoggerConfig {
         process.env.LOG_CONSOLE_COLOR === "true" || baseConfig.console.colorize,
     },
   };
+
+  // Final check: disable file logging if path is still undefined/null after all calculations
+  if (!finalConfig.file.path) {
+    finalConfig.file.enabled = false;
+  }
 
   return finalConfig;
 }

@@ -1,9 +1,9 @@
 import bcrypt from "bcryptjs";
 import { loadConfig, saveConfig } from "../lib/config";
-import { Logger } from "../lib/logger/logger";
+import { logger } from "../lib/logger"; // Import the singleton instance
 import { LogComponent } from "../lib/logger/types";
 
-const logger = Logger.getInstance();
+// Use the imported singleton logger instance directly
 
 async function rehashPasswords() {
   try {

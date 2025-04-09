@@ -43,6 +43,7 @@ export default function TaskListClient() {
   const [error, setError] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<TaskState | null>(null);
   const [newSchedule, setNewSchedule] = useState("");
+  const [runningTasks, setRunningTasks] = useState<Set<string>>(new Set());
 
   const fetchTasks = useCallback(async () => {
     setIsLoading(true);
@@ -148,6 +149,53 @@ export default function TaskListClient() {
     }
   };
 
+  const handleRunNow = async (task: TaskState) => {
+    if (runningTasks.has(task.id)) {
+      toast.error(`Task ${task.name} is already running.`);
+      return;
+    }
+
+    // Optimistically update UI
+    setRunningTasks((prev) => new Set(prev).add(task.id));
+    setTasks((currentTasks) =>
+      currentTasks.map((t) =>
+        t.id === task.id ? { ...t, status: "RUNNING" } : t
+      )
+    );
+
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/run`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to trigger task run");
+      }
+
+      toast.success(`Task ${task.name} triggered successfully.`);
+    } catch (e: any) {
+      console.error("Failed to trigger task run:", e);
+      toast.error(`Failed to trigger task run: ${e.message}`);
+      // Revert optimistic task status update on failure
+      // We keep the original task status from before the run attempt
+      setTasks((currentTasks) =>
+        currentTasks.map((t) =>
+          t.id === task.id ? { ...t, status: task.status } : t
+        )
+      );
+    } finally {
+      // Always remove from the local running set after the attempt
+      setRunningTasks((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(task.id);
+        return newSet;
+      });
+      // Always refresh the task list to get the final state from backend
+      fetchTasks();
+    }
+  };
+
   if (isLoading) {
     return <div>Loading tasks...</div>;
   }
@@ -209,56 +257,68 @@ export default function TaskListClient() {
                   />
                 </TableCell>
                 <TableCell>
-                  <Dialog
-                    onOpenChange={(isOpen) => !isOpen && setEditingTask(null)}
-                  >
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenConfigDialog(task)}
-                      >
-                        Configure
-                      </Button>
-                    </DialogTrigger>
-                    {editingTask && editingTask.id === task.id && (
-                      <DialogContent className="sm:max-w-[425px]">
-                        <DialogHeader>
-                          <DialogTitle>
-                            Configure Schedule: {editingTask.name}
-                          </DialogTitle>
-                          <DialogDescription>
-                            Update the cron schedule for this task. Make sure
-                            it's a valid format.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="schedule" className="text-right">
-                              Schedule
-                            </Label>
-                            <Input
-                              id="schedule"
-                              value={newSchedule}
-                              onChange={(e) => setNewSchedule(e.target.value)}
-                              className="col-span-3"
-                              placeholder="* * * * *"
-                            />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRunNow(task)}
+                      disabled={
+                        task.status === "RUNNING" || runningTasks.has(task.id)
+                      }
+                    >
+                      Run Now
+                    </Button>
+                    <Dialog
+                      onOpenChange={(isOpen) => !isOpen && setEditingTask(null)}
+                    >
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenConfigDialog(task)}
+                        >
+                          Configure
+                        </Button>
+                      </DialogTrigger>
+                      {editingTask && editingTask.id === task.id && (
+                        <DialogContent className="sm:max-w-[425px]">
+                          <DialogHeader>
+                            <DialogTitle>
+                              Configure Schedule: {editingTask.name}
+                            </DialogTitle>
+                            <DialogDescription>
+                              Update the cron schedule for this task. Make sure
+                              it's a valid format.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                              <Label htmlFor="schedule" className="text-right">
+                                Schedule
+                              </Label>
+                              <Input
+                                id="schedule"
+                                value={newSchedule}
+                                onChange={(e) => setNewSchedule(e.target.value)}
+                                className="col-span-3"
+                                placeholder="* * * * *"
+                              />
+                            </div>
                           </div>
-                        </div>
-                        <DialogFooter>
-                          <DialogClose asChild>
-                            <Button type="button" variant="secondary">
-                              Cancel
+                          <DialogFooter>
+                            <DialogClose asChild>
+                              <Button type="button" variant="secondary">
+                                Cancel
+                              </Button>
+                            </DialogClose>
+                            <Button type="button" onClick={handleSaveSchedule}>
+                              Save changes
                             </Button>
-                          </DialogClose>
-                          <Button type="button" onClick={handleSaveSchedule}>
-                            Save changes
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    )}
-                  </Dialog>
+                          </DialogFooter>
+                        </DialogContent>
+                      )}
+                    </Dialog>
+                  </div>
                 </TableCell>
               </TableRow>
             ))
