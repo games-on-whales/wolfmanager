@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Cpu,
+  Database, // Add Database icon
   FileText,
   Key,
   LogOut,
@@ -13,6 +14,7 @@ import {
   Webhook,
 } from "lucide-react";
 import Link from "next/link";
+// Removed import for SteamGridDbSettings as it's moved
 
 interface SettingsClientProps {
   user: {
@@ -152,6 +154,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                     </div>
                   </div>
                 </Card>
+                {/* SteamGridDbSettings component removed from here */}
               </Link>
 
               <Link href="/settings/tasks" className="block">
@@ -164,6 +167,24 @@ export function SettingsClient({ user }: SettingsClientProps) {
                       <h3 className="font-semibold">Background Tasks</h3>
                       <p className="text-sm text-muted-foreground">
                         Manage and monitor background processes
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+
+              {/* Moved Metadata Providers link here */}
+              <Link href="/settings/metadata-providers" className="block">
+                <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer h-[100px]">
+                  <div className="flex items-start space-x-4">
+                    <div className="bg-accent/10 p-3 rounded-lg">
+                      <Database className="h-5 w-5 text-accent" />{" "}
+                      {/* Use Database icon */}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Metadata Providers</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Configure external metadata sources like SteamGridDB
                       </p>
                     </div>
                   </div>

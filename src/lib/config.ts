@@ -31,10 +31,22 @@ export interface UserConfig {
   clients: ClientDevice[];
 }
 
+//+ Add interface for SteamGridDB settings
+export interface SteamGridDbConfig {
+  enabled: boolean;
+  apiKey: string; // Sensitive
+}
+
+//+ Add interface for metadata providers container
+export interface MetadataProvidersConfig {
+  steamgridDb?: SteamGridDbConfig;
+}
+
 export interface Config {
   system: SystemConfig;
   users: { [username: string]: UserConfig };
   clients: ClientDevice[];
+  metadataProviders?: MetadataProvidersConfig; //+ Add optional metadata providers
 }
 
 export function isValidConfig(config: unknown): config is Config {
@@ -47,7 +59,15 @@ export function isValidConfig(config: unknown): config is Config {
     typeof c.system.name !== "string" ||
     typeof c.system.version !== "string" ||
     typeof c.users !== "object" ||
-    c.users === null
+    c.users === null ||
+    //+ Add check for optional metadataProviders structure if it exists
+    (c.metadataProviders !== undefined &&
+      typeof c.metadataProviders !== "object") ||
+    (c.metadataProviders?.steamgridDb !== undefined &&
+      (typeof c.metadataProviders.steamgridDb !== "object" ||
+        c.metadataProviders.steamgridDb === null ||
+        typeof c.metadataProviders.steamgridDb.enabled !== "boolean" ||
+        typeof c.metadataProviders.steamgridDb.apiKey !== "string"))
   ) {
     return false;
   }
@@ -127,6 +147,8 @@ export function loadConfig(decryptSensitiveData: boolean = false): Config {
         hasSystem: typeof parsedConfig.system === "object",
         hasUsers: typeof parsedConfig.users === "object",
         hasClients: typeof parsedConfig.clients === "object",
+        hasMetadataProviders:
+          typeof parsedConfig.metadataProviders === "object", //+ Log presence of new section
       },
     });
 
@@ -168,6 +190,29 @@ export function loadConfig(decryptSensitiveData: boolean = false): Config {
           }
         }
       });
+
+      //+ Decrypt SteamGridDB API key if requested and present
+      if (
+        decryptSensitiveData &&
+        parsedConfig.metadataProviders?.steamgridDb?.apiKey &&
+        isEncryptedString(parsedConfig.metadataProviders.steamgridDb.apiKey)
+      ) {
+        try {
+          parsedConfig.metadataProviders.steamgridDb.apiKey = decrypt(
+            parsedConfig.metadataProviders.steamgridDb.apiKey
+          );
+        } catch (error) {
+          logger.error(
+            LogComponent.SYSTEM,
+            `Failed to decrypt steamgridDb.apiKey`,
+            error instanceof Error ? error : new Error(String(error))
+          );
+          // Clear potentially corrupt data
+          if (parsedConfig.metadataProviders?.steamgridDb) {
+            parsedConfig.metadataProviders.steamgridDb.apiKey = "";
+          }
+        }
+      }
     }
 
     // **Crucially: Ensure user.clients array exists after parsing**
@@ -214,6 +259,13 @@ export function loadConfig(decryptSensitiveData: boolean = false): Config {
           },
         },
         clients: [], // Initialize top-level clients
+        //+ Add default metadataProviders section
+        metadataProviders: {
+          steamgridDb: {
+            enabled: false,
+            apiKey: "",
+          },
+        },
       };
       try {
         saveConfig(defaultConfig); // Attempt to save the default
@@ -279,6 +331,26 @@ export function saveConfig(config: Config): void {
           return [username, encryptedUser];
         })
       ),
+      //+ Include metadataProviders in the encrypted config
+      metadataProviders: config.metadataProviders
+        ? {
+            ...config.metadataProviders,
+            //+ Encrypt steamgridDb apiKey if present and not already encrypted
+            steamgridDb: config.metadataProviders.steamgridDb
+              ? {
+                  ...config.metadataProviders.steamgridDb,
+                  apiKey:
+                    config.metadataProviders.steamgridDb.apiKey &&
+                    config.metadataProviders.steamgridDb.apiKey.length > 0 &&
+                    !isEncryptedString(
+                      config.metadataProviders.steamgridDb.apiKey
+                    )
+                      ? encrypt(config.metadataProviders.steamgridDb.apiKey)
+                      : config.metadataProviders.steamgridDb.apiKey,
+                }
+              : undefined,
+          }
+        : undefined,
     };
 
     logger.debug(
@@ -814,5 +886,58 @@ export async function addOrUpdateTaskDefinition(
     throw error;
   } finally {
     // Release lock
+  }
+}
+
+//+ Function to securely get the SteamGridDB API key
+export function getSteamGridDbApiKey(): string | null {
+  try {
+    // Load config WITHOUT decrypting user data, but DO decrypt SGDB key
+    const config = loadConfig(false); // Load raw config first
+
+    if (!config.metadataProviders?.steamgridDb?.apiKey) {
+      logger.debug(
+        LogComponent.SYSTEM,
+        "SteamGridDB API key not found or empty in config."
+      );
+      return null;
+    }
+
+    const encryptedKey = config.metadataProviders.steamgridDb.apiKey;
+
+    if (!isEncryptedString(encryptedKey)) {
+      // It might be empty or somehow saved unencrypted (shouldn't happen with saveConfig)
+      logger.warn(
+        LogComponent.SYSTEM,
+        "SteamGridDB API key found but is not in expected encrypted format.",
+        null,
+        { keyPreview: encryptedKey.substring(0, 5) } // Log a small preview for debugging
+      );
+      // Depending on policy, you might return it or null. Returning null is safer.
+      return null; // Or return encryptedKey if you want to allow unencrypted keys temporarily
+    }
+
+    try {
+      const decryptedKey = decrypt(encryptedKey);
+      logger.debug(
+        LogComponent.SYSTEM,
+        "Successfully decrypted SteamGridDB API key."
+      );
+      return decryptedKey;
+    } catch (error) {
+      logger.error(
+        LogComponent.SYSTEM,
+        "Failed to decrypt SteamGridDB API key",
+        error instanceof Error ? error : new Error(String(error))
+      );
+      return null;
+    }
+  } catch (error) {
+    logger.error(
+      LogComponent.SYSTEM,
+      "Failed to load configuration for getting SteamGridDB API key",
+      error instanceof Error ? error : new Error(String(error))
+    );
+    return null;
   }
 }
