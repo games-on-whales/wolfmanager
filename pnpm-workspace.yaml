@@ -1,0 +1,5 @@
+ignoredBuiltDependencies:
+  - protobufjs
+onlyBuiltDependencies:
+  - cpu-features
+  - ssh2

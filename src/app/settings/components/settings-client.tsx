@@ -8,6 +8,7 @@ import {
   Key,
   LogOut,
   Search,
+  Terminal,
   Users,
   Webhook,
 } from "lucide-react";
@@ -131,6 +132,22 @@ export function SettingsClient({ user }: SettingsClientProps) {
                       <h3 className="font-semibold">API Test</h3>
                       <p className="text-sm text-muted-foreground">
                         Test and verify API endpoints
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+
+              <Link href="/settings/wolf-logs" className="block">
+                <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer h-[100px]">
+                  <div className="flex items-start space-x-4">
+                    <div className="bg-accent/10 p-3 rounded-lg">
+                      <Terminal className="h-5 w-5 text-accent" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Wolf Container Logs</h3>
+                      <p className="text-sm text-muted-foreground">
+                        View and monitor Wolf container logs
                       </p>
                     </div>
                   </div>

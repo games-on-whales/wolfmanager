@@ -47,10 +47,22 @@ const nextConfig = {
     ];
   },
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // Add alias for @
     config.resolve.alias = {
       ...config.resolve.alias,
       "@": "./src",
     };
+
+    // Add rule to handle .node files using node-loader
+    config.module.rules.push({
+      test: /\.node$/,
+      use: "node-loader",
+    });
+
+    // Ignore cpu-features module for server-side builds, as it's likely not needed for socket connections
+    // and causes build issues with its native addon.
+    // Reverting the IgnorePlugin change. We need to address the native addon build issues directly.
+
     return config;
   },
 };

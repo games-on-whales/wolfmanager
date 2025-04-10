@@ -20,7 +20,8 @@
         "yoavbls.pretty-ts-errors",
         "csstools.postcss",
         "christian-kohler.path-intellisense",
-        "rangav.vscode-thunder-client"
+        "rangav.vscode-thunder-client",
+        "roocode.roocode" // Added roocode extension
       ],
       "settings": {
         "editor.formatOnSave": true,
@@ -47,7 +48,9 @@
   },
   "remoteUser": "node",
   "updateRemoteUserUID": true,
-  "postStartCommand": "sudo chmod 666 /var/run/wolf/wolf.sock || true && sudo chown root:node /var/run/wolf/wolf.sock && sudo chmod 660 /var/run/wolf/wolf.sock && pnpm install && npm rebuild bcrypt && npm rebuild sharp",
+  // Use postCreateCommand to set up docker group permissions before VS Code connects
+  "postCreateCommand": "if [ -S /var/run/docker.sock ]; then sudo groupmod -g $(stat -c '%g' /var/run/docker.sock) docker || sudo groupadd -g $(stat -c '%g' /var/run/docker.sock) docker; sudo usermod -aG docker node; fi",
+  "postStartCommand": "sleep 5 && sudo chmod 666 /var/run/wolf/wolf.sock || true && sudo chown root:node /var/run/wolf/wolf.sock && sudo chmod 660 /var/run/wolf/wolf.sock && pnpm install && npm rebuild bcrypt && npm rebuild sharp",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/WolfUI,type=bind,consistency=cached",
   "workspaceFolder": "/workspaces/WolfUI",
   "runArgs": [
