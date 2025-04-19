@@ -92,7 +92,7 @@ graph TD
     B --> C{Server Action: validateLogin};
     C --> D[lib/auth: authorize];
     D --> E[lib/config: validateUser];
-    E --> F[lib/config: loadConfig(decrypt=false)];
+    E --> F["lib/config: loadConfig(decrypt=false)"];
     F --> G[config/default.toml];
     G --> F;
     F --> E{Compare Hash};
@@ -118,7 +118,7 @@ graph TD
         B --> C{Server Action: pairAndAddClientAction};
     end
     subgraph Server-Side
-        C --> D[lib/config: loadConfig(decrypt=true)];
+        C --> D["lib/config: loadConfig(decrypt=true)"];
         D --> E[config/default.toml];
         E --> D;
         C --> F[api/wolf/lib/wolf-socket.server: callWolfApi(/pair/client)];
@@ -130,9 +130,9 @@ graph TD
             H --> G;
             G --> H{Updated Client List};
             H --> C{Find New Device ID};
-            C --> I[lib/config: loadConfig(decrypt=true)];
+            C --> I["lib/config: loadConfig(decrypt=true)"];
             I --> E; E --> I;
-            C --> J[lib/config: saveConfig (Add Client)];
+            C --> J["lib/config: saveConfig (Add Client)"];
             J --> E; E --> J;
             C --> K[Return Success + Client Data];
         else Pairing Failed
@@ -164,11 +164,11 @@ graph TD
             alt Invalid Data
                 E --> C{Return Validation Error};
             else Valid Data
-                E --> F[lib/config: loadConfig(decrypt=true)];
+                E --> F["lib/config: loadConfig(decrypt=true)"];
                 F --> G[config/default.toml];
                 G --> F;
                 F --> C{Update Config Object In Memory};
-                C --> H[lib/config: saveConfig (Encrypts API Key)];
+                C --> H["lib/config: saveConfig (Encrypts API Key)"];
                 H --> G; G --> H;
                 H --> C{Return Success + Updated Status};
             end
