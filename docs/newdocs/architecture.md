@@ -21,52 +21,52 @@ The system follows the Next.js App Router paradigm, utilizing Server Components,
 
 ```mermaid
 sequenceDiagram
-    participant User Browser (Client Components)
-    participant Next.js Server (Server Components, API Routes, Server Actions)
-    participant Lib Functions (`src/lib/*`)
-    participant Config Service (`src/lib/config.ts`)
-    participant TOML Files (`config/*.toml`)
-    participant Wolf Backend (Unix Socket)
-    participant External APIs (Steam, SteamGridDB)
-    participant Task Scheduler (`src/lib/scheduler.ts`)
+    participant web as Web Browser
+    participant next as Next.js Server
+    participant lib as Lib Functions
+    participant config as Config Service
+    participant toml as TOML Files
+    participant wolf as Wolf Backend
+    participant api as External APIs
+    participant task as Task Scheduler
 
-    User Browser (Client Components)->>Next.js Server (Server Components, API Routes, Server Actions): HTTP Request (Page Load / API Call / Action)
+    web->>next: HTTP Request (Page Load/API Call/Action)
     alt Page Load / Server Component Render
-        Next.js Server (Server Components, API Routes, Server Actions)->>Lib Functions (`src/lib/*`): Call utility/service functions
-        Lib Functions (`src/lib/*`)->>Config Service (`src/lib/config.ts`): Read config data
-        Config Service (`src/lib/config.ts`)->>TOML Files (`config/*.toml`): Read file
-        TOML Files (`config/*.toml`)-->>Config Service (`src/lib/config.ts`): Return TOML content
-        Config Service (`src/lib/config.ts`)-->>Lib Functions (`src/lib/*`): Return parsed config
-        Lib Functions (`src/lib/*`)-->>Next.js Server (Server Components, API Routes, Server Actions): Return data
-        Next.js Server (Server Components, API Routes, Server Actions)-->>User Browser (Client Components): Send HTML / Data
+        next->>lib: Call utility/service functions
+        lib->>config: Read config data
+        config->>toml: Read file
+        toml-->>config: Return TOML content
+        config-->>lib: Return parsed config
+        lib-->>next: Return data
+        next-->>web: Send HTML/Data
     else API Route / Server Action
-        Next.js Server (Server Components, API Routes, Server Actions)->>Lib Functions (`src/lib/*`): Call action/service logic
+        next->>lib: Call action/service logic
         alt Read Operation
-            Lib Functions (`src/lib/*`)->>Config Service (`src/lib/config.ts`): Read config data
-            Config Service (`src/lib/config.ts`)->>TOML Files (`config/*.toml`): Read file
-            TOML Files (`config/*.toml`)-->>Config Service (`src/lib/config.ts`): Return TOML content
-            Config Service (`src/lib/config.ts`)-->>Lib Functions (`src/lib/*`): Return parsed config
+            lib->>config: Read config data
+            config->>toml: Read file
+            toml-->>config: Return TOML content
+            config-->>lib: Return parsed config
         else Write Operation
-            Lib Functions (`src/lib/*`)->>Config Service (`src/lib/config.ts`): Update config data
-            Config Service (`src/lib/config.ts`)->>TOML Files (`config/*.toml`): Write file (with encryption)
-            TOML Files (`config/*.toml`)-->>Config Service (`src/lib/config.ts`): Confirm write
-            Config Service (`src/lib/config.ts`)-->>Lib Functions (`src/lib/*`): Confirm update
+            lib->>config: Update config data
+            config->>toml: Write file (with encryption)
+            toml-->>config: Confirm write
+            config-->>lib: Confirm update
         else Wolf Backend Interaction
-            Lib Functions (`src/lib/*`)->>Wolf Backend (Unix Socket): Send request via socket
-            Wolf Backend (Unix Socket)-->>Lib Functions (`src/lib/*`): Return response
+            lib->>wolf: Send request via socket
+            wolf-->>lib: Return response
         else External API Interaction
-             Lib Functions (`src/lib/*`)->>External APIs (Steam, SteamGridDB): HTTP Request
-             External APIs (Steam, SteamGridDB)-->>Lib Functions (`src/lib/*`): Return response
+             lib->>api: HTTP Request
+             api-->>lib: Return response
         end
-        Lib Functions (`src/lib/*`)-->>Next.js Server (Server Components, API Routes, Server Actions): Return result/status
-        Next.js Server (Server Components, API Routes, Server Actions)-->>User Browser (Client Components): Send JSON Response / Action Result
+        lib-->>next: Return result/status
+        next-->>web: Send JSON Response/Action Result
     end
 
     %% Background Tasks
-    Task Scheduler (`src/lib/scheduler.ts`) ->> Lib Functions (`src/lib/*`): Execute Task (e.g., syncSteamLibrary)
-    Lib Functions (`src/lib/*`) ->> Config Service (`src/lib/config.ts`): Read/Write Config
-    Lib Functions (`src/lib/*`) ->> External APIs (Steam, SteamGridDB): Fetch Data
-    Lib Functions (`src/lib/*`) ->> Task Scheduler (`src/lib/scheduler.ts`): Update Task Status
+    task->>lib: Execute Task (e.g., syncSteamLibrary)
+    lib->>config: Read/Write Config
+    lib->>api: Fetch Data
+    lib->>task: Update Task Status
 ```
 
 **Key Interactions:**
@@ -87,98 +87,97 @@ sequenceDiagram
 ### User Authentication (Login)
 
 ```mermaid
-graph TD
-    A[User Enters Credentials in Login Form] --> B(Client Component);
-    B --> C{Server Action: validateLogin};
-    C --> D[lib/auth: authorize];
-    D --> E[lib/config: validateUser];
-    E --> F["lib/config: loadConfig(decrypt=false)"];
-    F --> G[config/default.toml];
-    G --> F;
-    F --> E{Compare Hash};
-    alt Credentials Valid
-        E --> D{Return User Object};
-        D --> C{Return User Object};
-        C --> H[NextAuth.js: Create Session/JWT];
-        H --> I[Set Session Cookie];
-        I --> B{Redirect to Dashboard};
-    else Credentials Invalid
-        E --> D{Return null};
-        D --> C{Throw AuthenticationError};
-        C --> B{Display Error Message};
-    end
+flowchart TD
+    A[User Enters Credentials] --> B[Client Component]
+    B --> C{Server Action: validateLogin}
+    C --> D[lib/auth: authorize]
+    D --> E[lib/config: validateUser]
+    E --> F[lib/config: loadConfig]
+    F --> G[config/default.toml]
+    G --> F
+    F --> E_Decision{Compare Hash}
+    E_Decision -- "Valid" --> D_Valid{Return User Object}
+    D_Valid --> C_Valid{Return User Object}
+    C_Valid --> H[NextAuth.js: Create Session]
+    H --> I[Set Session Cookie]
+    I --> B_Redirect{Redirect to Dashboard}
+    B_Redirect --> B
+    E_Decision -- "Invalid" --> D_Invalid{Return null}
+    D_Invalid --> C_Invalid{Throw AuthError}
+    C_Invalid --> B_Error{Display Error}
+    B_Error --> B
 ```
 
 ### Device Pairing
 
 ```mermaid
-graph TD
-    subgraph Client-Side
-        A[User selects Pending Request / Enters PIN] --> B(PairDialog Component);
-        B --> C{Server Action: pairAndAddClientAction};
+flowchart TD
+    subgraph ClientSide
+        A[User selects Request/Enters PIN] --> B[PairDialog Component]
+        B --> C{Server Action: pairAndAddClient}
     end
-    subgraph Server-Side
-        C --> D["lib/config: loadConfig(decrypt=true)"];
-        D --> E[config/default.toml];
-        E --> D;
-        C --> F[api/wolf/lib/wolf-socket.server: callWolfApi(/pair/client)];
-        F --> G[Wolf Backend Socket];
-        G --> F{Pairing Result};
-        alt Pairing Successful
-            F --> C{Return Success};
-            C --> H[Retry Loop: callWolfApi(/clients)];
-            H --> G;
-            G --> H{Updated Client List};
-            H --> C{Find New Device ID};
-            C --> I["lib/config: loadConfig(decrypt=true)"];
-            I --> E; E --> I;
-            C --> J["lib/config: saveConfig (Add Client)"];
-            J --> E; E --> J;
-            C --> K[Return Success + Client Data];
-        else Pairing Failed
-            F --> C{Return Error};
-            C --> L[Return Error Response];
-        end
+
+    subgraph ServerSide
+        C --> D_Load1[loadConfig decrypt=true]
+        D_Load1 --> E[config/default.toml]
+        E --> D_Load1
+        C --> F_Call[callWolfApi /pair/client]
+        F_Call --> G[Wolf Backend Socket]
+        G --> F_Result{Pairing Result}
+
+        F_Result -- "Success" --> C_PairSuccess{Return Success}
+        C_PairSuccess --> H_Retry[Retry Loop: callWolfApi]
+        H_Retry --> G
+        G --> H_Result{Updated Client List}
+        H_Result --> C_FindID{Find New Device ID}
+        C_FindID --> I_Load2[loadConfig decrypt=true]
+        I_Load2 --> E
+        E --> I_Load2
+        C_FindID --> J_Save[saveConfig Add Client]
+        J_Save --> E
+        E --> J_Save
+        J_Save --> K[Return Success + Client Data]
+
+        F_Result -- "Failed" --> C_PairFail{Return Error}
+        C_PairFail --> L[Return Error Response]
     end
-    alt Action Success
-      K --> B{Show Success Toast, Refresh Lists};
-    else Action Failed
-      L --> B{Show Error Toast};
-    end
+
+    K -- "Success" --> B_Success{Show Success Toast}
+    L -- "Failed" --> B_Error{Show Error Toast}
+    B_Success --> B
+    B_Error --> B
 ```
 
 ### Configuration Update (e.g., SteamGridDB Settings)
 
 ```mermaid
-graph TD
-    subgraph Client-Side
-        A[Admin changes settings in SteamGridDbSettings Component] --> B(Form Submission);
-        B --> C{Server Action: updateSteamGridDbSettings};
+flowchart TD
+    subgraph ClientSide
+        A[Admin changes SteamGridDb settings] --> B[Form Submission]
+        B --> C{Server Action: updateSettings}
     end
-    subgraph Server-Side
-        C --> D[Auth Check: Verify Admin Role];
-        alt Not Admin
-            D --> C{Return Auth Error};
-        else Is Admin
-            D --> E[Zod Validation: Validate FormData];
-            alt Invalid Data
-                E --> C{Return Validation Error};
-            else Valid Data
-                E --> F["lib/config: loadConfig(decrypt=true)"];
-                F --> G[config/default.toml];
-                G --> F;
-                F --> C{Update Config Object In Memory};
-                C --> H["lib/config: saveConfig (Encrypts API Key)"];
-                H --> G; G --> H;
-                H --> C{Return Success + Updated Status};
-            end
-        end
+
+    subgraph ServerSide
+        C --> D_Auth{Auth Check: Admin Role}
+        D_Auth -- "Not Admin" --> C_AuthErr{Return Auth Error}
+        D_Auth -- "Is Admin" --> E_Valid{Zod Validation}
+
+        E_Valid -- "Invalid" --> C_ValidErr{Return Validation Error}
+        E_Valid -- "Valid" --> F_Load[loadConfig decrypt=true]
+        F_Load --> G[config/default.toml]
+        G --> F_Load
+        F_Load --> C_UpdateMem{Update Config In Memory}
+        C_UpdateMem --> H_Save[saveConfig Encrypts API Key]
+        H_Save --> G
+        G --> H_Save
+        H_Save --> C_Success{Return Success}
     end
-    alt Action Success
-      C --> A{Update UI State, Show Success Toast};
-    else Action Failed
-      C --> A{Show Error Toast};
-    end
+
+    C_Success -- "Success" --> A_Success{Update UI, Show Toast}
+    C_AuthErr -- "Failed" --> A_Error{Show Error Toast}
+    C_ValidErr -- "Failed" --> A_Error
+    A_Success --> A
+    A_Error --> A
 ```
 
 ## 4. Design Decisions and Rationale
