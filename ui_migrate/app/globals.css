@@ -1,0 +1,228 @@
+/* Remove the Google Fonts import */
+/* @import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap'); */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --neon-teal: #00e5cc;
+    --neon-blue: #01cdfe;
+    --neon-green: #05ffa1;
+    --neon-navy: #0077b6;
+    --neon-yellow: #fffb96;
+    --dark-bg: #1a1a1a;
+    --card-bg: rgba(255, 255, 255, 0.1);
+    --glass-effect: rgba(255, 255, 255, 0.05);
+    --text-color: #ffffff;
+
+    --background: 0 0% 10%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 190 100% 36%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 187 100% 50%;
+    --secondary-foreground: 0 0% 10%;
+
+    --accent: 158 100% 51%;
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 70%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 187 100% 50%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Use system monospace fonts instead of VT323 */
+    font-family: monospace, "Courier New", Courier;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    /* Use system monospace fonts instead of Press Start 2P */
+    font-family: monospace, "Courier New", Courier;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+}
+
+/* Starfield background animation */
+@keyframes move-stars-1 {
+  from {
+    transform: translateZ(0) translateY(0);
+  }
+  to {
+    transform: translateZ(0) translateY(1000px);
+  }
+}
+
+@keyframes move-stars-2 {
+  from {
+    transform: translateZ(-10px) translateY(-1000px) translateX(100px);
+  }
+  to {
+    transform: translateZ(-10px) translateY(1000px) translateX(-100px);
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    text-shadow: 0 0 10px var(--neon-navy), 0 0 20px var(--neon-blue);
+  }
+  50% {
+    text-shadow: 0 0 20px var(--neon-blue), 0 0 30px var(--neon-navy);
+  }
+}
+
+.stars {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  perspective: 1000px;
+  z-index: -1;
+  background: var(--dark-bg);
+}
+
+.stars:before,
+.stars:after {
+  content: "";
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background-image: radial-gradient(2px 2px at 20px 30px, var(--neon-blue), rgba(0, 0, 0, 0)),
+    radial-gradient(2px 2px at 40px 70px, var(--neon-teal), rgba(0, 0, 0, 0)),
+    radial-gradient(3px 3px at 50px 160px, var(--neon-navy), rgba(0, 0, 0, 0)),
+    radial-gradient(2px 2px at 90px 40px, var(--neon-green), rgba(0, 0, 0, 0)),
+    radial-gradient(3px 3px at 130px 80px, var(--neon-yellow), rgba(0, 0, 0, 0));
+  background-repeat: repeat;
+  background-size: 400px 400px;
+  animation: move-stars-1 60s linear infinite;
+  opacity: 0.5;
+}
+
+.stars:after {
+  transform-style: preserve-3d;
+  animation: move-stars-2 40s linear infinite;
+  opacity: 0.3;
+}
+
+/* Glass card effect - MODIFIED to remove hover transform effects */
+.glass-card {
+  background: var(--glass-effect);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  overflow: hidden;
+  /* Removed transform-style and perspective properties */
+  /* Removed transition property to prevent any animations */
+}
+
+/* Removed the ::before pseudo-element that was causing the shimmer effect */
+
+/* Removed the hover effects that were causing the card to lift and rotate */
+
+/* Neon text effect */
+.neon-text {
+  background: linear-gradient(45deg, var(--neon-navy), var(--neon-blue));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: glow 3s ease-in-out infinite;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* Neon border effect - MODIFIED to ensure consistent sizing */
+.neon-border {
+  position: relative;
+  border: 1px solid var(--neon-blue);
+  box-shadow: 0 0 5px var(--neon-blue), 0 0 10px var(--neon-blue) inset;
+  /* Ensure the border doesn't change the element size */
+  box-sizing: border-box;
+}
+
+.neon-border-teal {
+  position: relative;
+  border: 1px solid var(--neon-teal);
+  box-shadow: 0 0 5px var(--neon-teal), 0 0 10px var(--neon-teal) inset;
+  box-sizing: border-box;
+}
+
+.neon-border-green {
+  position: relative;
+  border: 1px solid var(--neon-green);
+  box-shadow: 0 0 5px var(--neon-green), 0 0 10px var(--neon-green) inset;
+  box-sizing: border-box;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--dark-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--neon-blue);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-teal);
+}
+
+/* Ensure buttons maintain consistent size on hover */
+button {
+  transform: none !important;
+  transition-property: background-color, color, border-color, opacity !important;
+  transition-duration: 0.15s !important;
+}
+
+/* Ensure cards and interactive elements maintain consistent size */
+.card,
+.button,
+.dropdown-trigger,
+.tabs-trigger,
+.select-trigger {
+  transform: none !important;
+  transition-property: background-color, color, border-color, opacity !important;
+  transition-duration: 0.15s !important;
+}
+
+/* Ensure consistent hover states for all interactive elements */
+*:hover {
+  transform: none !important;
+}
