@@ -1,10 +1,10 @@
-# Plan: Integrating Wolf Container Logs into WolfUI
+# Plan: Integrating Wolf Container Logs into WolfManager
 
-This document outlines the plan for integrating logs from the `ghcr.io/games-on-whales/wolf` Docker container into the WolfUI application.
+This document outlines the plan for integrating logs from the `ghcr.io/games-on-whales/wolf` Docker container into the WolfManager application.
 
 **Context:**
 
-- WolfUI has access to the host's Docker socket (`/var/run/docker.sock` mounted as `/docker.socket`).
+- WolfManager has access to the host's Docker socket (`/var/run/docker.sock` mounted as `/docker.socket`).
 - Target container image: `ghcr.io/games-on-whales/wolf`.
 - Logs are output to container stdout.
 
@@ -28,8 +28,8 @@ This document outlines the plan for integrating logs from the `ghcr.io/games-on-
 - **Handling Multiple Instances:**
   - **Challenge:** Multiple containers might run from the same image.
   - **Proposed Solutions (Prioritized):**
-    1.  **Configuration:** Allow user specification of container ID/name in WolfUI settings.
-    2.  **Labeling:** Filter containers based on a specific label (e.g., `wolfui.managed=true`).
+    1.  **Configuration:** Allow user specification of container ID/name in WolfManager settings.
+    2.  **Labeling:** Filter containers based on a specific label (e.g., `WolfManager.managed=true`).
     3.  **Naming:** Look for a specific name pattern (e.g., `wolf-instance`).
     4.  **Default:** If multiple found and no specific configuration, report error or default to the most recent, clearly indicating the default.
 - **Output:** The unique ID of the target running container.

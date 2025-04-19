@@ -2,7 +2,7 @@
 
 ## Overview
 
-The WolfUI authentication system uses Next-Auth with JWT strategy and implements a robust session management system with server-side validation and client-side handling of expired sessions.
+The WolfManager authentication system uses Next-Auth with JWT strategy and implements a robust session management system with server-side validation and client-side handling of expired sessions.
 
 ## Architecture
 

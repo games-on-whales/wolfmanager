@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   // but we should add some form of authentication in production
   const isTaskRequest = request.headers
     .get("User-Agent")
-    ?.includes("WolfUI-Task");
+    ?.includes("WolfManager-Task");
 
   if (!isTaskRequest && (!session?.user || session.user.role !== "admin")) {
     logger.warn(
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const gameResponse = await fetch(gameLookupUrl, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "User-Agent": "WolfUI/1.0.0",
+        "User-Agent": "WolfManager/1.0.0",
       },
     });
 
@@ -162,7 +162,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const response = await fetch(artworkUrl, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "User-Agent": "WolfUI/1.0.0",
+        "User-Agent": "WolfManager/1.0.0",
       },
     });
 

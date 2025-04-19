@@ -15,7 +15,7 @@ if (process.env.NODE_ENV === "development") {
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "WolfUI",
+  title: "WolfManager",
   description: "Modern Admin Interface",
 };
 

@@ -1,6 +1,6 @@
-# WolfUI Logger Documentation
+# WolfManager Logger Documentation
 
-The WolfUI Logger is a flexible, container-ready logging system designed for Next.js applications. It supports multiple output formats, container environments, and plugin integration.
+The WolfManager Logger is a flexible, container-ready logging system designed for Next.js applications. It supports multiple output formats, container environments, and plugin integration.
 
 ## Quick Start
 

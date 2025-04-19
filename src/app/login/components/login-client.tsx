@@ -87,7 +87,7 @@ export function LoginClient({ error, callbackUrl }: LoginClientProps) {
                 >
                   <img
                     src="https://images.opencollective.com/games-on-whales/33a2797/logo/128.png?height=128"
-                    alt="WolfUI Logo"
+                    alt="WolfManager Logo"
                     className="w-full h-full object-cover"
                   />
                 </div>

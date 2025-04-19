@@ -1,6 +1,6 @@
-# WolfUI Logging Standards
+# WolfManager Logging Standards
 
-This document outlines the logging standards for the WolfUI application. All new features and modifications should follow these guidelines to maintain consistent and useful logging throughout the application.
+This document outlines the logging standards for the WolfManager application. All new features and modifications should follow these guidelines to maintain consistent and useful logging throughout the application.
 
 ## Core Principles
 

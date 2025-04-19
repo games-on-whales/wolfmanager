@@ -1,7 +1,0 @@
----
-description: Correct command for installing ShadCN components
-globs: 
-alwaysApply: false
----
-
-[!WARNING] The command "npx shadcn-ui" (CLI) is going to be deprecated soon use "npx install shadcn@latest"

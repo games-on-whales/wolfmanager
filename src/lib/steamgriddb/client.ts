@@ -110,7 +110,7 @@ async function fetchArtworkMetadata(
 
   // API key is managed by the backend API, not needed here
   const headers = {
-    "User-Agent": "WolfUI-Task/1.0.0", // Use correct agent for task requests
+    "User-Agent": "WolfManager-Task/1.0.0", // Use correct agent for task requests
   };
 
   for (const type of types) {

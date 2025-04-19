@@ -73,7 +73,7 @@ export function Header() {
       >
         <div className="container flex h-16 items-center justify-between py-4">
           <div className="flex items-center gap-6">
-            <h2 className="text-lg font-semibold">WolfUI</h2>
+            <h2 className="text-lg font-semibold">WolfManager</h2>
             <nav className="flex items-center gap-4">
               <Link
                 href="/dashboard"

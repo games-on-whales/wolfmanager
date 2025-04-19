@@ -1,8 +1,8 @@
-# WolfUI Documentation
+# WolfManager Documentation
 
 ## Overview
 
-This directory contains comprehensive documentation for the WolfUI project.
+This directory contains comprehensive documentation for the WolfManager project.
 
 ## Directory Structure
 

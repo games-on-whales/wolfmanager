@@ -2,7 +2,7 @@
 
 ## Overview
 
-WolfUI provides a secure and user-friendly authentication system with the following key features:
+WolfManager provides a secure and user-friendly authentication system with the following key features:
 
 ## 🔐 Security Features
 

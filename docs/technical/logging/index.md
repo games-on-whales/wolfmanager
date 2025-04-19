@@ -1,8 +1,8 @@
-# WolfUI Logging System
+# WolfManager Logging System
 
 ## Overview
 
-The WolfUI logging system provides comprehensive logging capabilities for both server and client components, with features for:
+The WolfManager logging system provides comprehensive logging capabilities for both server and client components, with features for:
 
 - Structured logging
 - Multiple output formats

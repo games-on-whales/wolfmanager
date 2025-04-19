@@ -1,13 +1,55 @@
-node_modules
+
+#old Ignores
 dev
-.next
-.pnpm-store
-.shadcn-ui
-config/*
-.env.local
-.env
-logs/*
-logs
 package-lock.json
-scripts/test-auth.sh
+
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build artifacts
+.next/
+dist/
+tsconfig.tsbuildinfo
+
+# Development / Environment
+.env.local
+.env*.local # More general rule for local env files
+.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS specific
+#.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Generated Config / Data / Assets (Review if these should be tracked)
+config/*
+config/tasks.toml
+config/steam_library.toml
+config/assets/
+
+# Temp / Cache
+.shadcn-ui 
+# Assuming this is cache/generated
+# Add other cache/temp directories if applicable
+
+# Specific Files (Keep if needed)
 .cursor/mcp.json
+.roomodes
+.roo/*
+
+# Comment out or remove if default.toml should be tracked
+# !config/default.toml

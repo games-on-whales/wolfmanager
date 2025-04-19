@@ -243,7 +243,7 @@ export function loadConfig(decryptSensitiveData: boolean = false): Config {
         "Config file not found, creating default configuration."
       );
       const defaultConfig: Config = {
-        system: { name: "WolfUI", version: "1.0.0" },
+        system: { name: "WolfManager", version: "1.0.0" },
         users: {
           admin: {
             id: "1",
