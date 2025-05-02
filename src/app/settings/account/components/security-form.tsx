@@ -80,15 +80,13 @@ export function SecurityForm({ className }: { className?: string }) {
       await signOut({ redirect: false });
       router.push("/login");
     } catch (error) {
+      console.log("DEBUG: About to log error", error);
       await clientLogger.error(
         LogComponent.AUTH,
         "Failed to update password",
-        error
+        error instanceof Error ? error : new Error(String(error))
       );
-      showToast.error(
-        "Password Update Failed",
-        error instanceof Error ? error : new Error("Failed to update password")
-      );
+      showToast.error("Password Update Failed");
     } finally {
       setIsLoading(false);
     }
