@@ -2,7 +2,6 @@
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
@@ -25,12 +24,12 @@ export function LibrarySettings({ steamId, apiKey }: LibrarySettingsProps) {
   }
 
   return (
-    <Card>
+    <>
       <CardHeader>
-        <CardTitle>Game Libraries</CardTitle>
+        <CardTitle className="text-white text-xl">Libraries</CardTitle>
         <CardDescription>Connect your gaming accounts</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <Tabs defaultValue="steam" className="w-full">
           <TabsList>
             <TabsTrigger value="steam" className="flex items-center gap-2">
@@ -57,6 +56,6 @@ export function LibrarySettings({ steamId, apiKey }: LibrarySettingsProps) {
           </TabsContent>
         </Tabs>
       </CardContent>
-    </Card>
+    </>
   );
 }

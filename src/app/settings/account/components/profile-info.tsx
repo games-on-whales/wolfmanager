@@ -19,11 +19,12 @@ interface SessionUser {
 
 interface ProfileInfoProps {
   user: SessionUser;
+  className?: string;
 }
 
-export function ProfileInfo({ user }: ProfileInfoProps) {
+export function ProfileInfo({ user, className }: ProfileInfoProps) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle>Profile Information</CardTitle>
         <CardDescription>Your account details</CardDescription>
@@ -35,7 +36,7 @@ export function ProfileInfo({ user }: ProfileInfoProps) {
             id="username"
             value={user?.name || ""}
             disabled
-            className="bg-muted"
+            className="bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.1)] text-white neon-border"
           />
         </div>
         <div className="space-y-2">
@@ -44,7 +45,7 @@ export function ProfileInfo({ user }: ProfileInfoProps) {
             id="role"
             value={user?.role === "admin" ? "Administrator" : "User"}
             disabled
-            className="bg-muted"
+            className="bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.1)] text-white neon-border"
           />
         </div>
       </CardContent>

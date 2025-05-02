@@ -61,5 +61,9 @@ export default function DashboardLayout({
     return null;
   }
 
-  return <>{children}</>;
+  return (
+    <div className="relative grid gap-6 min-h-screen p-6 grid-cols-1">
+      {children}
+    </div>
+  );
 }

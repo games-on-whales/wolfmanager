@@ -1,6 +1,7 @@
 import { SettingsLayout } from "@/app/settings/components/settings-layout";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { LoadingState } from "@/components/loading-state";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
 import { loadConfig } from "@/lib/config";
 import { getServerSession } from "next-auth";
@@ -63,32 +64,40 @@ export default async function AccountSettingsPage() {
       description="Manage your account preferences"
       navigation={navigation}
     >
-      <ErrorBoundary>
-        <section id="profile">
+      <div className="space-y-6">
+        <ErrorBoundary>
           <Suspense fallback={<LoadingState />}>
-            <ProfileInfo user={session.user} />
-          </Suspense>
-        </section>
-      </ErrorBoundary>
-
-      <ErrorBoundary>
-        <section id="security" className="mt-8">
-          <Suspense fallback={<LoadingState />}>
-            <SecurityForm />
-          </Suspense>
-        </section>
-      </ErrorBoundary>
-
-      <ErrorBoundary>
-        <section id="libraries" className="mt-8">
-          <Suspense fallback={<LoadingState />}>
-            <LibrarySettings
-              steamId={steamSettings.maskedSteamId}
-              apiKey={steamSettings.maskedSteamApiKey}
+            <ProfileInfo
+              user={session.user}
+              className="glass-card border-none p-6"
             />
           </Suspense>
-        </section>
-      </ErrorBoundary>
+        </ErrorBoundary>
+
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingState />}>
+            <SecurityForm className="glass-card border-none p-6" />
+          </Suspense>
+        </ErrorBoundary>
+
+        {process.env.NEXT_PUBLIC_FEATURE_GAME_LIBRARY_ENABLED === "true" && (
+          <ErrorBoundary>
+            <Card className="glass-card border-none p-6">
+              <CardHeader>
+                <CardTitle className="text-white text-xl">Libraries</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Suspense fallback={<LoadingState />}>
+                  <LibrarySettings
+                    steamId={steamSettings.maskedSteamId}
+                    apiKey={steamSettings.maskedSteamApiKey}
+                  />
+                </Suspense>
+              </CardContent>
+            </Card>
+          </ErrorBoundary>
+        )}
+      </div>
     </SettingsLayout>
   );
 }

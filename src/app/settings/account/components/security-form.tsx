@@ -41,7 +41,7 @@ const passwordSchema = z
 
 type PasswordForm = z.infer<typeof passwordSchema>;
 
-export function SecurityForm() {
+export function SecurityForm({ className }: { className?: string }) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
@@ -95,7 +95,7 @@ export function SecurityForm() {
   };
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle>Security</CardTitle>
         <CardDescription>Update your password</CardDescription>
@@ -110,7 +110,11 @@ export function SecurityForm() {
                 <FormItem>
                   <FormLabel>Current Password</FormLabel>
                   <FormControl>
-                    <Input type="password" {...field} />
+                    <Input
+                      type="password"
+                      {...field}
+                      className="bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.1)] text-white neon-border"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -123,7 +127,11 @@ export function SecurityForm() {
                 <FormItem>
                   <FormLabel>New Password</FormLabel>
                   <FormControl>
-                    <Input type="password" {...field} />
+                    <Input
+                      type="password"
+                      {...field}
+                      className="bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.1)] text-white neon-border"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -136,13 +144,21 @@ export function SecurityForm() {
                 <FormItem>
                   <FormLabel>Confirm New Password</FormLabel>
                   <FormControl>
-                    <Input type="password" {...field} />
+                    <Input
+                      type="password"
+                      {...field}
+                      className="bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.1)] text-white neon-border"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isLoading}>
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 bg-[#00E5CC] hover:bg-[#00E5CC]/80 text-white"
+            >
               {isLoading ? "Updating..." : "Update Password"}
             </Button>
           </form>

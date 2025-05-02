@@ -181,6 +181,7 @@ export function SteamSettingsForm() {
         <Button
           type="submit"
           disabled={isSaving || isTesting || !credentialsVerified}
+          className="flex-1 bg-[#00E5CC] hover:bg-[#00E5CC]/80 text-white"
         >
           {isSaving ? "Saving..." : "Save Settings"}
         </Button>

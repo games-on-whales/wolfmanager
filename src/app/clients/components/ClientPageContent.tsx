@@ -320,8 +320,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
   }
 
   return (
-    <div className="relative">
-      {/* Main layout container that changes based on pairing state */}
+    <>
       <div
         className={`grid gap-6 transition-all duration-500 ease-in-out ${
           selectedRequest ? "md:grid-cols-2" : "grid-cols-1"
@@ -342,7 +341,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
             selectedRequest={selectedRequest}
             onCancel={handleCancelPairing}
             onSubmit={handleSubmitPairing}
-            isPairing={isPairingPending} // Use isPairingPending
+            isPairing={isPairingPending}
           />
         )}
       </div>
@@ -354,7 +353,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
         unpairingId={unpairingId}
         onUnpair={handleUnpair}
       />
-    </div>
+    </>
   );
 };
 
