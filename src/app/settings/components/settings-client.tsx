@@ -6,7 +6,6 @@ import {
   Database, // Add Database icon
   FileText,
   Key,
-  LogOut,
   Terminal,
   Users,
   Webhook,
@@ -62,21 +61,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 </Card>
               </Link>
 
-              <Link href="/settings/sessions" className="block">
-                <Card className="glass-card p-6 transition-colors cursor-pointer h-[100px]">
-                  <div className="flex items-start space-x-4">
-                    <div className="bg-secondary/10 p-3 rounded-lg">
-                      <LogOut className="h-5 w-5 text-secondary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">Sessions</h3>
-                      <p className="text-sm text-muted-foreground">
-                        View and manage your active sessions
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
+              {/* Sessions link removed */}
             </div>
           </section>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTimeUTC } from "@/app/clients/components/date-format";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,7 +19,6 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Monitor, Smartphone } from "lucide-react";
 import Link from "next/link";
-import { formatDateTimeUTC } from "@/app/clients/components/date-format";
 
 // Mock data for sessions
 const sessions = [
@@ -55,7 +55,7 @@ export default function SessionsPage() {
         </div>
       </div>
 
-      <Card>
+      <Card className="glass-card border-none p-6">
         <CardHeader>
           <CardTitle>Current Sessions</CardTitle>
           <CardDescription>
@@ -86,9 +86,7 @@ export default function SessionsPage() {
                     </div>
                   </TableCell>
                   <TableCell>{session.ip}</TableCell>
-                  <TableCell>
-                    {formatDateTimeUTC(session.lastActive)}
-                  </TableCell>
+                  <TableCell>{formatDateTimeUTC(session.lastActive)}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="destructive" size="sm">
                       Revoke

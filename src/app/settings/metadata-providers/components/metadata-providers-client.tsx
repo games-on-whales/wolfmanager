@@ -32,7 +32,7 @@ export function MetadataProvidersClient({
         {" "}
         {/* scroll-mt for sticky header offset */}
         {/* Render SteamGridDB Settings within a Card */}
-        <Card>
+        <Card className="glass-card border-none p-6">
           <CardHeader>
             <CardTitle>SteamGridDB</CardTitle>
             {/* Optional: Add description specific to this provider */}

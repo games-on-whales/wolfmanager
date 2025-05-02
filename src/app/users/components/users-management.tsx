@@ -217,8 +217,8 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="p-6 space-y-4">
+      <Card className="glass-card border-none p-6">
         <CardHeader>
           <CardTitle>Users Management</CardTitle>
           <CardDescription>Manage system users and their roles</CardDescription>
@@ -295,7 +295,7 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
             </Dialog>
             <div className="space-y-4">
               {optimisticUsers.map((user) => (
-                <Card key={user.id}>
+                <Card key={user.id} className="border-none glass-card">
                   <CardContent className="flex items-center justify-between p-4">
                     <div>
                       <p className="font-medium">{user.username}</p>

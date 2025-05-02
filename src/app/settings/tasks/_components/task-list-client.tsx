@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -201,126 +202,138 @@ export default function TaskListClient() {
   }
 
   return (
-    <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Schedule</TableHead>
-            <TableHead>Last Run</TableHead>
-            <TableHead>Next Run</TableHead>
-            <TableHead>Enabled</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tasks.length === 0 ? (
+    <Card className="glass-card border-none p-6">
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={8} className="text-center">
-                No tasks found.
-              </TableCell>
+              <TableHead>Name</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Schedule</TableHead>
+              <TableHead>Last Run</TableHead>
+              <TableHead>Next Run</TableHead>
+              <TableHead>Enabled</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
-          ) : (
-            tasks.map((task) => (
-              <TableRow key={task.id}>
-                <TableCell className="font-medium">{task.name}</TableCell>
-                <TableCell>{task.description}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      task.status === "RUNNING"
-                        ? "default"
-                        : task.status === "ERROR"
-                        ? "destructive"
-                        : "secondary"
-                    }
-                  >
-                    {task.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>{task.schedule}</TableCell>
-                <TableCell>{formatDate(task.last_run_at)}</TableCell>
-                <TableCell>{formatDate(task.next_run_at)}</TableCell>
-                <TableCell>
-                  <Switch
-                    checked={task.is_enabled}
-                    onCheckedChange={(checked) =>
-                      handleToggleTask(task, checked)
-                    }
-                    aria-label={`Toggle task ${task.name}`}
-                  />
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRunNow(task)}
-                      disabled={
-                        task.status === "RUNNING" || runningTasks.has(task.id)
-                      }
-                    >
-                      Run Now
-                    </Button>
-                    <Dialog
-                      onOpenChange={(isOpen) => !isOpen && setEditingTask(null)}
-                    >
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenConfigDialog(task)}
-                        >
-                          Configure
-                        </Button>
-                      </DialogTrigger>
-                      {editingTask && editingTask.id === task.id && (
-                        <DialogContent className="sm:max-w-[425px]">
-                          <DialogHeader>
-                            <DialogTitle>
-                              Configure Schedule: {editingTask.name}
-                            </DialogTitle>
-                            <DialogDescription>
-                              Update the cron schedule for this task. Make sure
-                              it's a valid format.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label htmlFor="schedule" className="text-right">
-                                Schedule
-                              </Label>
-                              <Input
-                                id="schedule"
-                                value={newSchedule}
-                                onChange={(e) => setNewSchedule(e.target.value)}
-                                className="col-span-3"
-                                placeholder="* * * * *"
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <DialogClose asChild>
-                              <Button type="button" variant="secondary">
-                                Cancel
-                              </Button>
-                            </DialogClose>
-                            <Button type="button" onClick={handleSaveSchedule}>
-                              Save changes
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      )}
-                    </Dialog>
-                  </div>
+          </TableHeader>
+          <TableBody>
+            {tasks.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center">
+                  No tasks found.
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </>
+            ) : (
+              tasks.map((task) => (
+                <TableRow key={task.id}>
+                  <TableCell className="font-medium">{task.name}</TableCell>
+                  <TableCell>{task.description}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        task.status === "RUNNING"
+                          ? "default"
+                          : task.status === "ERROR"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                    >
+                      {task.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{task.schedule}</TableCell>
+                  <TableCell>{formatDate(task.last_run_at)}</TableCell>
+                  <TableCell>{formatDate(task.next_run_at)}</TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={task.is_enabled}
+                      onCheckedChange={(checked) =>
+                        handleToggleTask(task, checked)
+                      }
+                      aria-label={`Toggle task ${task.name}`}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRunNow(task)}
+                        disabled={
+                          task.status === "RUNNING" || runningTasks.has(task.id)
+                        }
+                      >
+                        Run Now
+                      </Button>
+                      <Dialog
+                        onOpenChange={(isOpen) =>
+                          !isOpen && setEditingTask(null)
+                        }
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenConfigDialog(task)}
+                          >
+                            Configure
+                          </Button>
+                        </DialogTrigger>
+                        {editingTask && editingTask.id === task.id && (
+                          <DialogContent className="sm:max-w-[425px]">
+                            <DialogHeader>
+                              <DialogTitle>
+                                Configure Schedule: {editingTask.name}
+                              </DialogTitle>
+                              <DialogDescription>
+                                Update the cron schedule for this task. Make
+                                sure it's a valid format.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                <Label
+                                  htmlFor="schedule"
+                                  className="text-right"
+                                >
+                                  Schedule
+                                </Label>
+                                <Input
+                                  id="schedule"
+                                  value={newSchedule}
+                                  onChange={(e) =>
+                                    setNewSchedule(e.target.value)
+                                  }
+                                  className="col-span-3"
+                                  placeholder="* * * * *"
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <DialogClose asChild>
+                                <Button type="button" variant="secondary">
+                                  Cancel
+                                </Button>
+                              </DialogClose>
+                              <Button
+                                type="button"
+                                onClick={handleSaveSchedule}
+                              >
+                                Save changes
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        )}
+                      </Dialog>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

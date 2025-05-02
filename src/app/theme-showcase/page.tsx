@@ -101,7 +101,7 @@ export default function ThemeShowcase() {
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold">Theme Overview</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
+            <Card className="glass-card border-none p-6">
               <CardHeader>
                 <CardTitle>Primary Colors</CardTitle>
                 <CardDescription>Main color scheme</CardDescription>
@@ -121,7 +121,7 @@ export default function ThemeShowcase() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-card border-none p-6">
               <CardHeader>
                 <CardTitle>Backgrounds</CardTitle>
                 <CardDescription>Surface and background colors</CardDescription>
@@ -141,7 +141,7 @@ export default function ThemeShowcase() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-card border-none p-6">
               <CardHeader>
                 <CardTitle>Status Colors</CardTitle>
                 <CardDescription>Colors for different states</CardDescription>
@@ -169,7 +169,7 @@ export default function ThemeShowcase() {
         {/* Buttons */}
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold">Buttons</h2>
-          <Card>
+          <Card className="glass-card border-none p-6">
             <CardContent className="pt-6">
               <div className="flex flex-wrap gap-4">
                 <Button variant="default">Default</Button>
@@ -188,7 +188,7 @@ export default function ThemeShowcase() {
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold">Form Elements</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
+            <Card className="glass-card border-none p-6">
               <CardHeader>
                 <CardTitle>Inputs</CardTitle>
               </CardHeader>
@@ -247,7 +247,7 @@ export default function ThemeShowcase() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-card border-none p-6">
               <CardHeader>
                 <CardTitle>Select & Switch</CardTitle>
               </CardHeader>

@@ -1,6 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/protected-route";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -92,8 +93,8 @@ export function DashboardClient({ session }: DashboardClientProps) {
           <p className="text-muted-foreground">Welcome back, {username}!</p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Card className="glass-card border-none p-6">
             <CardHeader>
               <CardTitle>Users</CardTitle>
               <CardDescription>
@@ -106,7 +107,7 @@ export function DashboardClient({ session }: DashboardClientProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="glass-card border-none p-6">
             <CardHeader>
               <CardTitle>System Status</CardTitle>
               <CardDescription>
@@ -123,7 +124,7 @@ export function DashboardClient({ session }: DashboardClientProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="glass-card border-none p-6">
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
               <CardDescription>Frequently used actions</CardDescription>
@@ -132,7 +133,9 @@ export function DashboardClient({ session }: DashboardClientProps) {
               <ul className="space-y-2">
                 {session?.user?.role === "admin" && (
                   <li>
-                    <button
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
                       onClick={() => {
                         clientLogger.info(
                           LogComponent.WOLF_UI,
@@ -140,14 +143,15 @@ export function DashboardClient({ session }: DashboardClientProps) {
                         );
                         router.push("/users");
                       }}
-                      className="text-sm text-blue-500 hover:underline cursor-pointer w-full text-left"
                     >
                       Add new user
-                    </button>
+                    </Button>
                   </li>
                 )}
                 <li>
-                  <button
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
                     onClick={() => {
                       clientLogger.info(
                         LogComponent.WOLF_UI,
@@ -155,13 +159,14 @@ export function DashboardClient({ session }: DashboardClientProps) {
                       );
                       router.push("/settings");
                     }}
-                    className="text-sm text-blue-500 hover:underline cursor-pointer w-full text-left"
                   >
                     View system logs
-                  </button>
+                  </Button>
                 </li>
                 <li>
-                  <button
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
                     onClick={() => {
                       clientLogger.info(
                         LogComponent.WOLF_UI,
@@ -169,17 +174,16 @@ export function DashboardClient({ session }: DashboardClientProps) {
                       );
                       router.push("/settings");
                     }}
-                    className="text-sm text-blue-500 hover:underline cursor-pointer w-full text-left"
                   >
                     Update settings
-                  </button>
+                  </Button>
                 </li>
               </ul>
             </CardContent>
           </Card>
         </div>
 
-        <Card>
+        <Card className="glass-card border-none p-6">
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>Latest actions in the system</CardDescription>

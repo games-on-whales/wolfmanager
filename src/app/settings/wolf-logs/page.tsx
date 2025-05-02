@@ -36,7 +36,7 @@ export default function WolfLogsPage() {
       </div>
 
       <div className="grid gap-6">
-        <Card>
+        <Card className="glass-card border-none p-6">
           <CardHeader>
             <CardTitle>About Wolf Container Logs</CardTitle>
             <CardDescription>
