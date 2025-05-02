@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Monitor, Smartphone } from "lucide-react";
 import Link from "next/link";
+import { formatDateTimeUTC } from "@/app/clients/components/date-format";
 
 // Mock data for sessions
 const sessions = [
@@ -86,7 +87,7 @@ export default function SessionsPage() {
                   </TableCell>
                   <TableCell>{session.ip}</TableCell>
                   <TableCell>
-                    {new Date(session.lastActive).toLocaleString()}
+                    {formatDateTimeUTC(session.lastActive)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="destructive" size="sm">

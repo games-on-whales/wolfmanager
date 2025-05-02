@@ -7,6 +7,7 @@ import {
   createSuccessResponse,
   type ApiResponse,
 } from "@/lib/api-utils";
+import type { PendingPairRequest } from "@/lib/api/wolf-pair"; // Import PendingPairRequest
 import { authOptions } from "@/lib/auth";
 import type { Config } from "@/lib/config";
 import { loadConfig, saveConfig } from "@/lib/config";
@@ -580,10 +581,6 @@ export async function pairAndAddClientAction(
   }
 }
 
-// Keep addClientAction for now? Or remove it if pairAndAddClientAction replaces its use case?
-// Let's keep it for potential manual additions or other flows, but mark it perhaps?
-// Maybe add a comment indicating it's not for the primary pairing flow.
-
 /*
  * Manually adds a client device to the user's configuration.
  * Note: This is generally NOT used for the standard PIN-based pairing flow.
@@ -968,5 +965,34 @@ export async function listClientsAndOwners(): Promise<
       error instanceof Error ? error.message : "Failed to list clients",
       API_ERROR_CODES.INTERNAL_ERROR
     );
+  }
+}
+
+/**
+ * Server Action to fetch pending pairing requests.
+ * This wraps the wolfPairApi call to be safely invoked from Client Components.
+ */
+export async function getPendingRequestsAction(): Promise<
+  ApiResponse<PendingPairRequest[]>
+> {
+  try {
+    // Import wolfPairApi here, inside the action, to avoid potential issues
+    // if wolf-pair itself has client-side dependencies (though it shouldn't based on previous analysis)
+    const { wolfPairApi } = await import("@/lib/api/wolf-pair");
+    const requests = await wolfPairApi.getPendingRequests();
+    // Assuming PendingPairRequest is defined correctly elsewhere or needs definition
+    return createSuccessResponse(requests);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Unknown error fetching requests";
+    await logger.error(
+      LogComponent.SYSTEM, // Use LogComponent.SYSTEM for server action errors
+      "getPendingRequestsAction failed",
+      error instanceof Error ? error : new Error(errorMessage)
+    );
+    // Use the standardized error response structure
+    return createErrorResponse(API_ERROR_CODES.INTERNAL_ERROR, errorMessage);
   }
 }

@@ -1,13 +1,26 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Laptop, X, ChevronLeft } from "lucide-react"
-import PinInput from "@/components/pin-input"
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ChevronLeft, Laptop, X } from "lucide-react";
+import { useState } from "react";
+import PinInput from "./components/pin-input";
 
 // Sample pending client data
 const PENDING_CLIENTS = [
@@ -35,23 +48,37 @@ const PENDING_CLIENTS = [
     pairSecret: "WOLF-9012-IJKL",
     received: "2023-04-19 14:19:37",
   },
-]
+];
 
 export default function ClientsPage() {
-  const [clientName, setClientName] = useState("")
-  const [pinCode, setPinCode] = useState("")
-  const [selectedClient, setSelectedClient] = useState<number | null>(null)
-  const [isAnimating, setIsAnimating] = useState(false)
+  const [clientName, setClientName] = useState("");
+  const [pinCode, setPinCode] = useState("");
+  const [selectedClient, setSelectedClient] = useState<number | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
   const [pairedClients, setPairedClients] = useState([
-    { id: 101, name: "Living Room TV", ip: "192.168.1.55", device: "Samsung TV", lastConnected: "2 hours ago" },
-    { id: 102, name: "Gaming PC", ip: "192.168.1.22", device: "Windows PC", lastConnected: "Yesterday" },
-  ])
+    {
+      id: 101,
+      name: "Living Room TV",
+      ip: "192.168.1.55",
+      device: "Samsung TV",
+      lastConnected: "2 hours ago",
+    },
+    {
+      id: 102,
+      name: "Gaming PC",
+      ip: "192.168.1.22",
+      device: "Windows PC",
+      lastConnected: "Yesterday",
+    },
+  ]);
 
   const handlePairClient = () => {
-    if (!selectedClient || !clientName.trim() || pinCode.length !== 4) return
+    if (!selectedClient || !clientName.trim() || pinCode.length !== 4) return;
 
-    const clientToPair = PENDING_CLIENTS.find((client) => client.id === selectedClient)
-    if (!clientToPair) return
+    const clientToPair = PENDING_CLIENTS.find(
+      (client) => client.id === selectedClient
+    );
+    if (!clientToPair) return;
 
     const newPairedClient = {
       id: Date.now(),
@@ -59,32 +86,36 @@ export default function ClientsPage() {
       ip: clientToPair.ip,
       device: clientToPair.device,
       lastConnected: "Just now",
-    }
+    };
 
-    setPairedClients([...pairedClients, newPairedClient])
-    setClientName("")
-    setPinCode("")
-    setSelectedClient(null)
-  }
+    setPairedClients([...pairedClients, newPairedClient]);
+    setClientName("");
+    setPinCode("");
+    setSelectedClient(null);
+  };
 
   const startPairing = (clientId: number) => {
-    setSelectedClient(clientId)
-    setClientName("")
-    setPinCode("")
-  }
+    setSelectedClient(clientId);
+    setClientName("");
+    setPinCode("");
+  };
 
   const cancelPairing = () => {
-    setSelectedClient(null)
-    setClientName("")
-    setPinCode("")
-  }
+    setSelectedClient(null);
+    setClientName("");
+    setPinCode("");
+  };
 
   // Get the selected client details
-  const selectedClientDetails = selectedClient ? PENDING_CLIENTS.find((client) => client.id === selectedClient) : null
+  const selectedClientDetails = selectedClient
+    ? PENDING_CLIENTS.find((client) => client.id === selectedClient)
+    : null;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white neon-text">Client Pairing</h1>
+      <h1 className="text-2xl font-bold text-white neon-text">
+        Client Pairing
+      </h1>
 
       <div className="relative">
         {/* Main layout container that changes based on pairing state */}
@@ -97,7 +128,9 @@ export default function ClientsPage() {
           <Card className="glass-card border-none">
             <CardHeader>
               <CardTitle className="text-white">Pending Requests</CardTitle>
-              <CardDescription className="text-gray-400">Clients waiting to be paired with your server</CardDescription>
+              <CardDescription className="text-gray-400">
+                Clients waiting to be paired with your server
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -106,15 +139,24 @@ export default function ClientsPage() {
                     <TableHead className="text-[#fffb96]">IP Address</TableHead>
                     <TableHead className="text-[#fffb96]">Device</TableHead>
                     <TableHead className="text-[#fffb96]">Requested</TableHead>
-                    <TableHead className="text-[#fffb96] text-right">Action</TableHead>
+                    <TableHead className="text-[#fffb96] text-right">
+                      Action
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {PENDING_CLIENTS.map((client) => (
-                    <TableRow key={client.id} className="border-[rgba(255,255,255,0.1)]">
+                    <TableRow
+                      key={client.id}
+                      className="border-[rgba(255,255,255,0.1)]"
+                    >
                       <TableCell className="text-white">{client.ip}</TableCell>
-                      <TableCell className="text-white">{client.device}</TableCell>
-                      <TableCell className="text-gray-400">{client.requestTime}</TableCell>
+                      <TableCell className="text-white">
+                        {client.device}
+                      </TableCell>
+                      <TableCell className="text-gray-400">
+                        {client.requestTime}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
@@ -129,7 +171,10 @@ export default function ClientsPage() {
 
                   {PENDING_CLIENTS.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-gray-400">
+                      <TableCell
+                        colSpan={4}
+                        className="h-24 text-center text-gray-400"
+                      >
                         No pending requests
                       </TableCell>
                     </TableRow>
@@ -159,7 +204,9 @@ export default function ClientsPage() {
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
                   <div>
-                    <CardTitle className="text-white">Complete Pairing</CardTitle>
+                    <CardTitle className="text-white">
+                      Complete Pairing
+                    </CardTitle>
                     <CardDescription className="text-gray-400">
                       Enter the pairing code shown on the client device
                     </CardDescription>
@@ -172,15 +219,21 @@ export default function ClientsPage() {
                     <div className="rounded-md bg-[rgba(0,0,0,0.3)] p-3 text-sm mb-4">
                       <p className="mb-1">
                         <span className="text-gray-400">IP Address:</span>{" "}
-                        <span className="text-white">{selectedClientDetails.ip}</span>
+                        <span className="text-white">
+                          {selectedClientDetails.ip}
+                        </span>
                       </p>
                       <p className="mb-1">
                         <span className="text-gray-400">Pair Secret:</span>{" "}
-                        <span className="text-white">{selectedClientDetails.pairSecret}</span>
+                        <span className="text-white">
+                          {selectedClientDetails.pairSecret}
+                        </span>
                       </p>
                       <p>
                         <span className="text-gray-400">Received:</span>{" "}
-                        <span className="text-white">{selectedClientDetails.received}</span>
+                        <span className="text-white">
+                          {selectedClientDetails.received}
+                        </span>
                       </p>
                     </div>
                   )}
@@ -203,7 +256,11 @@ export default function ClientsPage() {
                       Pairing Code
                     </Label>
                     <div className="flex flex-col items-center">
-                      <PinInput value={pinCode} onChange={setPinCode} maxLength={4} />
+                      <PinInput
+                        value={pinCode}
+                        onChange={setPinCode}
+                        maxLength={4}
+                      />
                       <p className="text-xs text-gray-400 mt-2">
                         Enter the 4-digit code displayed on the client device
                       </p>
@@ -236,7 +293,9 @@ export default function ClientsPage() {
       <Card className="glass-card border-none">
         <CardHeader>
           <CardTitle className="text-white">Paired Clients</CardTitle>
-          <CardDescription className="text-gray-400">Devices connected to your streaming server</CardDescription>
+          <CardDescription className="text-gray-400">
+            Devices connected to your streaming server
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -247,16 +306,25 @@ export default function ClientsPage() {
                 <TableHead className="text-[#fffb96]">Device</TableHead>
                 <TableHead className="text-[#fffb96]">Last Connected</TableHead>
                 <TableHead className="text-[#fffb96]">Status</TableHead>
-                <TableHead className="text-[#fffb96] text-right">Actions</TableHead>
+                <TableHead className="text-[#fffb96] text-right">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {pairedClients.map((client) => (
-                <TableRow key={client.id} className="border-[rgba(255,255,255,0.1)]">
-                  <TableCell className="font-medium text-white">{client.name}</TableCell>
+                <TableRow
+                  key={client.id}
+                  className="border-[rgba(255,255,255,0.1)]"
+                >
+                  <TableCell className="font-medium text-white">
+                    {client.name}
+                  </TableCell>
                   <TableCell className="text-white">{client.ip}</TableCell>
                   <TableCell className="text-white">{client.device}</TableCell>
-                  <TableCell className="text-gray-400">{client.lastConnected}</TableCell>
+                  <TableCell className="text-gray-400">
+                    {client.lastConnected}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center">
                       <div className="h-2 w-2 rounded-full bg-[#05ffa1] mr-2"></div>
@@ -265,11 +333,19 @@ export default function ClientsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-white">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-gray-400 hover:text-white"
+                      >
                         <Laptop className="h-4 w-4" />
                         <span className="sr-only">Edit</span>
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-[#0077B6] hover:text-[#0077B6]/80">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-[#0077B6] hover:text-[#0077B6]/80"
+                      >
                         <X className="h-4 w-4" />
                         <span className="sr-only">Delete</span>
                       </Button>
@@ -280,7 +356,10 @@ export default function ClientsPage() {
 
               {pairedClients.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-gray-400">
+                  <TableCell
+                    colSpan={6}
+                    className="h-24 text-center text-gray-400"
+                  >
                     No paired clients
                   </TableCell>
                 </TableRow>
@@ -290,5 +369,5 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

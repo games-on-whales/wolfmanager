@@ -21,6 +21,13 @@ interface ScheduledJob {
 const activeJobs = new Map<string, ScheduledJob>();
 
 async function discoverAndInitializeTasks(): Promise<void> {
+  if (process.env.NEXT_PUBLIC_FEATURE_BACKGROUND_TASKS_ENABLED !== "true") {
+    logger.info(
+      LogComponent.WOLF_SERVER,
+      "Background tasks are disabled by FEATURE_BACKGROUND_TASKS_ENABLED flag."
+    );
+    return;
+  }
   logger.info(
     LogComponent.WOLF_SERVER,
     "Initializing tasks from static map..."

@@ -20,6 +20,10 @@ interface LibrarySettingsProps {
 export function LibrarySettings({ steamId, apiKey }: LibrarySettingsProps) {
   const hasSteamCredentials = steamId || apiKey;
 
+  if (process.env.NEXT_PUBLIC_FEATURE_GAME_LIBRARY_ENABLED !== "true") {
+    return null;
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -49,7 +53,7 @@ export function LibrarySettings({ steamId, apiKey }: LibrarySettingsProps) {
                 </AlertDescription>
               </Alert>
             )}
-            <SteamSettingsForm steamId={steamId} apiKey={apiKey} />
+            <SteamSettingsForm />
           </TabsContent>
         </Tabs>
       </CardContent>

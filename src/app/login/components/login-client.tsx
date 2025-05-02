@@ -52,7 +52,9 @@ export function LoginClient({ error, callbackUrl }: LoginClientProps) {
     <>
       <StarfieldBackground />
       <ConstellationBackground />
-      <div className="login-page flex min-h-screen items-center justify-center bg-transparent">
+      <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-transparent">
+        {" "}
+        {/* Updated classes */}
         {showEasterEgg && (
           <div
             className="fixed top-0 left-0 bottom-0 w-[40vw] z-0 transition-all duration-500"
@@ -64,10 +66,11 @@ export function LoginClient({ error, callbackUrl }: LoginClientProps) {
         )}
         <div
           className={cn(
-            "relative z-10 w-full max-w-md px-4 transition-all duration-500",
+            "relative z-10 w-full max-w-md transition-all duration-500", // Updated classes, removed px-4
             showEasterEgg && "translate-x-[-30vw]"
           )}
         >
+          {/* Keep the Card and its content, which now uses the updated LoginForm */}
           <Card className="border-muted/20 bg-card/60 shadow-lg backdrop-blur-md backdrop-saturate-150">
             <CardHeader className="space-y-4 text-center">
               <div className="mx-auto flex flex-col items-center space-y-4">

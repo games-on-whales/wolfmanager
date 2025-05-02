@@ -1,8 +1,30 @@
-import chalk from "chalk";
 import { LogEntry, LogLevel, LogTransport } from "../types";
+
+// Check if we're in an environment where chalk can be safely used
+const isEdgeRuntime =
+  typeof navigator === "undefined" &&
+  typeof process !== "undefined" &&
+  process.env.NEXT_RUNTIME === "edge";
+const isServer = typeof window === "undefined";
+
+// Only import chalk if we're not in Edge Runtime
+let chalk: any;
+if (!isEdgeRuntime) {
+  try {
+    // Dynamic import to avoid issues in Edge Runtime
+    chalk = require("chalk");
+  } catch (e) {
+    console.warn("Failed to load chalk, colorized logs will be disabled");
+  }
+}
 
 export class ConsoleTransport implements LogTransport {
   private colorize(level: LogLevel, text: string): string {
+    // If chalk is not available or we're in Edge Runtime, return plain text
+    if (!chalk || isEdgeRuntime) {
+      return text;
+    }
+
     switch (level) {
       case "debug":
         return chalk.gray(text);
@@ -37,6 +59,7 @@ export class ConsoleTransport implements LogTransport {
 
   async log(entry: LogEntry): Promise<void> {
     const formattedEntry = this.formatEntry(entry);
+    // Only colorize if not in Edge Runtime
     const colorizedEntry = this.colorize(entry.level, formattedEntry);
 
     switch (entry.level) {

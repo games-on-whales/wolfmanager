@@ -27,14 +27,10 @@ import { TaskState, TasksConfig } from "@/types/task";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner"; // Assuming sonner for toast notifications
 
-// Helper to format dates (replace with more robust date formatting if needed)
+import { formatDateTimeUTC } from "@/app/clients/components/date-format";
+// Helper to format dates (deterministic UTC)
 const formatDate = (dateString: string | null | undefined) => {
-  if (!dateString) return "N/A";
-  try {
-    return new Date(dateString).toLocaleString();
-  } catch (e) {
-    return "Invalid Date";
-  }
+  return formatDateTimeUTC(dateString);
 };
 
 export default function TaskListClient() {

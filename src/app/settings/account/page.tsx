@@ -19,10 +19,15 @@ const navigation = [
     id: "security",
     label: "Security",
   },
-  {
-    id: "libraries",
-    label: "Libraries",
-  },
+  // Conditionally include the "Libraries" link based on the feature flag
+  ...(process.env.NEXT_PUBLIC_FEATURE_GAME_LIBRARY_ENABLED === "true"
+    ? [
+        {
+          id: "libraries",
+          label: "Libraries",
+        },
+      ]
+    : []),
 ];
 
 function maskString(str: string): string {

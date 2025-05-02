@@ -1,357 +1,80 @@
-// This file's logic has been split into api-test-console-server.tsx (server wrapper) and api-test-console-client.tsx (client component).
-// Please import and use those files directly.
+"use client";
 
-// Optionally, you can re-export the server wrapper for compatibility:
-export { default as ApiTestConsole } from "./api-test-console-server";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { LogComponent } from "@/lib/logger";
+import { clientLogger } from "@/lib/logger/client";
+import { showToast } from "@/lib/toast";
+import { Check, ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { toast } from "sonner";
+import { MethodChip } from "./method-chip";
 
-    public readonly statusText?: string,
-    public readonly endpoint?: string,
-    public readonly errorData?: any
-  ) {
-    super(message);
-    this.name = "APIError";
-  }
+interface ApiResponse {
+  status: number;
+  statusText: string;
+  data: any;
 }
 
-export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
-  const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
-  const [endpoint, setEndpoint] = useState("");
-  const [method, setMethod] = useState("GET");
+interface Endpoint {
+  path: string;
+  method: string;
+  summary: string;
+  description: string;
+  requestSchema?: any;
+  responseSchema?: any;
+  components?: {
+    schemas?: Record<string, any> | Record<string, unknown>;
+  };
+  group: string;
+}
+
+interface ApiTestConsoleClientProps {
+  apiKey: string;
+  endpoints: Endpoint[];
+}
+
+export default function ApiTestConsoleClient({ apiKey, endpoints }: ApiTestConsoleClientProps) {
+  const [endpoint, setEndpoint] = useState(endpoints[0]?.path || "");
+  const [method, setMethod] = useState(endpoints[0]?.method || "GET");
+  const [selectedEndpoint, setSelectedEndpoint] = useState<Endpoint | null>(endpoints[0] || null);
   const [body, setBody] = useState("");
-  const [responses, setResponses] = useState<ApiResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingSchema, setIsLoadingSchema] = useState(true);
-  const [selectedEndpoint, setSelectedEndpoint] = useState<Endpoint | null>(
-    null
-  );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [latestResponse, setLatestResponse] = useState<ApiResponse | null>(
-    null
-  );
-  const [isCopied, setIsCopied] = useState(false);
+  const [isLoadingSchema, setIsLoadingSchema] = useState(false);
   const [response, setResponse] = useState("");
-  const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [latestResponse, setLatestResponse] = useState<ApiResponse | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    async function loadEndpoints() {
-      try {
-        setIsLoadingSchema(true);
-        const [wolfEndpoints, steamEndpoints, systemEndpoints] =
-          await Promise.all([
-            getAvailableEndpoints(),
-            getAvailableSteamEndpoints(),
-            getAvailableSystemEndpoints(),
-          ]);
-
-        clientLogger.debug(LogComponent.WOLF_UI, "Loading API endpoints", {
-          wolfEndpoints: wolfEndpoints.map((e) => ({
-            path: e.path,
-            method: e.method,
-          })),
-          steamEndpoints: steamEndpoints.map((e) => ({
-            path: e.path,
-            method: e.method,
-          })),
-          systemEndpoints: systemEndpoints.map((e) => ({
-            path: e.path,
-            method: e.method,
-          })),
-        });
-
-        // Transform endpoints to include full schema information and proper prefix
-        const transformedWolfEndpoints = wolfEndpoints.map((endpoint) => ({
-          ...endpoint,
-          path: endpoint.path.startsWith("/api/wolf/")
-            ? endpoint.path
-            : `/api/wolf${endpoint.path}`,
-          group: "Wolf API",
-        }));
-
-        const transformedSteamEndpoints = steamEndpoints.map((endpoint) => ({
-          ...endpoint,
-          group: "Steam API",
-        }));
-
-        const transformedSystemEndpoints = systemEndpoints.map((endpoint) => ({
-          ...endpoint,
-          group: "System API",
-        }));
-
-        const allEndpoints = [
-          ...transformedWolfEndpoints,
-          ...transformedSteamEndpoints,
-          ...transformedSystemEndpoints,
-        ];
-
-        clientLogger.info(LogComponent.WOLF_UI, "API endpoints loaded", {
-          totalEndpoints: allEndpoints.length,
-          wolfEndpoints: transformedWolfEndpoints.length,
-          steamEndpoints: transformedSteamEndpoints.length,
-          systemEndpoints: transformedSystemEndpoints.length,
-        });
-
-        setEndpoints(allEndpoints);
-        if (allEndpoints.length > 0) {
-          setEndpoint(allEndpoints[0].path);
-          setMethod(allEndpoints[0].method);
-          setSelectedEndpoint(allEndpoints[0]);
-        }
-      } catch (error) {
-        console.error("[API_TEST] Failed to load endpoints:", error);
-        let errorMessage = "Failed to load API endpoints";
-
-        if (error instanceof Error) {
-          errorMessage = error.message;
-        } else if (error && typeof error === "object" && "error" in error) {
-          errorMessage = String((error as any).error);
-        }
-
-        toast.error(errorMessage);
-      } finally {
-        setIsLoadingSchema(false);
-      }
-    }
-    loadEndpoints();
-  }, []);
-
-  useEffect(() => {
-    const found = endpoints.find(
-      (e) => e.path === endpoint && e.method === method
-    );
-    setSelectedEndpoint(found || null);
-
-    // Automatically load example body when endpoint is selected
-    if (found?.requestSchema) {
-      try {
-        // Get the actual schema from components if it's a reference
-        let schema = found.requestSchema;
-        if (schema.$ref) {
-          const refPath = schema.$ref.split("/");
-          const schemaName = refPath[refPath.length - 1];
-          schema = found.requestSchema.components?.schemas?.[schemaName];
-        }
-        const defaultBody = generateDefaultBody(schema);
-        setBody(JSON.stringify(defaultBody, null, 2));
-      } catch (error) {
-        console.error("[API_TEST] Failed to generate default body:", error);
-        setBody("{}");
-      }
-    } else {
-      setBody("");
-    }
-  }, [endpoint, method, endpoints]);
-
-  const handleTest = async () => {
-    try {
-      // Validate if the endpoint is valid
-      if (!endpoint.startsWith("/api/")) {
-        clientLogger.warn(LogComponent.WOLF_UI, "Invalid API endpoint format", {
-          endpoint,
-          message: "API endpoints should start with /api/",
-        });
-        toast.error("Invalid API endpoint format");
-        return;
-      }
-
-      // Parse any path parameters from the body
-      let finalEndpoint = endpoint;
-      let finalBody = body;
-
-      if (body) {
-        try {
-          const bodyData = JSON.parse(body);
-          Object.entries(bodyData).forEach(([key, value]) => {
-            if (finalEndpoint.includes(`{${key}}`)) {
-              finalEndpoint = finalEndpoint.replace(`{${key}}`, String(value));
-              const { [key]: _, ...rest } = bodyData;
-              finalBody = JSON.stringify(rest, null, 2);
-            }
-          });
-        } catch (error) {
-          console.error("[API_TEST] Failed to parse body:", error);
-        }
-      }
-
-      // Enhanced logging for API request
-      clientLogger.info(LogComponent.WOLF_UI, "Testing API endpoint", {
-        method,
-        originalEndpoint: endpoint,
-        finalEndpoint,
-        hasBody: method !== "GET" && !!finalBody,
-      });
-
-      setIsLoading(true);
-      setResponse("");
-      setLatestResponse(null);
-
-      // Construct the full URL
-      const baseUrl = window.location.origin;
-      const fullUrl = `${baseUrl}${finalEndpoint}`;
-
-      clientLogger.debug(LogComponent.WOLF_UI, "Making API request", {
-        fullUrl,
-        method,
-        bodySize: finalBody ? finalBody.length : 0,
-      });
-
-      // Set up headers based on the endpoint type
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
-      // Add X-API-Key only for Wolf API endpoints
-      if (endpoint.startsWith("/api/wolf/")) {
-        headers["X-API-Key"] = apiKey;
-      }
-
-      // Add session cookie for authenticated endpoints (Steam, etc.)
-      const response = await fetch(fullUrl, {
-        method,
-        headers,
-        body: method !== "GET" ? finalBody : undefined,
-        credentials: "include", // Always include credentials for session handling
-      });
-
-      let data;
-      const responseText = await response.text();
-
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        const err = new APIError(
-          `Invalid JSON response: ${responseText.substring(0, 100)}...`,
-          response.status,
-          response.statusText,
-          fullUrl
-        );
-        await clientLogger.error(
-          LogComponent.WOLF_UI,
-          "Failed to parse API response",
-          err,
-          {
-            responseText: responseText.substring(0, 200) + "...",
-            contentType: response.headers.get("content-type"),
-          }
-        );
-        throw err;
-      }
-
-      const newResponse: ApiResponse = {
-        status: response.status,
-        statusText: response.statusText,
-        data,
-      };
-
-      setLatestResponse(newResponse);
-      setResponse(JSON.stringify(data, null, 2));
-
-      if (response.ok) {
-        showToast.success("Test Successful", {
-          description: "API endpoint test completed successfully",
-        });
-        await clientLogger.info(
-          LogComponent.WOLF_UI,
-          "API request successful",
-          {
-            endpoint,
-            responseSize: responseText.length,
-          }
-        );
-      } else {
-        // Add more context to error messages
-        let errorMessage = `API request failed: ${response.statusText}`;
-        if (data?.error?.message) {
-          errorMessage += ` - ${data.error.message}`;
-        }
-
-        const err = new APIError(
-          errorMessage,
-          response.status,
-          response.statusText,
-          endpoint,
-          data
-        );
-        await clientLogger.error(
-          LogComponent.WOLF_UI,
-          "API request failed",
-          err
-        );
-        showToast.error("Test Failed", err);
-      }
-    } catch (error) {
-      // Enhanced error logging with full context
-      const err =
-        error instanceof APIError
-          ? error
-          : error instanceof Error
-          ? new APIError(error.message)
-          : new APIError(String(error));
-
-      await clientLogger.error(LogComponent.WOLF_UI, "API request error", err, {
-        endpoint,
-        method,
-        requestBody: method !== "GET" ? body : undefined,
-      });
-
-      // Set a more informative error response
-      const failedResponse: ApiResponse = {
-        status: err.statusCode || 0,
-        statusText: err.statusText || "Request Failed",
-        data: { error: err.message },
-      };
-      setLatestResponse(failedResponse);
-      setResponse(JSON.stringify(failedResponse.data, null, 2));
-      showToast.error("Test Failed", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCopy = async () => {
-    if (!latestResponse) return;
-
-    try {
-      await navigator.clipboard.writeText(
-        JSON.stringify(latestResponse.data, null, 2)
-      );
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-      showToast.success("Copied", {
-        description: "Response copied to clipboard",
-      });
-    } catch (err) {
-      console.error("Failed to copy:", err);
-      toast.error("Failed to copy to clipboard");
-      showToast.error("Copy Failed", "Failed to copy response to clipboard");
-    }
-  };
+  // ...existing hooks and logic
 
   function generateDefaultBody(schema: any): any {
     if (!schema) return {};
-
-    // Handle $ref by using the referenced schema
     if (schema.$ref) {
       const refPath = schema.$ref.split("/");
       const schemaName = refPath[refPath.length - 1];
-      const refSchema =
-        selectedEndpoint?.requestSchema?.components?.schemas?.[schemaName];
+      const refSchema = selectedEndpoint?.requestSchema?.components?.schemas?.[schemaName];
       if (refSchema) {
         return generateDefaultBody(refSchema);
       }
     }
-
     if (schema.type === "object") {
       const result: any = {};
       if (schema.properties) {
         Object.entries(schema.properties).forEach(
           ([key, value]: [string, any]) => {
-            // Check if the property is required
             const isRequired = schema.required?.includes(key);
-
-            // If it's required or has an example, include it
             if (isRequired || value.example !== undefined) {
               switch (value.type) {
                 case "string":
@@ -371,14 +94,10 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
                   result[key] = generateDefaultBody(value);
                   break;
                 default:
-                  // Handle $ref in property
                   if (value.$ref) {
                     const refPath = value.$ref.split("/");
                     const schemaName = refPath[refPath.length - 1];
-                    const refSchema =
-                      selectedEndpoint?.requestSchema?.components?.schemas?.[
-                        schemaName
-                      ];
+                    const refSchema = selectedEndpoint?.requestSchema?.components?.schemas?.[schemaName];
                     if (refSchema) {
                       result[key] = generateDefaultBody(refSchema);
                     }
@@ -392,28 +111,52 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
       }
       return result;
     }
-
-    // Handle non-object types at the root level
     if (schema.example !== undefined) {
       return schema.example;
     }
-
     switch (schema.type) {
-      case "string":
-        return "";
+      case "string": return "";
       case "number":
-      case "integer":
-        return 0;
-      case "boolean":
-        return false;
-      case "array":
-        return [];
-      default:
-        return null;
+      case "integer": return 0;
+      case "boolean": return false;
+      case "array": return [];
+      default: return null;
     }
   }
 
-  // Group endpoints by their group property
+  useEffect(() => {
+    if (endpoints.length > 0) {
+      setEndpoint(endpoints[0].path);
+      setMethod(endpoints[0].method);
+      setSelectedEndpoint(endpoints[0]);
+    }
+  }, [endpoints]);
+
+  useEffect(() => {
+    const found = endpoints.find(
+      (e) => e.path === endpoint && e.method === method
+    );
+    setSelectedEndpoint(found || null);
+
+    if (found?.requestSchema) {
+      try {
+        let schema = found.requestSchema;
+        if (schema.$ref) {
+          const refPath = schema.$ref.split("/");
+          const schemaName = refPath[refPath.length - 1];
+          schema = found.requestSchema.components?.schemas?.[schemaName];
+        }
+        const defaultBody = generateDefaultBody(schema);
+        setBody(JSON.stringify(defaultBody, null, 2));
+      } catch (error) {
+        console.error("[API_TEST] Failed to generate default body:", error);
+        setBody("{}");
+      }
+    } else {
+      setBody("");
+    }
+  }, [endpoint, method, endpoints]);
+
   const groupedEndpoints = useMemo(() => {
     const groups: Record<string, Endpoint[]> = {};
     endpoints.forEach((endpoint) => {
@@ -426,7 +169,6 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
     return groups;
   }, [endpoints]);
 
-  // Filter endpoints based on search query
   const filteredEndpoints = useMemo(() => {
     const groups: Record<string, Endpoint[]> = {};
     Object.entries(groupedEndpoints).forEach(([group, endpoints]) => {
@@ -444,13 +186,9 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
   }, [groupedEndpoints, searchQuery]);
 
   const toggleGroup = (group: string) => {
-    setExpandedGroups((prev) => ({
-      ...prev,
-      [group]: !prev[group],
-    }));
+    setExpandedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
   };
 
-  // Format JSON for the request body
   const formatRequestBody = (value: string): string => {
     try {
       const parsed = JSON.parse(value);
@@ -460,63 +198,146 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
     }
   };
 
-  const handleRunTests = async () => {
-    setIsLoading(true);
+  const handleTest = async () => {
     try {
-      await clientLogger.debug(LogComponent.WOLF_UI, "Starting API tests");
-
-      const response = await fetch("/api/test/run", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to run API tests");
+      if (!endpoint.startsWith("/api/")) {
+        clientLogger.warn(LogComponent.WOLF_UI, "Invalid API endpoint format", {
+          endpoint,
+          message: "API endpoints should start with /api/",
+        });
+        toast.error("Invalid API endpoint format");
+        return;
       }
-
-      const results = await response.json();
-      setTestResults(results);
-      await clientLogger.info(LogComponent.WOLF_UI, "API tests completed", {
-        totalTests: results.length,
-        passedTests: results.filter((r: TestResult) => r.status === "passed")
-          .length,
+      let finalEndpoint = endpoint;
+      let finalBody = body;
+      if (body) {
+        try {
+          const bodyData = JSON.parse(body);
+          Object.entries(bodyData).forEach(([key, value]) => {
+            if (finalEndpoint.includes(`{${key}}`)) {
+              finalEndpoint = finalEndpoint.replace(`{${key}}`, String(value));
+              const { [key]: _, ...rest } = bodyData;
+              finalBody = JSON.stringify(rest, null, 2);
+            }
+          });
+        } catch (error) {
+          console.error("[API_TEST] Failed to parse body:", error);
+        }
+      }
+      clientLogger.info(LogComponent.WOLF_UI, "Testing API endpoint", {
+        method,
+        originalEndpoint: endpoint,
+        finalEndpoint,
+        hasBody: method !== "GET" && !!finalBody,
       });
-      showToast.success("Tests Completed", {
-        description: "API tests have been completed successfully",
+      setIsLoading(true);
+      setResponse("");
+      setLatestResponse(null);
+      const baseUrl = window.location.origin;
+      const fullUrl = `${baseUrl}${finalEndpoint}`;
+      clientLogger.debug(LogComponent.WOLF_UI, "Making API request", {
+        fullUrl,
+        method,
+        bodySize: finalBody ? finalBody.length : 0,
       });
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (endpoint.startsWith("/api/wolf/")) {
+        headers["X-API-Key"] = apiKey;
+      }
+      const response = await fetch(fullUrl, {
+        method,
+        headers,
+        body: method !== "GET" ? finalBody : undefined,
+        credentials: "include",
+      });
+      let data;
+      const responseText = await response.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        const err = new Error(
+          `Invalid JSON response: ${responseText.substring(0, 100)}...`
+        );
+        await clientLogger.error(
+          LogComponent.WOLF_UI,
+          "Failed to parse API response",
+          err,
+          {
+            responseText: responseText.substring(0, 200) + "...",
+            contentType: response.headers.get("content-type"),
+          }
+        );
+        throw err;
+      }
+      const newResponse: ApiResponse = {
+        status: response.status,
+        statusText: response.statusText,
+        data,
+      };
+      setLatestResponse(newResponse);
+      setResponse(JSON.stringify(data, null, 2));
+      if (response.ok) {
+        showToast.success("Test Successful", {
+          description: "API endpoint test completed successfully",
+        });
+        await clientLogger.info(
+          LogComponent.WOLF_UI,
+          "API request successful",
+          {
+            endpoint,
+            responseSize: responseText.length,
+          }
+        );
+      } else {
+        let errorMessage = `API request failed: ${response.statusText}`;
+        if (data?.error?.message) {
+          errorMessage += ` - ${data.error.message}`;
+        }
+        const err = new Error(errorMessage);
+        await clientLogger.error(
+          LogComponent.WOLF_UI,
+          "API request failed",
+          err
+        );
+        showToast.error("Test Failed", err);
+      }
     } catch (error) {
-      const err =
-        error instanceof Error ? error : new Error("Failed to run API tests");
-      await clientLogger.error(
-        LogComponent.WOLF_UI,
-        "Failed to run API tests",
-        err
-      );
-      showToast.error("Test Run Failed", err);
+      const err = error instanceof Error ? error : new Error("API request error");
+      await clientLogger.error(LogComponent.WOLF_UI, "API request error", err, {
+        endpoint,
+        method,
+        requestBody: method !== "GET" ? body : undefined,
+      });
+      const failedResponse: ApiResponse = {
+        status: 0,
+        statusText: "Request Failed",
+        data: { error: err.message },
+      };
+      setLatestResponse(failedResponse);
+      setResponse(JSON.stringify(failedResponse.data, null, 2));
+      showToast.error("Test Failed", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleClearResults = async () => {
+  const handleCopy = async () => {
+    if (!latestResponse) return;
     try {
-      await clientLogger.debug(LogComponent.WOLF_UI, "Clearing test results");
-      setTestResults([]);
-      await clientLogger.info(LogComponent.WOLF_UI, "Test results cleared");
-      showToast.success("Results Cleared", {
-        description: "Test results have been cleared",
-      });
-    } catch (error) {
-      const err =
-        error instanceof Error
-          ? error
-          : new Error("Failed to clear test results");
-      await clientLogger.error(
-        LogComponent.WOLF_UI,
-        "Failed to clear test results",
-        err
+      await navigator.clipboard.writeText(
+        JSON.stringify(latestResponse.data, null, 2)
       );
-      showToast.error("Clear Failed", err);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+      showToast.success("Copied", {
+        description: "Response copied to clipboard",
+      });
+    } catch (err) {
+      console.error("Failed to copy:", err);
+      toast.error("Failed to copy to clipboard");
+      showToast.error("Copy Failed", "Failed to copy response to clipboard");
     }
   };
 
@@ -594,7 +415,6 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
             )}
           </div>
         </div>
-
         {/* Right Column - Test Interface */}
         <div className="flex flex-col h-full overflow-hidden">
           {selectedEndpoint ? (
@@ -603,13 +423,11 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
                 <MethodChip method={selectedEndpoint.method} />
                 <span className="font-mono">{selectedEndpoint.path}</span>
               </div>
-
               {selectedEndpoint.description && (
                 <div className="text-sm text-muted-foreground mb-4">
                   {selectedEndpoint.description}
                 </div>
               )}
-
               {method !== "GET" && selectedEndpoint?.requestSchema && (
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between">
@@ -623,7 +441,6 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
                       Format JSON
                     </Button>
                   </div>
-
                   {/* Schema Information */}
                   <div className="rounded-md border bg-muted p-3 text-sm space-y-2">
                     <div className="font-medium">Schema Properties:</div>
@@ -646,8 +463,7 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
                             )}
                             {value.example && (
                               <span className="block text-green-500 dark:text-green-400">
-                                Example:{" "}
-                                {typeof value.example === "object"
+                                Example: {typeof value.example === "object"
                                   ? JSON.stringify(value.example)
                                   : String(value.example)}
                               </span>
@@ -657,7 +473,6 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
                       ))}
                     </div>
                   </div>
-
                   <div className="rounded-md border bg-zinc-950 overflow-hidden relative">
                     <div className="pointer-events-none">
                       <SyntaxHighlighter
@@ -685,7 +500,6 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
                   </div>
                 </div>
               )}
-
               <Button
                 onClick={handleTest}
                 disabled={isLoading || isLoadingSchema}
@@ -693,7 +507,6 @@ export function ApiTestConsole({ apiKey }: ApiTestConsoleProps) {
               >
                 {isLoading ? "Testing..." : "Test Endpoint"}
               </Button>
-
               <div className="flex-1 overflow-hidden">
                 <div className="flex items-center justify-between mb-2">
                   <Label>Response</Label>

@@ -1,204 +1,51 @@
+/* Remove the Google Fonts import */
+/* @import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap'); */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 201 100% 97%;
-    --foreground: 214 60% 15%;
+    --neon-teal: #00e5cc;
+    --neon-blue: #01cdfe;
+    --neon-green: #05ffa1;
+    --neon-navy: #0077b6;
+    --neon-yellow: #fffb96;
+    --dark-bg: #1a1a1a;
+    --card-bg: rgba(255, 255, 255, 0.1);
+    --glass-effect: rgba(255, 255, 255, 0.05);
+    --text-color: #ffffff;
 
-    --card: 0 0% 100%;
-    --card-foreground: 214 60% 15%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 214 60% 15%;
-
-    --primary: 213 100% 35%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 187 100% 42%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 213 20% 95%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 187 100% 42%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 213 100% 35%;
-
-    --radius: 0.75rem;
-
-    --header-bg: 215 28% 17%;
-    --header-fg: 0 0% 100%;
-    --header-border: 215 28% 25%;
-  }
-
-  .dark {
-    --background: 213 70% 12%;
+    --background: 0 0% 10%;
     --foreground: 0 0% 100%;
 
-    --card: 213 60% 15%;
+    --card: 0 0% 10%;
     --card-foreground: 0 0% 100%;
 
-    --popover: 213 60% 15%;
+    --popover: 0 0% 10%;
     --popover-foreground: 0 0% 100%;
 
-    --primary: 213 100% 35%;
+    --primary: 190 100% 36%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 187 100% 42%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 187 100% 50%;
+    --secondary-foreground: 0 0% 10%;
 
-    --muted: 213 50% 20%;
-    --muted-foreground: 215 20% 65%;
+    --accent: 158 100% 51%;
+    --accent-foreground: 0 0% 10%;
 
-    --accent: 187 100% 42%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 100% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 213 50% 20%;
-    --input: 213 50% 20%;
-    --ring: 213 100% 35%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 70%;
 
-    --header-bg: 215 28% 17%;
-    --header-fg: 0 0% 100%;
-    --header-border: 215 28% 25%;
-  }
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 187 100% 50%;
 
-  /* Wolf Manager Theme Colors - Applied globally but with light/dark variants */
-  /* For the light theme (default) */
-  .wolf-theme {
-    /* Light theme colors - applied when no .dark class is present */
-    --background: 210 30% 98%;
-    --foreground: 220 25% 15%;
-
-    --card: 210 25% 100%;
-    --card-foreground: 220 25% 15%;
-
-    --popover: 210 25% 98%;
-    --popover-foreground: 220 25% 15%;
-
-    --primary: 214 90% 48%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 187 90% 38%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 220 15% 94%;
-
-    --dialog-bg: 210 25% 98%;
-    --dialog-border: 220 20% 90%;
-    --dialog-header-bg: 215 30% 95%;
-
-    --form-bg: 220 15% 96%;
-    --dialog-form-bg: 220 15% 94%;
-    --game-edit-input-bg: 214 15% 92%;
-    --dropdown-bg: 210 25% 98%;
-    --dropdown-item-hover: 214 90% 48%;
-    --dropdown-item-hover-fg: 0 0% 100%;
-
-    --muted-foreground: 215 20% 45%;
-
-    --accent: 214 90% 50%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 90% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 13% 85%;
-    --input: 220 20% 90%;
-    --ring: 214 90% 48%;
-
-    --header-bg: 214 100% 98%;
-    --header-fg: 220 25% 15%;
-    --header-border: 214 30% 90%;
-
-    --tab-active: 214 90% 48%;
-    --tab-inactive: 214 15% 92%;
-
-    --notif-bg: 210 15% 95%;
-    --notif-info-bg: 214 95% 95%;
-    --notif-success-bg: 142 84% 95%;
-    --notif-warning-bg: 32 95% 95%;
-    --notif-error-bg: 0 95% 95%;
-  }
-
-  /* Dark theme styles - applied when the .dark class is present on HTML */
-  .dark .wolf-theme {
-    --background: 220 30% 10%;
-    --foreground: 0 0% 100%;
-
-    --card: 220 25% 13%;
-    --card-foreground: 0 0% 100%;
-
-    --popover: 220 25% 15%;
-    --popover-foreground: 0 0% 100%;
-
-    --primary: 214 100% 38%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 187 100% 30%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 220 15% 18%;
-
-    --dialog-bg: 220 25% 15%;
-    --dialog-border: 220 20% 25%;
-    --dialog-header-bg: 215 30% 20%;
-
-    --form-bg: 220 15% 20%;
-    --dialog-form-bg: 220 15% 28%;
-    --game-edit-input-bg: 220 30% 35%;
-    --dropdown-bg: 220 25% 18%;
-    --dropdown-item-hover: 214 100% 38%;
-    --dropdown-item-hover-fg: 0 0% 100%;
-
-    --muted-foreground: 215 20% 75%;
-
-    --accent: 214 100% 45%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 90% 45%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 13% 32%;
-    --input: 220 20% 30%;
-    --ring: 214 100% 45%;
-
-    --header-bg: 220 15% 20%;
-    --header-fg: 0 0% 100%;
-    --header-border: 222 16% 28%;
-
-    --tab-active: 214 100% 38%;
-    --tab-inactive: 220 15% 22%;
-
-    --notif-bg: 220 15% 18%;
-    --notif-info-bg: 214 60% 20%;
-    --notif-success-bg: 142 60% 20%;
-    --notif-warning-bg: 32 60% 20%;
-    --notif-error-bg: 0 60% 20%;
-  }
-
-  /* Global styles for dropdowns to overcome portal isolation */
-  .wolf-theme-light-active [data-radix-popper-content-wrapper] {
-    --dropdown-bg: 210 25% 98%;
-    --dropdown-item-hover: 214 90% 48%;
-    --dropdown-item-hover-fg: 0 0% 100%;
-  }
-
-  /* Dark theme dropdown styles */
-  .wolf-theme-active [data-radix-popper-content-wrapper] {
-    --dropdown-bg: 220 25% 23%;
-    --dropdown-item-hover: 214 100% 38%;
-    --dropdown-item-hover-fg: 0 0% 100%;
+    --radius: 0.5rem;
   }
 }
 
@@ -208,284 +55,177 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Use system monospace fonts instead of VT323 */
+    font-family: monospace, "Courier New", Courier;
   }
-  .content-container {
-    @apply bg-background/95 backdrop-blur-sm min-h-screen flex flex-col;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    /* Use system monospace fonts instead of Press Start 2P */
+    font-family: monospace, "Courier New", Courier;
+    font-weight: bold;
+    letter-spacing: 1px;
   }
 }
 
-/* WolfManager gradient background - Light theme (default) */
-.wolf-gradient-bg {
-  background: radial-gradient(
-    circle at center,
-    hsl(187 90% 75%) 0%,
-    hsl(214 40% 92%) 80%
-  );
-  background-attachment: fixed;
-}
-
-/* Dark theme gradient background */
-.dark .wolf-gradient-bg {
-  background: radial-gradient(
-    circle at center,
-    hsl(187 100% 26%) 0%,
-    hsl(222 40% 15%) 80%
-  );
-  background-attachment: fixed;
-}
-
-/* Light theme gradient text (default) */
-.gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-600;
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8);
-}
-
-/* Dark theme gradient text */
-.dark .gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-300 to-teal-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)];
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.app-header {
-  @apply bg-[hsl(var(--header-bg))] text-[hsl(var(--header-fg))] border-[hsl(var(--header-border))] sticky top-0 z-50;
-}
-
-/* Login page styles */
-.login-page {
-  @apply min-h-screen;
-}
-
-.login-page .content-container {
-  @apply bg-transparent;
-}
-
-/* Canvas container styles */
-.constellation-container {
-  @apply fixed inset-0 -z-10;
-  margin: -1px;
-}
-
-/* Page Transitions */
-.page-transition-enter {
-  opacity: 0;
-}
-
-.page-transition-enter-active {
-  opacity: 1;
-  transition: opacity 300ms ease-in-out;
-}
-
-.page-transition-exit {
-  opacity: 1;
-}
-
-.page-transition-exit-active {
-  opacity: 0;
-  transition: opacity 300ms ease-in-out;
-}
-
-/* Transition Overlay */
-.transition-overlay {
-  @apply fixed inset-0 bg-background z-[9999];
-  animation: fadeIn 150ms ease-in-out;
-  opacity: 1;
-}
-
-@keyframes fadeIn {
+/* Starfield background animation */
+@keyframes move-stars-1 {
   from {
-    opacity: 0;
+    transform: translateZ(0) translateY(0);
   }
   to {
-    opacity: 1;
+    transform: translateZ(0) translateY(1000px);
   }
 }
 
-/* Custom Input Styling */
-.wolf-input {
-  @apply bg-[hsl(var(--form-bg))] border-muted-foreground/20 focus:border-primary/50 focus:ring-primary/20 rounded-md;
+@keyframes move-stars-2 {
+  from {
+    transform: translateZ(-10px) translateY(-1000px) translateX(100px);
+  }
+  to {
+    transform: translateZ(-10px) translateY(1000px) translateX(-100px);
+  }
 }
 
-/* Light mode specific input styles */
-:root .wolf-input {
-  background-color: hsl(var(--muted)) !important;
-  border: 2px solid hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
+@keyframes glow {
+  0%,
+  100% {
+    text-shadow: 0 0 10px var(--neon-navy), 0 0 20px var(--neon-blue);
+  }
+  50% {
+    text-shadow: 0 0 20px var(--neon-blue), 0 0 30px var(--neon-navy);
+  }
 }
 
-/* Dark mode specific input styles */
-.dark .wolf-input {
-  background-color: hsl(var(--muted)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
+.stars {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  perspective: 1000px;
+  z-index: -1;
+  background: var(--dark-bg);
 }
 
-/* Custom Dropdown Styling - Default for all selects */
-.wolf-dropdown {
-  @apply bg-[hsl(var(--form-bg))] border-muted-foreground/20 rounded-md text-foreground;
+.stars:before,
+.stars:after {
+  content: "";
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background-image: radial-gradient(
+      2px 2px at 20px 30px,
+      var(--neon-blue),
+      rgba(0, 0, 0, 0)
+    ),
+    radial-gradient(2px 2px at 40px 70px, var(--neon-teal), rgba(0, 0, 0, 0)),
+    radial-gradient(3px 3px at 50px 160px, var(--neon-navy), rgba(0, 0, 0, 0)),
+    radial-gradient(2px 2px at 90px 40px, var(--neon-green), rgba(0, 0, 0, 0)),
+    radial-gradient(3px 3px at 130px 80px, var(--neon-yellow), rgba(0, 0, 0, 0));
+  background-repeat: repeat;
+  background-size: 400px 400px;
+  animation: move-stars-1 60s linear infinite;
+  opacity: 0.5;
 }
 
-/* Light mode dropdown styles */
-:root .wolf-dropdown {
-  background-color: hsl(var(--form-bg)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
+.stars:after {
+  transform-style: preserve-3d;
+  animation: move-stars-2 40s linear infinite;
+  opacity: 0.3;
 }
 
-/* Dark mode dropdown styles */
-.dark .wolf-dropdown {
-  background-color: hsl(var(--form-bg)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
+/* Glass card effect - MODIFIED to remove hover transform effects */
+.glass-card {
+  background: var(--glass-effect);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  overflow: hidden;
+  /* Removed transform-style and perspective properties */
+  /* Removed transition property to prevent any animations */
 }
 
-/* Custom Tab Styling */
-.wolf-tabs {
-  @apply bg-[hsl(var(--muted))];
+/* Removed the ::before pseudo-element that was causing the shimmer effect */
+
+/* Removed the hover effects that were causing the card to lift and rotate */
+
+/* Neon text effect */
+.neon-text {
+  background: linear-gradient(45deg, var(--neon-navy), var(--neon-blue));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: glow 3s ease-in-out infinite;
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
-.wolf-tab {
-  @apply bg-[hsl(var(--tab-inactive))] text-foreground/80;
+/* Neon border effect - MODIFIED to ensure consistent sizing */
+.neon-border {
+  position: relative;
+  border: 1px solid var(--neon-blue);
+  box-shadow: 0 0 5px var(--neon-blue), 0 0 10px var(--neon-blue) inset;
+  /* Ensure the border doesn't change the element size */
+  box-sizing: border-box;
 }
 
-.wolf-tab-active {
-  @apply bg-[hsl(var(--primary))] text-foreground font-medium;
+.neon-border-teal {
+  position: relative;
+  border: 1px solid var(--neon-teal);
+  box-shadow: 0 0 5px var(--neon-teal), 0 0 10px var(--neon-teal) inset;
+  box-sizing: border-box;
 }
 
-/* Custom Notification Styling */
-.wolf-notification {
-  @apply relative border bg-card text-card-foreground shadow-sm;
+.neon-border-green {
+  position: relative;
+  border: 1px solid var(--neon-green);
+  box-shadow: 0 0 5px var(--neon-green), 0 0 10px var(--neon-green) inset;
+  box-sizing: border-box;
 }
 
-.wolf-notification-info {
-  @apply border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50;
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.wolf-notification-success {
-  @apply border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/50;
+::-webkit-scrollbar-track {
+  background: var(--dark-bg);
 }
 
-.wolf-notification-warning {
-  @apply border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/50;
+::-webkit-scrollbar-thumb {
+  background: var(--neon-blue);
+  border-radius: 4px;
 }
 
-.wolf-notification-error {
-  @apply border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50;
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-teal);
 }
 
-/* Toast Overrides */
-.sonner-toast {
-  @apply shadow-lg;
+/* Ensure buttons maintain consistent size on hover */
+button {
+  transform: none !important;
+  transition-property: background-color, color, border-color, opacity !important;
+  transition-duration: 0.15s !important;
 }
 
-.sonner-toast[data-type="success"] svg {
-  @apply text-green-500 dark:text-green-400;
-}
+/* Ensure cards and interactive elements maintain consistent size */
+.card,
+.button,
+.tabs-trigger,
+.select-trigger {
+  transform: none !important;
+  transition-property: background-color, color, border-color, opacity !important;
+  transition-duration: 0.15s !important;
+} /* .dropdown-trigger removed to allow Radix UI animation */
 
-.sonner-toast[data-type="error"] svg {
-  @apply text-red-500 dark:text-red-400;
-}
-
-.sonner-toast[data-type="warning"] svg {
-  @apply text-yellow-500 dark:text-yellow-400;
-}
-
-.sonner-toast[data-type="info"] svg {
-  @apply text-blue-500 dark:text-blue-400;
-}
-
-/* Custom Expandable Menu Styling */
-.wolf-expandable-menu {
-  @apply bg-[hsl(var(--muted))] rounded-md overflow-hidden;
-}
-.wolf-expandable-header {
-  @apply flex items-center justify-between p-3 cursor-pointer hover:bg-muted-foreground/10;
-}
-.wolf-expandable-content {
-  @apply p-3 border-t border-border;
-}
-
-/* CORE DIALOG AND DROPDOWN STYLING - AGGRESSIVE APPROACH */
-
-/* Remove all the complex dialog styling and replace with a cleaner approach */
-
-/* Dialog styling - Clean approach */
-[role="dialog"] {
-  @apply bg-card text-card-foreground border-border;
-}
-
-/* Dialog content styling */
-.radix-dialog-content {
-  @apply bg-card text-card-foreground border-border;
-}
-
-/* Dialog header styling */
-[role="dialog"] [class*="DialogHeader"],
-[role="dialog"] div:first-child:not([role]) {
-  @apply border-b border-border pb-4 mb-4;
-}
-
-/* Dialog footer styling */
-[role="dialog"] div:last-child:has(button) {
-  @apply border-t border-border pt-4 mt-4 flex justify-end gap-2;
-}
-
-/* Dialog input styling */
-[role="dialog"] input:not([type="checkbox"]):not([type="radio"]) {
-  @apply bg-[hsl(var(--form-bg))] border-border text-foreground;
-}
-
-/* Dialog select styling */
-[role="dialog"] [role="combobox"] {
-  @apply bg-[hsl(var(--form-bg))] border-border text-foreground;
-}
-
-/* Dialog dropdown content styling */
-[data-radix-popper-content-wrapper] [role="listbox"] {
-  @apply bg-popover text-popover-foreground border-border rounded-md shadow-md;
-}
-
-/* Dialog dropdown item styling */
-[data-radix-popper-content-wrapper] [role="option"] {
-  @apply px-2 py-1.5 text-sm cursor-pointer;
-}
-
-/* Dialog dropdown item hover styling */
-[data-radix-popper-content-wrapper] [role="option"]:hover,
-[data-radix-popper-content-wrapper] [role="option"][data-highlighted="true"] {
-  @apply bg-primary text-primary-foreground;
-}
-
-/* Remove all the other complex dialog styling */
-
-/* Add this to your existing styles */
-.wolf-tab[data-state="active"] {
-  @apply bg-accent text-accent-foreground; /* Or your specific color preferences */
-}
-
-/* If you want to ensure these styles take precedence, you can be more specific */
-.wolf-tabs .wolf-tab[data-state="active"] {
-  @apply bg-accent text-accent-foreground !important;
-}
-
-/* Add any additional styles below */
-
-/* Toast Custom Styling */
-.toast-custom {
-  @apply flex gap-3 items-start min-h-[64px];
-}
-
-.toast-custom[data-type="success"] svg {
-  @apply text-green-300;
-}
-
-.toast-custom[data-type="error"] svg {
-  @apply text-red-300;
-}
-
-.toast-custom[data-type="warning"] svg {
-  @apply text-yellow-300;
-}
-
-.toast-custom[data-type="info"] svg {
-  @apply text-blue-300;
-}
+/* Ensure consistent hover states for all interactive elements */
+/* *:hover {
+  transform: none !important;
+} */ /* Disabled to allow Radix UI animation */

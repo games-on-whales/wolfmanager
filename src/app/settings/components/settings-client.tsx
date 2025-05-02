@@ -157,39 +157,45 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 {/* SteamGridDbSettings component removed from here */}
               </Link>
 
-              <Link href="/settings/tasks" className="block">
-                <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer h-[100px]">
-                  <div className="flex items-start space-x-4">
-                    <div className="bg-accent/10 p-3 rounded-lg">
-                      <Cpu className="h-5 w-5 text-accent" />
+              {process.env.NEXT_PUBLIC_FEATURE_BACKGROUND_TASKS_ENABLED ===
+                "true" && (
+                <Link href="/settings/tasks" className="block">
+                  <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer h-[100px]">
+                    <div className="flex items-start space-x-4">
+                      <div className="bg-accent/10 p-3 rounded-lg">
+                        <Cpu className="h-5 w-5 text-accent" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">Background Tasks</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Manage and monitor background processes
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold">Background Tasks</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Manage and monitor background processes
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
+                  </Card>
+                </Link>
+              )}
 
               {/* Moved Metadata Providers link here */}
-              <Link href="/settings/metadata-providers" className="block">
-                <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer h-[100px]">
-                  <div className="flex items-start space-x-4">
-                    <div className="bg-accent/10 p-3 rounded-lg">
-                      <Database className="h-5 w-5 text-accent" />{" "}
-                      {/* Use Database icon */}
+              {process.env.NEXT_PUBLIC_FEATURE_GAME_LIBRARY_ENABLED ===
+                "true" && (
+                <Link href="/settings/metadata-providers" className="block">
+                  <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer h-[100px]">
+                    <div className="flex items-start space-x-4">
+                      <div className="bg-accent/10 p-3 rounded-lg">
+                        <Database className="h-5 w-5 text-accent" />{" "}
+                        {/* Use Database icon */}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">Metadata Providers</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Configure external metadata sources like SteamGridDB
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold">Metadata Providers</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Configure external metadata sources like SteamGridDB
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
+                  </Card>
+                </Link>
+              )}
             </div>
           </section>
         )}

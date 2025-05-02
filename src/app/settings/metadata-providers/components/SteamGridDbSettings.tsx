@@ -137,17 +137,9 @@ export function SteamGridDbSettings() {
   // Use a form element and the server action
   return (
     // Pass formAction directly to the form's action prop
+    // Only use the action prop for server action submission; do not use onSubmit to avoid React rendering errors
     <form
       action={formAction}
-      onSubmit={(e) => {
-        // Prevent default form submission if needed, though action handles it
-        // e.preventDefault();
-        // Wrap the form submission in startTransition
-        startTransition(() => {
-          const formData = new FormData(e.currentTarget);
-          formAction(formData);
-        });
-      }}
       className="space-y-4"
     >
       <h3 className="text-lg font-medium">SteamGridDB Integration</h3>

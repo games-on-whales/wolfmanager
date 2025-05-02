@@ -55,16 +55,28 @@ export async function loadWolfApiSchema(): Promise<WolfApiSchema> {
   // Start new load
   loadingPromise = (async () => {
     try {
-      const response = await fetch("/api/wolf/schema");
-      if (!response.ok) {
-        throw new Error(`Failed to fetch schema: ${response.statusText}`);
+      // Check if running on the server (Node.js environment)
+      if (typeof process !== "undefined" && process.versions?.node) {
+        // Dynamically import the server-side schema loader
+        const { getWolfSchema: serverGetWolfSchema } = await import(
+          "./schema.server"
+        );
+        const schema = await serverGetWolfSchema();
+        wolfApiSchema = schema as WolfApiSchema;
+        return wolfApiSchema;
+      } else {
+        // On the client, fetch the schema from the API route
+        const response = await fetch("/api/wolf/schema");
+        if (!response.ok) {
+          throw new Error(`Failed to fetch schema: ${response.statusText}`);
+        }
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        wolfApiSchema = data as WolfApiSchema;
+        return wolfApiSchema;
       }
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      wolfApiSchema = data as WolfApiSchema;
-      return wolfApiSchema;
     } catch (error) {
       await logger.error(
         LogComponent.WOLF_UI,

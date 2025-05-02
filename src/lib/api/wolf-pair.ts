@@ -1,4 +1,5 @@
 import { isValidWolfEndpoint } from "@/app/api/wolf/lib/schema";
+import { callWolfApi } from "@/app/api/wolf/lib/wolf-socket.server"; // Added import
 import { LogComponent, logger } from "@/lib/logger";
 
 interface WolfPairResponse {
@@ -47,25 +48,18 @@ export const wolfPairApi = {
         throw new Error("Endpoint /pair/pending is not available");
       }
 
-      const response = await fetch("/api/wolf/pair/pending", {
+      // Use callWolfApi instead of fetch
+      const data = (await callWolfApi("/pair/pending", {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        credentials: "include",
-      });
+      })) as WolfPairResponse;
 
-      if (!response.ok) {
+      if (!data || !data.success) {
+        // Check if data itself is null/undefined or success is false
         throw new Error(
-          `Failed to fetch pending requests: ${response.statusText}`
+          `API returned unsuccessful or invalid response for pending requests. Response: ${JSON.stringify(
+            data
+          )}`
         );
-      }
-
-      const data = (await response.json()) as WolfPairResponse;
-
-      if (!data.success) {
-        throw new Error("API returned unsuccessful response");
       }
 
       // Transform the response to match our interface
@@ -113,53 +107,35 @@ export const wolfPairApi = {
         throw new Error(error);
       }
 
-      const response = await fetch("/api/wolf/pair/client", {
+      // Use callWolfApi instead of fetch
+      const responseData = (await callWolfApi("/pair/client", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
+        body: {
           pair_secret: data.requestId,
           friendly_name: data.friendlyName,
           pin: data.pin,
-        }),
-      });
+        },
+      })) as { success: boolean; error?: string; client_id?: string }; // Define expected response shape
 
-      let errorData;
-      if (!response.ok) {
-        try {
-          errorData = await response.json();
-          await logger.error(LogComponent.WOLF_UI, "Pairing request failed", {
-            status: response.status,
-            statusText: response.statusText,
-            errorData,
-          });
-        } catch (parseError) {
-          await logger.error(
-            LogComponent.WOLF_UI,
-            "Failed to parse error response",
-            {
-              status: response.status,
-              statusText: response.statusText,
-            }
-          );
-        }
-        throw new Error(
-          `Failed to pair client: ${response.statusText}${
-            errorData ? ` - ${JSON.stringify(errorData)}` : ""
-          }`
-        );
+      // Check the response structure and success status
+      if (!responseData || !responseData.success) {
+        const errorMessage =
+          responseData?.error || "Pairing failed with unknown reason";
+        await logger.error(LogComponent.WOLF_UI, "Pairing request failed", {
+          error: errorMessage,
+          requestData: {
+            requestId: data.requestId,
+            friendlyName: data.friendlyName,
+          },
+          responseData,
+        });
+        throw new Error(`Failed to pair client: ${errorMessage}`);
       }
 
-      const responseData = await response.json();
       await logger.debug(LogComponent.WOLF_UI, "Pairing request successful", {
         clientId: data.requestId,
         response: responseData,
       });
-
-      return responseData;
     } catch (error) {
       await logger.error(LogComponent.WOLF_UI, "Failed to pair client", {
         error: error instanceof Error ? error : new Error(String(error)),
@@ -181,23 +157,18 @@ export const wolfPairApi = {
         throw new Error("Endpoint /clients is not available");
       }
 
-      const response = await fetch("/api/wolf/clients", {
+      // Use callWolfApi instead of fetch
+      const data = (await callWolfApi("/clients", {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        credentials: "include",
-      });
+      })) as WolfClientsResponse;
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch clients: ${response.statusText}`);
-      }
-
-      const data = (await response.json()) as WolfClientsResponse;
-
-      if (!data.success) {
-        throw new Error("API returned unsuccessful response");
+      if (!data || !data.success) {
+        // Check if data itself is null/undefined or success is false
+        throw new Error(
+          `API returned unsuccessful or invalid response for clients. Response: ${JSON.stringify(
+            data
+          )}`
+        );
       }
 
       // Transform the response to match our interface
