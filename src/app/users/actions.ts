@@ -31,7 +31,7 @@ export async function createUser(data: {
       throw new Error("Unauthorized");
     }
 
-    await logger.debug(LogComponent.WOLF_UI, "Creating new user", {
+    logger.debug(LogComponent.WOLF_UI, "Creating new user", {
       username: data.username,
       isAdmin: data.isAdmin,
     });
@@ -45,14 +45,14 @@ export async function createUser(data: {
       updatedAt: newUser.updated_at,
     };
 
-    await logger.info(LogComponent.WOLF_UI, "User created successfully", {
+    logger.info(LogComponent.WOLF_UI, "User created successfully", {
       userId: user.id,
     });
 
     revalidatePath("/users");
     return { success: true, data: user };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.WOLF_UI,
       "Failed to create user",
       error instanceof Error ? error : new Error(String(error))
@@ -78,7 +78,7 @@ export async function updateUserAction(
       throw new Error("Unauthorized");
     }
 
-    await logger.debug(LogComponent.WOLF_UI, "Updating user", {
+    logger.debug(LogComponent.WOLF_UI, "Updating user", {
       userId,
       ...data,
     });
@@ -105,14 +105,14 @@ export async function updateUserAction(
       updatedAt: existingUser.updated_at,
     };
 
-    await logger.info(LogComponent.WOLF_UI, "User updated successfully", {
+    logger.info(LogComponent.WOLF_UI, "User updated successfully", {
       userId,
     });
 
     revalidatePath("/users");
     return { success: true, data: user };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.WOLF_UI,
       "Failed to update user",
       error instanceof Error ? error : new Error(String(error))
@@ -133,20 +133,20 @@ export async function deleteUser(
       throw new Error("Unauthorized");
     }
 
-    await logger.debug(LogComponent.WOLF_UI, "Deleting user", {
+    logger.debug(LogComponent.WOLF_UI, "Deleting user", {
       userId,
     });
 
     removeUser(userId);
 
-    await logger.info(LogComponent.WOLF_UI, "User deleted successfully", {
+    logger.info(LogComponent.WOLF_UI, "User deleted successfully", {
       userId,
     });
 
     revalidatePath("/users");
     return { success: true };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.WOLF_UI,
       "Failed to delete user",
       error instanceof Error ? error : new Error(String(error))
@@ -174,13 +174,13 @@ export async function getUsers(): Promise<ActionResponse<User[]>> {
       updatedAt: user.updated_at,
     }));
 
-    await logger.info(LogComponent.WOLF_UI, "User list fetched", {
+    logger.info(LogComponent.WOLF_UI, "User list fetched", {
       count: users.length,
     });
 
     return { success: true, data: users };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.WOLF_UI,
       "Failed to fetch users",
       error instanceof Error ? error : new Error(String(error))

@@ -13,7 +13,7 @@ export async function validateLogin(data: z.infer<typeof loginSchema>) {
     // Validate the input data
     const result = loginSchema.safeParse(data);
     if (!result.success) {
-      await logger.warn(LogComponent.AUTH, "Login validation failed", {
+      logger.warn(LogComponent.AUTH, "Login validation failed", {
         errors: result.error.errors,
       });
       return {
@@ -27,13 +27,13 @@ export async function validateLogin(data: z.infer<typeof loginSchema>) {
     // For example, checking if the username exists before attempting login
     // This prevents unnecessary auth attempts and provides better error messages
 
-    await logger.debug(LogComponent.AUTH, "Login validation successful", {
+    logger.debug(LogComponent.AUTH, "Login validation successful", {
       username: data.username,
     });
 
     return { success: true };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.AUTH,
       "Login validation error",
       error instanceof Error ? error : new Error(String(error))

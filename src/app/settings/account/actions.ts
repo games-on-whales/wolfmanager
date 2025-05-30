@@ -23,7 +23,7 @@ export async function updateSteamSettings(data: UpdateSteamSettingsData) {
       throw new Error("Unauthorized");
     }
 
-    await logger.debug(LogComponent.STEAM, "Updating Steam settings", {
+    logger.debug(LogComponent.STEAM, "Updating Steam settings", {
       userId: session.user.name,
       steamId: data.steamId,
       hasApiKey: !!data.steamApiKey,
@@ -32,7 +32,7 @@ export async function updateSteamSettings(data: UpdateSteamSettingsData) {
     // Update the user's Steam information
     updateUserSteamInfo(session.user.name, data.steamId, data.steamApiKey);
 
-    await logger.info(
+    logger.info(
       LogComponent.STEAM,
       "Steam settings updated successfully",
       {
@@ -43,7 +43,7 @@ export async function updateSteamSettings(data: UpdateSteamSettingsData) {
     revalidatePath("/settings/account");
     return { success: true };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.STEAM,
       "Failed to update Steam settings",
       error instanceof Error ? error : new Error(String(error))
@@ -70,7 +70,7 @@ export async function updateUserPassword(data: UpdatePasswordData) {
       throw new Error("Unauthorized");
     }
 
-    await logger.debug(LogComponent.AUTH, "Updating user password", {
+    logger.debug(LogComponent.AUTH, "Updating user password", {
       userId: session.user.name,
     });
 
@@ -94,14 +94,14 @@ export async function updateUserPassword(data: UpdatePasswordData) {
     // Update password
     changeUserPassword(session.user.name, data.newPassword);
 
-    await logger.info(LogComponent.AUTH, "Password updated successfully", {
+    logger.info(LogComponent.AUTH, "Password updated successfully", {
       userId: session.user.name,
     });
 
     revalidatePath("/settings/account");
     return { success: true };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.AUTH,
       "Failed to update password",
       error instanceof Error ? error : new Error(String(error))
@@ -129,7 +129,7 @@ export async function testSteamCredentials(data: TestSteamCredentialsData) {
     }
     sessionUsername = session.user.name;
 
-    await logger.debug(LogComponent.STEAM, "Testing Steam credentials", {
+    logger.debug(LogComponent.STEAM, "Testing Steam credentials", {
       userId: sessionUsername,
       steamId: data.steamId,
       hasApiKey: !!data.steamApiKey,
@@ -152,7 +152,7 @@ export async function testSteamCredentials(data: TestSteamCredentialsData) {
         result.response.players[0].steamid === steamId
       ) {
         isValid = true;
-        await logger.debug(
+        logger.debug(
           LogComponent.STEAM,
           "Steam API validation successful via GetPlayerSummaries",
           { userId: sessionUsername }
@@ -161,7 +161,7 @@ export async function testSteamCredentials(data: TestSteamCredentialsData) {
         // Status OK but unexpected body? Could be private profile + limited key, or invalid ID format?
         // Treat as potentially valid based on OK status, but log a warning.
         isValid = true; // Assume OK status means key is generally valid
-        await logger.warn(
+        logger.warn(
           LogComponent.STEAM,
           "Steam API validation returned OK but unexpected body",
           { userId: sessionUsername, steamId: steamId, responseBody: result }
@@ -169,7 +169,7 @@ export async function testSteamCredentials(data: TestSteamCredentialsData) {
       }
     } else if (response.status === 401 || response.status === 403) {
       isValid = false;
-      await logger.warn(
+      logger.warn(
         LogComponent.STEAM,
         "Steam API validation failed (401/403 Unauthorized/Forbidden)",
         { userId: sessionUsername, steamId: steamId, status: response.status }
@@ -183,7 +183,7 @@ export async function testSteamCredentials(data: TestSteamCredentialsData) {
     }
     // --- End of external API validation ---
 
-    await logger.info(LogComponent.STEAM, "Steam credential test completed", {
+    logger.info(LogComponent.STEAM, "Steam credential test completed", {
       userId: sessionUsername,
       isValid: isValid,
     });
@@ -192,7 +192,7 @@ export async function testSteamCredentials(data: TestSteamCredentialsData) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
-    await logger.error(
+    logger.error(
       LogComponent.STEAM,
       `Failed to test Steam credentials: ${errorMessage}`,
       { stack: errorStack },

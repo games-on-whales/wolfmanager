@@ -11,7 +11,7 @@ export async function refreshDashboardData() {
       throw new Error("Unauthorized");
     }
 
-    await logger.info(
+    logger.info(
       LogComponent.WOLF_UI,
       "Dashboard data refresh requested",
       {
@@ -24,7 +24,7 @@ export async function refreshDashboardData() {
 
     return { success: true };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.WOLF_UI,
       "Failed to refresh dashboard data",
       error instanceof Error ? error : new Error(String(error))

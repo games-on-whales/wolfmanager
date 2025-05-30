@@ -201,7 +201,7 @@ export default function ApiTestConsoleClient({ apiKey, endpoints }: ApiTestConso
   const handleTest = async () => {
     try {
       if (!endpoint.startsWith("/api/")) {
-        clientLogger.warn(LogComponent.WOLF_UI, "Invalid API endpoint format", {
+        console.warn("[API_TEST] Invalid API endpoint format", {
           endpoint,
           message: "API endpoints should start with /api/",
         });
@@ -224,7 +224,7 @@ export default function ApiTestConsoleClient({ apiKey, endpoints }: ApiTestConso
           console.error("[API_TEST] Failed to parse body:", error);
         }
       }
-      clientLogger.info(LogComponent.WOLF_UI, "Testing API endpoint", {
+      console.log("[API_TEST] Testing API endpoint", {
         method,
         originalEndpoint: endpoint,
         finalEndpoint,
@@ -235,7 +235,7 @@ export default function ApiTestConsoleClient({ apiKey, endpoints }: ApiTestConso
       setLatestResponse(null);
       const baseUrl = window.location.origin;
       const fullUrl = `${baseUrl}${finalEndpoint}`;
-      clientLogger.debug(LogComponent.WOLF_UI, "Making API request", {
+      console.log("[API_TEST] Making API request", {
         fullUrl,
         method,
         bodySize: finalBody ? finalBody.length : 0,
@@ -260,15 +260,11 @@ export default function ApiTestConsoleClient({ apiKey, endpoints }: ApiTestConso
         const err = new Error(
           `Invalid JSON response: ${responseText.substring(0, 100)}...`
         );
-        await clientLogger.error(
-          LogComponent.WOLF_UI,
-          "Failed to parse API response",
-          err,
-          {
-            responseText: responseText.substring(0, 200) + "...",
-            contentType: response.headers.get("content-type"),
-          }
-        );
+        console.error("[API_TEST] Failed to parse API response", {
+          error: err,
+          responseText: responseText.substring(0, 200) + "...",
+          contentType: response.headers.get("content-type"),
+        });
         throw err;
       }
       const newResponse: ApiResponse = {
@@ -282,30 +278,27 @@ export default function ApiTestConsoleClient({ apiKey, endpoints }: ApiTestConso
         showToast.success("Test Successful", {
           description: "API endpoint test completed successfully",
         });
-        await clientLogger.info(
-          LogComponent.WOLF_UI,
-          "API request successful",
-          {
-            endpoint,
-            responseSize: responseText.length,
-          }
-        );
+        console.log("[API_TEST] API request successful", {
+          endpoint,
+          responseSize: responseText.length,
+        });
       } else {
         let errorMessage = `API request failed: ${response.statusText}`;
         if (data?.error?.message) {
           errorMessage += ` - ${data.error.message}`;
         }
         const err = new Error(errorMessage);
-        await clientLogger.error(
-          LogComponent.WOLF_UI,
-          "API request failed",
-          err
-        );
+        console.error("[API_TEST] API request failed", {
+          error: err,
+          endpoint,
+          method,
+        });
         showToast.error("Test Failed", err);
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error("API request error");
-      await clientLogger.error(LogComponent.WOLF_UI, "API request error", err, {
+      console.error("[API_TEST] API request error", {
+        error: err,
         endpoint,
         method,
         requestBody: method !== "GET" ? body : undefined,

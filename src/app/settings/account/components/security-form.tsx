@@ -86,7 +86,10 @@ export function SecurityForm({ className }: { className?: string }) {
         "Failed to update password",
         error instanceof Error ? error : new Error(String(error))
       );
-      showToast.error("Password Update Failed");
+      showToast.error(
+        "Password Update Failed",
+        error instanceof Error ? error : new Error("Failed to update password")
+      );
     } finally {
       setIsLoading(false);
     }

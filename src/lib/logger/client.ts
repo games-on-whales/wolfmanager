@@ -103,12 +103,19 @@ export class ClientLogger {
     error: Error,
     metadata?: Record<string, unknown>
   ): Promise<void> {
+    // Serialize Error object to make it serializable for server actions
+    const serializedError = {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+    
     const promise = this.logToServer({
       timestamp: new Date(),
       level: "error",
       component,
       message,
-      raw: error,
+      raw: serializedError,
       metadata,
     });
     this.queue.push(promise);

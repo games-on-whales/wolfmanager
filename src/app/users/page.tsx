@@ -2,6 +2,9 @@ import { PageLayout } from "@/components/layout/page-layout";
 import { getUsers } from "./actions";
 import { UsersManagement } from "./components/users-management";
 
+// Force dynamic rendering since this page uses server-side session data
+export const dynamic = 'force-dynamic';
+
 export default async function UsersPage() {
   const result = await getUsers();
 

@@ -48,7 +48,7 @@ export async function createLogEntry(entry: LogEntry) {
     // Pass raw as 3rd arg, metadata as 4th, matching logger.ts signature
     switch (enrichedEntry.level) {
       case "debug":
-        await logger.debug(
+        logger.debug(
           enrichedEntry.component,
           enrichedEntry.message,
           enrichedEntry.raw,
@@ -56,7 +56,7 @@ export async function createLogEntry(entry: LogEntry) {
         );
         break;
       case "info":
-        await logger.info(
+        logger.info(
           enrichedEntry.component,
           enrichedEntry.message,
           enrichedEntry.raw,
@@ -64,7 +64,7 @@ export async function createLogEntry(entry: LogEntry) {
         );
         break;
       case "warn":
-        await logger.warn(
+        logger.warn(
           enrichedEntry.component,
           enrichedEntry.message,
           enrichedEntry.raw,
@@ -72,7 +72,7 @@ export async function createLogEntry(entry: LogEntry) {
         );
         break;
       case "error":
-        await logger.error(
+        logger.error(
           enrichedEntry.component,
           enrichedEntry.message,
           // Ensure raw is an Error object if passed
@@ -107,7 +107,7 @@ export async function getLogs() {
 
     // Check authentication and admin status
     if (!session?.user || session.user.role !== "admin") {
-      await logger.warn(LogComponent.AUTH, "Unauthorized logs access attempt", {
+      logger.warn(LogComponent.AUTH, "Unauthorized logs access attempt", {
         userId: session?.user?.id,
       });
       return { success: false, error: "You need admin access to view logs" };
@@ -119,7 +119,7 @@ export async function getLogs() {
     try {
       await fs.access(logPath);
     } catch (error) {
-      await logger.warn(LogComponent.SYSTEM, "Log file not found", {
+      logger.warn(LogComponent.SYSTEM, "Log file not found", {
         path: logPath,
         userId: session.user.id,
       });
@@ -140,14 +140,14 @@ export async function getLogs() {
       })
       .filter(Boolean);
 
-    await logger.info(LogComponent.SYSTEM, "Logs retrieved", {
+    logger.info(LogComponent.SYSTEM, "Logs retrieved", {
       count: entries.length,
       userId: session.user.id,
     });
 
     return { success: true, entries };
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.SYSTEM,
       "Failed to retrieve logs",
       error instanceof Error ? error : new Error(String(error))

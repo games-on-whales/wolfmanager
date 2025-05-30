@@ -37,7 +37,7 @@ export async function GET() {
 
     // Check authentication and admin status
     if (!session?.user || session.user.role !== "admin") {
-      await logger.warn(LogComponent.AUTH, "Unauthorized logs access attempt", {
+      logger.warn(LogComponent.AUTH, "Unauthorized logs access attempt", {
         userId: session?.user?.id,
       });
       return Response.json(
@@ -52,7 +52,7 @@ export async function GET() {
     try {
       await fs.access(logPath);
     } catch (error) {
-      await logger.warn(LogComponent.SYSTEM, "Log file not found", {
+      logger.warn(LogComponent.SYSTEM, "Log file not found", {
         path: logPath,
         userId: session.user.id,
       });
@@ -73,14 +73,14 @@ export async function GET() {
       })
       .filter(Boolean);
 
-    await logger.info(LogComponent.SYSTEM, "Logs retrieved", {
+    logger.info(LogComponent.SYSTEM, "Logs retrieved", {
       count: entries.length,
       userId: session.user.id,
     });
 
     return Response.json({ entries });
   } catch (error) {
-    await logger.error(
+    logger.error(
       LogComponent.SYSTEM,
       "Failed to retrieve logs",
       error instanceof Error ? error : new Error(String(error))
@@ -124,25 +124,25 @@ export async function POST(req: Request) {
     // Forward to appropriate logger based on level
     switch (enrichedEntry.level) {
       case "debug":
-        await logger.debug(enrichedEntry.component, enrichedEntry.message, {
+        logger.debug(enrichedEntry.component, enrichedEntry.message, {
           ...enrichedEntry.metadata,
           raw: enrichedEntry.raw,
         });
         break;
       case "info":
-        await logger.info(enrichedEntry.component, enrichedEntry.message, {
+        logger.info(enrichedEntry.component, enrichedEntry.message, {
           ...enrichedEntry.metadata,
           raw: enrichedEntry.raw,
         });
         break;
       case "warn":
-        await logger.warn(enrichedEntry.component, enrichedEntry.message, {
+        logger.warn(enrichedEntry.component, enrichedEntry.message, {
           ...enrichedEntry.metadata,
           raw: enrichedEntry.raw,
         });
         break;
       case "error":
-        await logger.error(enrichedEntry.component, enrichedEntry.message, {
+        logger.error(enrichedEntry.component, enrichedEntry.message, {
           ...enrichedEntry.metadata,
           raw: enrichedEntry.raw,
         });
@@ -158,7 +158,7 @@ export async function POST(req: Request) {
       );
     }
 
-    await logger.error(
+    logger.error(
       LogComponent.SYSTEM,
       "Failed to process log entry",
       error instanceof Error ? error : new Error(String(error))

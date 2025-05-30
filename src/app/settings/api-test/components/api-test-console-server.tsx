@@ -14,37 +14,44 @@ export default async function ApiTestConsoleServer({ apiKey }: ApiTestConsoleSer
     getAvailableSteamEndpoints(),
     getAvailableSystemEndpoints(),
   ]);
-  // Merge all endpoints
-  const allEndpoints = [...wolfEndpoints, ...steamEndpoints, ...systemEndpoints];
-  // Grouping logic
+  // Process each endpoint array separately to ensure proper grouping
   function stripNonSerializable(endpoint: any) {
     // Remove known non-serializable fields
     const { requestSchema, responseSchema, components, ...rest } = endpoint;
     return { ...rest };
   }
-  const endpoints = allEndpoints.map(endpoint => {
-    let group = "Other API";
+
+  // Process Wolf endpoints
+  const processedWolfEndpoints = wolfEndpoints.map(endpoint => {
     let path = endpoint.path;
-    if (path.includes("/wolf")) {
-      group = "Wolf API";
-      if (!path.startsWith("/api/wolf")) path = `/api${path}`;
-    } else if (path.includes("/libraries/steam") || path.includes("/steam")) {
-      group = "Steam API";
-      if (!path.startsWith("/api/libraries/steam") && !path.startsWith("/api/steam")) path = `/api${path}`;
-    } else if (path.includes("/system")) {
-      group = "System API";
-      if (!path.startsWith("/api/system")) path = `/api${path}`;
-    } else if (path.startsWith("/api/")) {
-      group = "Other API";
-    } else {
-      group = "Other API";
-      path = `/api${path}`;
+    // All wolf endpoints should go through /api/wolf/ proxy
+    if (!path.startsWith("/api/wolf")) {
+      path = `/api/wolf${path}`;
     }
     return stripNonSerializable({
       ...endpoint,
       path,
-      group,
+      group: "Wolf API",
     });
   });
+
+  // Process Steam endpoints (they already have /api/ prefix)
+  const processedSteamEndpoints = steamEndpoints.map(endpoint => {
+    return stripNonSerializable({
+      ...endpoint,
+      group: "Steam API",
+    });
+  });
+
+  // Process System endpoints (they already have /api/ prefix)
+  const processedSystemEndpoints = systemEndpoints.map(endpoint => {
+    return stripNonSerializable({
+      ...endpoint,
+      group: "System API",
+    });
+  });
+
+  // Merge all processed endpoints
+  const endpoints = [...processedWolfEndpoints, ...processedSteamEndpoints, ...processedSystemEndpoints];
   return <ApiTestConsoleClient apiKey={apiKey} endpoints={endpoints} />;
 }

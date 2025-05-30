@@ -74,6 +74,14 @@ export async function callWolfApi(
 ): Promise<unknown> {
   const { method = "GET", body } = options;
 
+  console.log("[WOLF_SOCKET_DEBUG] callWolfApi started", {
+    endpoint,
+    method,
+    hasBody: !!body,
+    bodyType: body ? typeof body : undefined,
+    timestamp: new Date().toISOString(),
+  });
+
   return new Promise((resolve, reject) => {
     const requestOptions = {
       socketPath: WOLF_SOCKET_PATH,
@@ -88,14 +96,43 @@ export async function callWolfApi(
       },
     };
 
+    console.log("[WOLF_SOCKET_DEBUG] Request options prepared", {
+      endpoint,
+      method,
+      socketPath: requestOptions.socketPath,
+      fullPath: requestOptions.path,
+      headers: requestOptions.headers,
+    });
+
     const req = http.request(requestOptions, (res) => {
+      console.log("[WOLF_SOCKET_DEBUG] Response received", {
+        endpoint,
+        method,
+        statusCode: res.statusCode,
+        statusMessage: res.statusMessage,
+        headers: res.headers,
+      });
+
       let data = "";
 
       res.on("data", (chunk) => {
         data += chunk;
+        console.log("[WOLF_SOCKET_DEBUG] Data chunk received", {
+          endpoint,
+          method,
+          chunkSize: chunk.length,
+          totalDataSize: data.length,
+        });
       });
 
       res.on("end", async () => {
+        console.log("[WOLF_SOCKET_DEBUG] Response end event", {
+          endpoint,
+          method,
+          totalDataSize: data.length,
+          dataPreview: data.substring(0, 200),
+        });
+
         try {
           await logger.debug(LogComponent.API, "[WOLF_SOCKET_RAW_DATA]", {
             endpoint,
@@ -106,6 +143,7 @@ export async function callWolfApi(
           });
 
           if (!data) {
+            console.log("[WOLF_SOCKET_DEBUG] Empty response, returning empty object");
             await logger.debug(
               LogComponent.API,
               "[WOLF_SOCKET_EMPTY_RESPONSE]",
@@ -115,7 +153,15 @@ export async function callWolfApi(
             return;
           }
 
+          console.log("[WOLF_SOCKET_DEBUG] Parsing JSON response...");
           const jsonResponse = JSON.parse(data);
+          console.log("[WOLF_SOCKET_DEBUG] JSON parsed successfully", {
+            endpoint,
+            method,
+            responseType: typeof jsonResponse,
+            responseKeys: jsonResponse && typeof jsonResponse === 'object' ? Object.keys(jsonResponse) : undefined,
+          });
+
           await logger.debug(
             LogComponent.API,
             "[WOLF_SOCKET_PARSED_RESPONSE]",
@@ -127,6 +173,14 @@ export async function callWolfApi(
           );
           resolve(jsonResponse);
         } catch (error) {
+          console.error("[WOLF_SOCKET_DEBUG] JSON parse error", {
+            endpoint,
+            method,
+            error,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            rawData: data.substring(0, 500),
+          });
+
           await logger.error(
             LogComponent.API,
             "[WOLF_SOCKET_PARSE_ERROR]",
@@ -139,6 +193,16 @@ export async function callWolfApi(
     });
 
     req.on("error", async (error: SystemError) => {
+      console.error("[WOLF_SOCKET_DEBUG] Request error", {
+        endpoint,
+        method,
+        error,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorSyscall: error.syscall,
+        errorAddress: error.address,
+      });
+
       await logger.error(
         LogComponent.API,
         "[WOLF_SOCKET_REQUEST_ERROR]",
@@ -153,9 +217,18 @@ export async function callWolfApi(
     });
 
     if (body) {
+      console.log("[WOLF_SOCKET_DEBUG] Writing request body", {
+        endpoint,
+        method,
+        bodySize: JSON.stringify(body).length,
+      });
       req.write(JSON.stringify(body));
     }
 
+    console.log("[WOLF_SOCKET_DEBUG] Ending request", {
+      endpoint,
+      method,
+    });
     req.end();
   });
 }

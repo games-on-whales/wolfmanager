@@ -170,8 +170,8 @@ export const DockerLogService = {
       }
 
       // When follow is false, container.logs() returns a Buffer
-      // When follow is false, container.logs() returns a Buffer
-      const logBuffer = await container.logs(logOptions);
+      // TypeScript casting needed due to complex overload types
+      const logBuffer = await container.logs(logOptions as any) as unknown as Buffer;
 
       // Ensure logBuffer is a Buffer before parsing
       if (!Buffer.isBuffer(logBuffer)) {
