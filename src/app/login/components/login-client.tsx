@@ -29,7 +29,7 @@ export function LoginClient({ error, callbackUrl }: LoginClientProps) {
           LogComponent.AUTH,
           "Session expired - redirecting to login",
           {
-            callbackUrl: callbackUrl || "/dashboard",
+            callbackUrl: callbackUrl || "/clients",
           }
         );
         showToast.error(

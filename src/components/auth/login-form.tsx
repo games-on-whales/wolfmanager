@@ -40,7 +40,7 @@ export function LoginForm({}: LoginFormProps) {
       const result = await signIn("credentials", {
         username,
         password,
-        callbackUrl: "/dashboard",
+        callbackUrl: "/clients",
         redirect: true,
       });
 

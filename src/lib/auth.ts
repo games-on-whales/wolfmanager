@@ -171,6 +171,51 @@ export const authOptions: AuthOptions = {
         return session;
       }
     },
+    async signIn({ user, account, profile, email, credentials }) {
+      try {
+        logger.debug(LogComponent.AUTH, "SignIn callback triggered", {
+          userId: user.id,
+          provider: account?.provider,
+        });
+        return true;
+      } catch (error) {
+        logger.error(LogComponent.AUTH, "SignIn callback error", error);
+        return true; // Don't block signin due to logging errors
+      }
+    },
+    async redirect({ url, baseUrl }) {
+      try {
+        logger.debug(LogComponent.AUTH, "Redirect callback triggered", {
+          url,
+          baseUrl,
+        });
+        
+        // If redirecting to root or dashboard, redirect to clients instead
+        if (url === baseUrl || url === `${baseUrl}/` || url === `${baseUrl}/dashboard`) {
+          logger.info(LogComponent.AUTH, "Redirecting post-login to clients page", {
+            originalUrl: url,
+            newUrl: `${baseUrl}/clients`,
+          });
+          return `${baseUrl}/clients`;
+        }
+        
+        // If it's a relative URL, make it absolute with baseUrl
+        if (url.startsWith("/")) {
+          return `${baseUrl}${url}`;
+        }
+        
+        // If it's already a valid URL on the same origin, use it
+        if (url.startsWith(baseUrl)) {
+          return url;
+        }
+        
+        // Default to clients page
+        return `${baseUrl}/clients`;
+      } catch (error) {
+        logger.error(LogComponent.AUTH, "Redirect callback error", error);
+        return `${baseUrl}/clients`; // Safe fallback
+      }
+    },
   },
   session: {
     strategy: "jwt",

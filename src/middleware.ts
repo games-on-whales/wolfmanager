@@ -46,8 +46,13 @@ export default withAuth(
     if (publicPaths.some((path) => pathname.startsWith(path))) {
       // Special handling for root path
       if (pathname === "/" && token) {
-        // If authenticated, redirect to dashboard
-        return NextResponse.redirect(new URL("/dashboard", req.url));
+        // Log the redirect decision for debugging
+        await logger.debug(LogComponent.AUTH, "Root path redirect decision", {
+          destination: "clients",
+          userId: token.id,
+        });
+        // If authenticated, redirect to clients page
+        return NextResponse.redirect(new URL("/clients", req.url));
       }
       return NextResponse.next();
     }
