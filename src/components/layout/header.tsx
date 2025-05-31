@@ -132,7 +132,19 @@ export default function Header() {
             <DropdownMenuSeparator className="bg-[rgba(255,255,255,0.1)]" />
             <DropdownMenuItem
               className="cursor-pointer text-[#0077B6] hover:bg-[rgba(255,255,255,0.05)]"
-              onClick={() => signOut()}
+              onClick={async () => {
+                try {
+                  // Use NextAuth's built-in redirect functionality to avoid navigation conflicts
+                  await signOut({
+                    callbackUrl: "/login",
+                    redirect: true
+                  });
+                } catch (error) {
+                  console.error("Logout error:", error);
+                  // Fallback: force navigation to login if signOut fails
+                  window.location.href = "/login";
+                }
+              }}
             >
               Logout
             </DropdownMenuItem>

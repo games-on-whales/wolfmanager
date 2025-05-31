@@ -21,6 +21,7 @@ export function LogoutHandler() {
         });
         router.push("/login");
       } catch (error) {
+        console.error("LogoutHandler: Error during logout:", error);
         await clientLogger.error(
           LogComponent.AUTH,
           "Logout failed",

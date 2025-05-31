@@ -1,5 +1,6 @@
 "use client";
 
+import { AuthErrorBoundary } from "@/components/auth/auth-error-boundary";
 import { LogComponent } from "@/lib/logger";
 import { clientLogger } from "@/lib/logger/client";
 import {
@@ -17,12 +18,27 @@ function SessionLogger() {
 
   useEffect(() => {
     const logSession = async () => {
-      if (!session) {
-        await clientLogger.debug(LogComponent.AUTH, "Session ended");
-      } else {
-        await clientLogger.debug(LogComponent.AUTH, "Session updated", {
-          user: session.user?.name,
-        });
+      try {
+        if (!session) {
+          // Use setTimeout to avoid potential race conditions during session destruction
+          setTimeout(async () => {
+            try {
+              await clientLogger.debug(LogComponent.AUTH, "Session ended");
+            } catch (error) {
+              console.error("Session end logging error:", error);
+            }
+          }, 0);
+        } else {
+          try {
+            await clientLogger.debug(LogComponent.AUTH, "Session updated", {
+              user: session.user?.name,
+            });
+          } catch (error) {
+            console.error("Session update logging error:", error);
+          }
+        }
+      } catch (error) {
+        console.error("Session logging error:", error);
       }
     };
 
@@ -34,9 +50,11 @@ function SessionLogger() {
 
 export function SessionProvider({ children }: SessionProviderProps) {
   return (
-    <NextAuthSessionProvider>
-      <SessionLogger />
-      {children}
-    </NextAuthSessionProvider>
+    <AuthErrorBoundary>
+      <NextAuthSessionProvider>
+        <SessionLogger />
+        {children}
+      </NextAuthSessionProvider>
+    </AuthErrorBoundary>
   );
 }

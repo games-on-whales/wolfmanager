@@ -179,9 +179,14 @@ export const authOptions: AuthOptions = {
   },
   events: {
     async signOut({ token }) {
-      logger.debug(LogComponent.AUTH, "User signed out", {
-        userId: token?.id,
-      });
+      try {
+        logger.debug(LogComponent.AUTH, "User signed out", {
+          userId: token?.id,
+        });
+      } catch (error) {
+        // Don't let logging errors prevent signout
+        console.error("Failed to log signout event:", error);
+      }
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
