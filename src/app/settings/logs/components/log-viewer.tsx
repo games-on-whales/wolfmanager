@@ -51,6 +51,13 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
   const [date, setDate] = useState<DateRange | undefined>();
   const [error, setError] = useState<string | null>(null);
 
+  // Debug logging
+  console.log("[LOG_VIEWER_DEBUG] Component rendered", {
+    initialEntries: initialEntries.length,
+    logsState: logs.length,
+    error,
+  });
+
   const uniqueComponents = Array.from(
     new Set(logs.map((entry) => entry.component))
   ).sort();
@@ -86,22 +93,22 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
 
       const result = await getLogs();
       if (result.success) {
-        setLogs(result.entries || []);
+        setLogs(result.entries);
         setError(null);
         clientLogger.info(LogComponent.WOLF_UI, "Log entries refreshed", {
-          entryCount: result.entries?.length || 0,
+          entryCount: result.entries.length,
         });
         showToast.success("Logs Refreshed", {
           description: "Log entries have been updated",
         });
       } else {
-        setError(result.error || "Failed to fetch logs");
+        setError(result.error);
         clientLogger.error(
           LogComponent.SYSTEM,
           "Failed to fetch logs",
-          new Error(result.error || "Unknown error")
+          new Error(result.error)
         );
-        showToast.error("Refresh Failed", result.error || "Unknown error");
+        showToast.error("Refresh Failed", result.error);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
@@ -122,14 +129,14 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
       try {
         const result = await getLogs();
         if (result.success) {
-          setLogs(result.entries || []);
+          setLogs(result.entries);
           setError(null);
         } else {
-          setError(result.error || "Failed to fetch logs");
+          setError(result.error);
           clientLogger.error(
             LogComponent.SYSTEM,
             "Failed to fetch logs",
-            new Error(result.error || "Unknown error")
+            new Error(result.error)
           );
         }
       } catch (err) {

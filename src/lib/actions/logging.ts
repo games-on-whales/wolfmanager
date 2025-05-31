@@ -94,14 +94,43 @@ export async function createLogEntry(entry: LogEntry) {
   }
 }
 
-// Helper function to get log file path
+// Helper function to get log file path with fallbacks
 function getLogPath() {
-  return process.env.NODE_ENV === "production"
-    ? "/config/logs/wolf-ui.log"
-    : path.join(process.cwd(), "config", "logs", "wolf-ui.log");
+  // Check environment variables first
+  if (process.env.LOG_FILE_PATH) {
+    return process.env.LOG_FILE_PATH;
+  }
+  
+  // Production paths with fallbacks
+  if (process.env.NODE_ENV === "production") {
+    const possiblePaths = [
+      "/config/logs/wolf-ui.log",
+      path.join(process.cwd(), "config", "logs", "wolf-ui.log"),
+      path.join("/app", "config", "logs", "wolf-ui.log"), // Docker container path
+    ];
+    
+    // Return the first path that exists, or fallback to the primary one
+    for (const testPath of possiblePaths) {
+      try {
+        require("fs").accessSync(testPath);
+        return testPath;
+      } catch {
+        // Continue to next path
+      }
+    }
+    
+    // Fallback to primary production path
+    return "/config/logs/wolf-ui.log";
+  }
+  
+  // Development path
+  return path.join(process.cwd(), "config", "logs", "wolf-ui.log");
 }
 
-export async function getLogs() {
+export async function getLogs(): Promise<
+  | { success: true; entries: LogEntry[] }
+  | { success: false; error: string }
+> {
   try {
     const session = await getServerSession(authOptions);
 
@@ -113,12 +142,54 @@ export async function getLogs() {
       return { success: false, error: "You need admin access to view logs" };
     }
 
-    // Read log file
+    // Add debug logging to see what's happening
+    console.log("[LOGS_DEBUG] Starting log retrieval process");
+    console.log("[LOGS_DEBUG] Environment:", {
+      NODE_ENV: process.env.NODE_ENV,
+      CONTAINER: process.env.CONTAINER,
+      LOG_FILE_PATH: process.env.LOG_FILE_PATH,
+    });
+    
+    // Test the logger by creating a new log entry
+    await logger.info(LogComponent.SYSTEM, "Testing log file writing - getLogs called", {
+      userId: session.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Read log file with improved path detection
     const logPath = getLogPath();
+    console.log("[LOGS_DEBUG] Primary log path:", logPath);
 
     try {
       await fs.access(logPath);
+      console.log("[LOGS_DEBUG] Primary log file exists");
     } catch (error) {
+      console.log("[LOGS_DEBUG] Primary log file not found:", error);
+      
+      // Try alternative paths in production
+      if (process.env.NODE_ENV === "production") {
+        const alternativePaths = [
+          path.join(process.cwd(), "config", "logs", "wolf-ui.log"),
+          path.join("/app", "config", "logs", "wolf-ui.log"),
+          "./config/logs/wolf-ui.log",
+        ];
+        
+        console.log("[LOGS_DEBUG] Trying alternative paths:", alternativePaths);
+        
+        for (const altPath of alternativePaths) {
+          try {
+            await fs.access(altPath);
+            console.log("[LOGS_DEBUG] Found logs at alternative path:", altPath);
+            
+            // Read and parse the alternative file
+            const content = await fs.readFile(altPath, "utf-8");
+            return parseAndReturnLogs(content, session.user.id, altPath);
+          } catch (altError) {
+            console.log("[LOGS_DEBUG] Alternative path failed:", altPath, altError);
+          }
+        }
+      }
+      
       logger.warn(LogComponent.SYSTEM, "Log file not found", {
         path: logPath,
         userId: session.user.id,
@@ -127,31 +198,56 @@ export async function getLogs() {
     }
 
     const content = await fs.readFile(logPath, "utf-8");
-
-    // Parse last 1000 lines into JSON
-    const lines = content.trim().split("\n").slice(-1000);
-    const entries = lines
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch (e) {
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-    logger.info(LogComponent.SYSTEM, "Logs retrieved", {
-      count: entries.length,
-      userId: session.user.id,
-    });
-
-    return { success: true, entries };
+    console.log("[LOGS_DEBUG] Log file content length:", content.length);
+    
+    return parseAndReturnLogs(content, session.user.id, logPath);
+    
   } catch (error) {
+    console.error("[LOGS_DEBUG] Error in getLogs:", error);
     logger.error(
       LogComponent.SYSTEM,
       "Failed to retrieve logs",
-      error instanceof Error ? error : new Error(String(error))
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        nodeEnv: process.env.NODE_ENV,
+        container: process.env.CONTAINER,
+      }
     );
-    return { success: false, error: "Failed to retrieve logs" };
+    return {
+      success: false,
+      error: `Failed to retrieve logs: ${error instanceof Error ? error.message : String(error)}`
+    };
   }
+}
+
+// Helper function to parse logs and return consistent format
+function parseAndReturnLogs(content: string, userId: string, logPath: string): { success: true; entries: LogEntry[] } {
+  console.log("[LOGS_DEBUG] Parsing logs from path:", logPath);
+  
+  // Parse last 1000 lines into JSON
+  const lines = content.trim().split("\n").slice(-1000);
+  console.log("[LOGS_DEBUG] Total lines to parse:", lines.length);
+  
+  const entries: LogEntry[] = lines
+    .map((line) => {
+      try {
+        const parsed = JSON.parse(line);
+        // Ensure the parsed object conforms to LogEntry structure
+        return parsed as LogEntry;
+      } catch (e) {
+        return null;
+      }
+    })
+    .filter((entry): entry is LogEntry => entry !== null);
+
+  console.log("[LOGS_DEBUG] Successfully parsed entries:", entries.length);
+
+  logger.info(LogComponent.SYSTEM, "Logs retrieved successfully", {
+    count: entries.length,
+    totalLines: content.trim().split("\n").length,
+    userId,
+    logPath,
+  });
+
+  return { success: true, entries };
 }
