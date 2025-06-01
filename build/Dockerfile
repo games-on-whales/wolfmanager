@@ -10,6 +10,12 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install
 
 COPY . .
+
+# Add build-time environment variables for NextAuth and encryption
+ENV NODE_ENV=production
+ENV NEXTAUTH_SECRET="build-time-secret-will-be-regenerated-at-runtime"
+ENV ENCRYPTION_KEY="build-time-key-32chars-regenerated"
+
 RUN pnpm run build
 
 FROM node:20-slim AS runner
