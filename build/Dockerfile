@@ -1,12 +1,16 @@
 FROM node:20-slim AS builder
 
+# Install pnpm globally
+RUN npm install -g pnpm
+
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+# Copy pnpm lock files along with package.json
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install
 
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 FROM node:20-slim AS runner
 
@@ -21,7 +25,7 @@ COPY --from=builder /app/.next/static ./.next/static
 
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"] 
