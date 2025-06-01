@@ -34,7 +34,7 @@ jobs:
       - name: Generate version tag
         id: version
         run: |
-          if [[ "${{ github.ref_name }}" == "stable" ]] || [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/stable" ]]; then
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "stable" ]]; then
             # For stable branch, use YYYYMM.### format
             YEAR=$(date +%Y)
             MONTH=$(date +%m)
