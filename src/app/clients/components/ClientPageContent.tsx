@@ -3,6 +3,7 @@
 import {
   getPendingRequestsAction,
   listClientsAndOwners,
+  getAllPairedClientsInternal,
   pairAndAddClientAction,
   removeClientAction,
 } from "@/app/clients/actions"; // Import Server Actions
@@ -98,23 +99,29 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
       }
       const pendingRequests = pendingResult.data;
 
-      // Get all confirmed paired clients (with owner info) - Still needed for filtering pending requests
-      const pairedClientsResponse = await listClientsAndOwners();
-      const pairedClientsData: ClientWithOwner[] = pairedClientsResponse.success
-        ? pairedClientsResponse.data?.clients || []
+      // Get ALL confirmed paired clients (from all users) for filtering pending requests
+      const allPairedClientsResponse = await getAllPairedClientsInternal();
+      const allPairedClientsData: ClientWithOwner[] = allPairedClientsResponse.success
+        ? allPairedClientsResponse.data?.clients || []
         : [];
 
-      // Filter out pending requests whose pair_secret matches a secret stored for any paired client
+      // Get user-specific paired clients for display
+      const userPairedClientsResponse = await listClientsAndOwners();
+      const userPairedClientsData: ClientWithOwner[] = userPairedClientsResponse.success
+        ? userPairedClientsResponse.data?.clients || []
+        : [];
+
+      // Filter out pending requests whose pair_secret matches a secret stored for ANY paired client (from any user)
       const filteredRequests = pendingRequests.filter(
         (request: PendingPairRequest) =>
-          !pairedClientsData.some(
+          !allPairedClientsData.some(
             (client: ClientWithOwner) =>
               client.pair_secret && client.pair_secret === request.pair_secret
           )
       );
 
       setRequests(filteredRequests);
-      setPairedClients(pairedClientsData); // Update paired clients state based on refresh
+      setPairedClients(userPairedClientsData); // Show only user's own paired clients
     } catch (error) {
       setErrorRequests("Failed to load pending requests");
       setErrorPairedClients("Failed to load paired clients"); // Keep setting both errors if fetch fails
