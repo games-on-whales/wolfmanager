@@ -1,4 +1,4 @@
-import { listClientsAndOwners } from "@/app/clients/actions";
+import { listClientsAndOwners, getAllPairedClientsInternal } from "@/app/clients/actions";
 import { type PendingPairRequest, wolfPairApi } from "@/lib/api/wolf-pair";
 import { ClientDevice } from "@/types/client"; // Import ClientDevice type
 import ClientPageContent from "./components/ClientPageContent";
@@ -24,22 +24,29 @@ export default async function ClientsPage() {
       throw new Error("Invalid response format for pending requests");
     }
 
-    // Get all confirmed paired clients (with owner info)
-    const pairedClientsResponse = await listClientsAndOwners();
-    const pairedClientsData: ClientWithOwner[] = pairedClientsResponse.success
-      ? pairedClientsResponse.data?.clients || []
+    // Get ALL confirmed paired clients (from all users) for filtering pending requests
+    const allPairedClientsResponse = await getAllPairedClientsInternal();
+    const allPairedClientsData: ClientWithOwner[] = allPairedClientsResponse.success
+      ? allPairedClientsResponse.data?.clients || []
       : [];
 
-    // Filter out pending requests whose pair_secret matches a secret stored for any paired client
+    // Get user-specific paired clients for display
+    const userPairedClientsResponse = await listClientsAndOwners();
+    const userPairedClientsData: ClientWithOwner[] = userPairedClientsResponse.success
+      ? userPairedClientsResponse.data?.clients || []
+      : [];
+
+    // Filter out pending requests whose pair_secret matches a secret stored for ANY paired client (from any user)
     initialRequests = pendingRequests.filter(
       (request: PendingPairRequest) =>
-        !pairedClientsData.some(
+        !allPairedClientsData.some(
           (client: ClientWithOwner) =>
             client.pair_secret && client.pair_secret === request.pair_secret
         )
     );
 
-    initialPairedClients = pairedClientsData;
+    // Show only user's own paired clients
+    initialPairedClients = userPairedClientsData;
   } catch (e) {
     error = "Failed to load client data.";
     console.error("Error fetching initial client data:", e);

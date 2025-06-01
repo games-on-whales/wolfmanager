@@ -734,6 +734,24 @@ export async function removeClientAction(
       }
     }
 
+    // CRITICAL SECURITY CHECK: Verify that the requesting user owns this client
+    if (ownerUsername && ownerUsername !== username) {
+      logger.warn(
+        LogComponent.WOLF_UI,
+        "[Action] SECURITY VIOLATION: User attempted to unpair client they don't own",
+        {
+          requestingUser: username,
+          clientOwner: ownerUsername,
+          deviceId,
+          securityViolation: true
+        }
+      );
+      return createErrorResponse(
+        "Unauthorized: You can only unpair your own clients",
+        API_ERROR_CODES.UNAUTHORIZED
+      );
+    }
+
     // Remove client from the owner's list if found
     let clientRemovedFromConfig = false;
     if (
@@ -751,8 +769,12 @@ export async function removeClientAction(
     } else {
       logger.warn(
         LogComponent.WOLF_UI,
-        "[Action] Client to unpair not found in any user config",
-        { deviceId }
+        "[Action] SECURITY ISSUE: Client to unpair not found in any user config - possible orphaned client",
+        {
+          deviceId,
+          requestingUser: username,
+          securityNote: "Allowing removal since client has no owner in config"
+        }
       );
     }
 
@@ -819,14 +841,20 @@ export async function getClientsAction(): Promise<
 
     // 2. Load config
     const config = (await loadConfig(true)) as Config;
-    const clients = config.clients || [];
+    
+    // CRITICAL SECURITY FIX: Filter clients to only show user's own clients
+    let userClients: ClientDevice[] = [];
+    if (config.users?.[username]?.clients) {
+      userClients = config.users[username].clients;
+    }
 
-    logger.info(LogComponent.WOLF_UI, "[Action] Fetched clients", {
+    logger.info(LogComponent.WOLF_UI, "[Action] SECURITY FIX: Fetched only user's clients", {
       username,
-      clientCount: clients.length,
+      userClientCount: userClients.length,
+      totalClientsInConfig: config.clients?.length || 0,
     });
 
-    return createSuccessResponse({ clients });
+    return createSuccessResponse({ clients: userClients });
   } catch (error) {
     const errorMessage = "Failed to get clients";
     logger.error(
@@ -839,14 +867,134 @@ export async function getClientsAction(): Promise<
   }
 }
 
-// --- New Action: List Clients and their Owners ---
-export async function listClientsAndOwners(): Promise<
+// --- Helper Action: Get ALL paired clients (for filtering pending requests) ---
+export async function getAllPairedClientsInternal(): Promise<
   ApiResponse<{ clients: (ClientDevice & { owner?: string })[] }>
 > {
   logger.debug(
     LogComponent.WOLF_UI,
-    "[Action] Starting listClientsAndOwners"
+    "[Action] Starting getAllPairedClientsInternal - NO USER FILTERING"
   );
+
+  try {
+    // 1. Get clients from Wolf API
+    const wolfClientsRaw = await getWolfClients();
+    logger.debug(
+      LogComponent.WOLF_UI,
+      "[Action] Fetched raw clients from Wolf API for pending request filtering",
+      { count: wolfClientsRaw.length }
+    );
+
+    // 2. Load full configuration
+    const config = (await loadConfig(true)) as Config;
+    logger.debug(LogComponent.WOLF_UI, "[Action] Loaded configuration");
+
+    // 3. Create a map of deviceId -> username from config
+    const ownerMap = new Map<string, string>();
+    if (config.users) {
+      for (const [username, userConfig] of Object.entries(config.users)) {
+        if (userConfig.clients) {
+          for (const client of userConfig.clients) {
+            if (client.id) {
+              ownerMap.set(client.id, username);
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Combine Wolf clients with owner info and config details
+    const combinedClients: (ClientDevice & { owner?: string })[] =
+      wolfClientsRaw
+        .map((wolfClient: any) => {
+          const deviceId = wolfClient.id || wolfClient.client_id;
+          if (!deviceId) {
+            return null;
+          }
+
+          const owner = ownerMap.get(deviceId);
+          let friendlyName = wolfClient.friendly_name || wolfClient.name || "Unknown";
+          let pairSecret: string | undefined = undefined;
+
+          // Try to find the matching client in the config to get pair secret
+          let foundInConfig = false;
+          if (owner && config.users?.[owner]?.clients) {
+            const configClient = config.users[owner].clients.find(
+              (c) => c.id === deviceId
+            );
+            if (configClient) {
+              friendlyName = configClient.friendly_name || friendlyName;
+              pairSecret = configClient.pair_secret;
+              foundInConfig = true;
+            }
+          }
+
+          // If not found under the mapped owner, search all users
+          if (!foundInConfig) {
+            if (config.users) {
+              outerLoop: for (const userConfig of Object.values(config.users)) {
+                if (userConfig.clients) {
+                  for (const client of userConfig.clients) {
+                    if (client.id === deviceId) {
+                      friendlyName = client.friendly_name || friendlyName;
+                      pairSecret = client.pair_secret;
+                      break outerLoop;
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          return {
+            id: deviceId,
+            friendly_name: friendlyName,
+            pair_secret: pairSecret,
+            owner: owner,
+          };
+        })
+        .filter(Boolean) as (ClientDevice & { owner?: string })[];
+
+    logger.info(
+      LogComponent.WOLF_UI,
+      "[Action] Successfully retrieved ALL paired clients for pending request filtering",
+      {
+        totalPairedClients: combinedClients.length
+      }
+    );
+
+    return createSuccessResponse({ clients: combinedClients });
+  } catch (error) {
+    logger.error(
+      LogComponent.WOLF_UI,
+      "[Action] Failed to get all paired clients",
+      error instanceof Error ? error : new Error(String(error))
+    );
+    return createErrorResponse(
+      error instanceof Error ? error.message : "Failed to get all paired clients",
+      API_ERROR_CODES.INTERNAL_ERROR
+    );
+  }
+}
+
+// --- New Action: List Clients and their Owners (User-Filtered) ---
+export async function listClientsAndOwners(): Promise<
+  ApiResponse<{ clients: (ClientDevice & { owner?: string })[] }>
+> {
+  const username = await getUsername();
+  logger.debug(
+    LogComponent.WOLF_UI,
+    "[Action] Starting listClientsAndOwners",
+    { requestingUser: username }
+  );
+
+  if (!username) {
+    logger.warn(
+      LogComponent.WOLF_UI,
+      "[Action] listClientsAndOwners called without authenticated user"
+    );
+    return createErrorResponse("Unauthorized", API_ERROR_CODES.UNAUTHORIZED);
+  }
 
   try {
     // 1. Get clients from Wolf API
@@ -949,12 +1097,21 @@ export async function listClientsAndOwners(): Promise<
         })
         .filter(Boolean) as (ClientDevice & { owner?: string })[]; // Filter out any nulls
 
+    // CRITICAL SECURITY FIX: Filter to only show clients owned by the requesting user
+    const userFilteredClients = combinedClients.filter((client) => {
+      return client.owner === username;
+    });
+
     logger.info(
       LogComponent.WOLF_UI,
-      "[Action] Successfully listed clients and owners",
-      { count: combinedClients.length }
+      "[Action] Successfully filtered clients by user ownership",
+      {
+        requestingUser: username,
+        userOwnedClients: userFilteredClients.length
+      }
     );
-    return createSuccessResponse({ clients: combinedClients });
+
+    return createSuccessResponse({ clients: userFilteredClients });
   } catch (error) {
     logger.error(
       LogComponent.WOLF_UI,
@@ -975,12 +1132,29 @@ export async function listClientsAndOwners(): Promise<
 export async function getPendingRequestsAction(): Promise<
   ApiResponse<PendingPairRequest[]>
 > {
+  const username = await getUsername();
+  if (!username) {
+    logger.warn(
+      LogComponent.WOLF_UI,
+      "[Action] getPendingRequestsAction called without authenticated user"
+    );
+    return createErrorResponse("Unauthorized", API_ERROR_CODES.UNAUTHORIZED);
+  }
+
   try {
+    logger.debug(
+      LogComponent.WOLF_UI,
+      "[Action] Getting pending requests for user",
+      { requestingUser: username }
+    );
+
     // Import wolfPairApi here, inside the action, to avoid potential issues
     // if wolf-pair itself has client-side dependencies (though it shouldn't based on previous analysis)
     const { wolfPairApi } = await import("@/lib/api/wolf-pair");
     const requests = await wolfPairApi.getPendingRequests();
-    // Assuming PendingPairRequest is defined correctly elsewhere or needs definition
+    
+    // NOTE: Pending requests are intentionally global - any authenticated user can pair with any pending request
+    // This is by design as clients don't have user association until after pairing
     return createSuccessResponse(requests);
   } catch (error) {
     const errorMessage =
