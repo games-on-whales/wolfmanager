@@ -3,8 +3,13 @@ name: Docker Build
 on:
   push:
     branches: [ stable ]
-  pull_request:
-    branches: [ stable ]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build'
+        required: false
+        default: 'current'
+        type: string
 
 jobs:
   build:
@@ -26,18 +31,72 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
+      - name: Generate version tag
+        id: version
+        run: |
+          if [[ "${{ github.ref_name }}" == "stable" ]] || [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/stable" ]]; then
+            # For stable branch, use YYYYMM.### format
+            YEAR=$(date +%Y)
+            MONTH=$(date +%m)
+            BASE_VERSION="${YEAR}${MONTH}"
+            
+            # Get existing tags for this month to determine next increment
+            EXISTING_TAGS=$(git tag -l "${BASE_VERSION}.*" | sort -V | tail -1)
+            
+            if [[ -z "$EXISTING_TAGS" ]]; then
+              # No existing tags for this month, start with .001
+              INCREMENT="001"
+            else
+              # Extract the increment number and add 1
+              LAST_INCREMENT=$(echo "$EXISTING_TAGS" | sed "s/${BASE_VERSION}\.//")
+              INCREMENT=$(printf "%03d" $((10#$LAST_INCREMENT + 1)))
+            fi
+            
+            VERSION_TAG="${BASE_VERSION}.${INCREMENT}"
+            echo "tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
+            echo "is_stable=true" >> $GITHUB_OUTPUT
+          else
+            # For non-stable branches, use branch name as tag
+            BRANCH_NAME="${{ github.ref_name }}"
+            # Replace invalid Docker tag characters
+            SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+            echo "tag=${SAFE_BRANCH}" >> $GITHUB_OUTPUT
+            echo "is_stable=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create and push version tag
+        if: steps.version.outputs.is_stable == 'true' && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+      
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}/wolfmanager
+          tags: |
+            type=raw,value=${{ steps.version.outputs.tag }}
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=WolfManager
+            org.opencontainers.image.description=Wolf Manager Production Docker Image
+            org.opencontainers.image.version=${{ steps.version.outputs.tag }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          file: build/Dockerfile
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max 
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            NODE_ENV=production
