@@ -39,20 +39,18 @@ COPY --from=builder --chown=node:node /app/.next ./.next
 # Install production dependencies (before switching to node user)
 RUN npm install -g pnpm && pnpm install --prod
 
-# CRITICAL: Create config directory with proper permissions AFTER deps but BEFORE switching users
-RUN mkdir -p /app/config && chown -R node:node /app/config
-
 # Copy and setup entrypoint script
 COPY build/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# IMPORTANT: Switch to node user LAST, after all permission setup
-USER node
+# Install gosu for secure user switching (better than su-exec for containers)
+RUN apt-get update && apt-get install -y gosu && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Keep container running as root initially to fix permissions, then switch to node
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["pnpm", "start"]
