@@ -24,25 +24,22 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Create a non-root user with matching user and group names
-RUN addgroup --system --gid 1000 wolfmanager
-RUN adduser --system --uid 1000 --gid 1000 wolfmanager
-
+# Use the existing node user from the base image
 # Copy all necessary files (not using standalone mode)
-COPY --from=builder --chown=wolfmanager:wolfmanager /app/package.json ./package.json
-COPY --from=builder --chown=wolfmanager:wolfmanager /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=wolfmanager:wolfmanager /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder --chown=wolfmanager:wolfmanager /app/next.config.js ./next.config.js
+COPY --from=builder --chown=node:node /app/package.json ./package.json
+COPY --from=builder --chown=node:node /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder --chown=node:node /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder --chown=node:node /app/next.config.js ./next.config.js
 
 # Copy source and build files
-COPY --from=builder --chown=wolfmanager:wolfmanager /app/src ./src
-COPY --from=builder --chown=wolfmanager:wolfmanager /app/public ./public
-COPY --from=builder --chown=wolfmanager:wolfmanager /app/.next ./.next
+COPY --from=builder --chown=node:node /app/src ./src
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next ./.next
 
 # Install production dependencies
 RUN npm install -g pnpm && pnpm install --prod
 
-USER wolfmanager
+USER node
 
 EXPOSE 3000
 
