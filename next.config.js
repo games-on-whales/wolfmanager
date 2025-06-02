@@ -33,7 +33,6 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  output: "standalone",
   distDir: ".next",
   experimental: {},
   // Skip ESLint during build to avoid lint errors blocking production builds
