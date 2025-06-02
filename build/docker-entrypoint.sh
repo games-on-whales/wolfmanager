@@ -34,10 +34,9 @@ fix_socket_permissions() {
     fi
 }
 
-# Ensure config directory has correct permissions
-echo "Setting up config directory permissions..."
-mkdir -p /app/config
-chown -R node:node /app/config 2>/dev/null || echo "Cannot change config ownership (proceeding anyway)"
+# Config directory permissions should be set during build
+echo "Checking config directory permissions..."
+ls -la /app/config/ 2>/dev/null || echo "Config directory not found"
 
 # Fix socket permissions if they exist
 fix_socket_permissions "/var/run/wolf/wolf.sock" "Wolf socket"

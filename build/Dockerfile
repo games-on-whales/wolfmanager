@@ -36,16 +36,17 @@ COPY --from=builder --chown=node:node /app/src ./src
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next ./.next
 
-# CRITICAL: Create config directory with proper permissions
-RUN mkdir -p /app/config && chown -R node:node /app/config
-
-# Install production dependencies
+# Install production dependencies (before switching to node user)
 RUN npm install -g pnpm && pnpm install --prod
+
+# CRITICAL: Create config directory with proper permissions AFTER deps but BEFORE switching users
+RUN mkdir -p /app/config && chown -R node:node /app/config
 
 # Copy and setup entrypoint script
 COPY build/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# IMPORTANT: Switch to node user LAST, after all permission setup
 USER node
 
 EXPOSE 3000
