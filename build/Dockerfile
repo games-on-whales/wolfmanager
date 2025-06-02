@@ -36,9 +36,8 @@ COPY --from=builder --chown=node:node /app/src ./src
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next ./.next
 
-# CRITICAL: Create config directory with proper permissions AND copy any existing config
-COPY --from=builder --chown=node:node /app/config ./config 2>/dev/null || mkdir -p /app/config
-RUN chown -R node:node /app/config
+# CRITICAL: Create config directory with proper permissions
+RUN mkdir -p /app/config && chown -R node:node /app/config
 
 # Install production dependencies
 RUN npm install -g pnpm && pnpm install --prod
