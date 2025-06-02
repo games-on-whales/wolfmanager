@@ -36,8 +36,16 @@ COPY --from=builder --chown=node:node /app/src ./src
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next ./.next
 
+# CRITICAL: Create config directory with proper permissions AND copy any existing config
+COPY --from=builder --chown=node:node /app/config ./config 2>/dev/null || mkdir -p /app/config
+RUN chown -R node:node /app/config
+
 # Install production dependencies
 RUN npm install -g pnpm && pnpm install --prod
+
+# Copy and setup entrypoint script
+COPY build/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER node
 
@@ -46,4 +54,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["pnpm", "start"]
