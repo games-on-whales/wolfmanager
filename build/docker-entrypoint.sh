@@ -1,63 +1,56 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "=== WolfManager Container Startup ==="
+# Source utility functions
+source /opt/wolf/scripts/utils.sh
 
-# CRITICAL: Fix config directory permissions (we're running as root initially)
-echo "Fixing config directory permissions..."
-mkdir -p /app/config
-chown -R 1000:1000 /app/config
-echo "Config directory ownership set to node user (1000:1000)"
+wolf_log "=== WolfManager Container Startup ==="
 
-# Function to safely change socket permissions
-fix_socket_permissions() {
-    local socket_path="$1"
-    local socket_name="$2"
+# Get environment variables with defaults
+UNAME="${UNAME:-node}"
+
+# Execute initialization scripts only if running as root
+if [ "$(id -u)" = "0" ]; then
+    wolf_log "Running as root - executing initialization scripts"
     
-    if [ -S "$socket_path" ]; then
-        echo "Found $socket_name at $socket_path"
-        
-        # Check current ownership
-        local current_owner=$(stat -c "%u:%g" "$socket_path" 2>/dev/null || echo "unknown")
-        echo "$socket_name current ownership: $current_owner"
-        
-        # Try to make it accessible to node user (1000:1000)
-        if chgrp 1000 "$socket_path" 2>/dev/null; then
-            echo "Successfully set $socket_name group to node (1000)"
-            chmod g+rw "$socket_path" 2>/dev/null || echo "Cannot change $socket_name permissions"
-        else
-            echo "Cannot change $socket_name group - checking if accessible..."
-            # Check if node user can access it
-            if su-exec 1000:1000 test -r "$socket_path" && su-exec 1000:1000 test -w "$socket_path" 2>/dev/null; then
-                echo "$socket_name is accessible to node user"
-            else
-                echo "WARNING: $socket_name may not be accessible to node user"
-            fi
-        fi
-    else
-        echo "WARNING: $socket_name not found at $socket_path"
+    # Run user setup first
+    if ! /opt/wolf/scripts/setup-user.sh; then
+        wolf_log "ERROR: User setup failed"
+        exit 1
     fi
-}
-
-# Fix socket permissions if they exist
-fix_socket_permissions "/var/run/wolf/wolf.sock" "Wolf socket"
-fix_socket_permissions "/var/run/docker.sock" "Docker socket"
-
-echo "=== Starting WolfManager Application as node user ==="
-echo "Switching to node user (1000:1000) and starting application..."
-
-# Install gosu if not present (fallback)
-if ! command -v gosu &> /dev/null; then
-    if command -v su-exec &> /dev/null; then
-        # Use su-exec as fallback
-        echo "Using su-exec to switch to node user"
-        exec su-exec 1000:1000 "$@"
+    
+    # Run permission setup
+    if ! /opt/wolf/scripts/setup-permissions.sh; then
+        wolf_log "ERROR: Permission setup failed"
+        exit 1
+    fi
+    
+    # Run device/socket group setup
+    if ! /opt/wolf/scripts/setup-groups.sh; then
+        wolf_log "ERROR: Group setup failed"
+        exit 1
+    fi
+    
+    wolf_log "Initialization complete - switching to ${UNAME} user"
+    
+    # If no command provided, use default command
+    if [ $# -eq 0 ]; then
+        wolf_log "No command provided - using default: pnpm start"
+        set -- "pnpm" "start"
+    fi
+    
+    # Execute command as the non-root user
+    wolf_log "Executing command as ${UNAME}: $*"
+    exec gosu "${UNAME}" "$@"
+else
+    wolf_log "Not running as root - skipping initialization"
+    
+    # If not root, just execute the command directly
+    if [ $# -eq 0 ]; then
+        wolf_log "No command provided - using default: pnpm start"
+        exec pnpm start
     else
-        echo "Neither gosu nor su-exec available, running as root (not recommended)"
+        wolf_log "Executing command directly: $*"
         exec "$@"
     fi
-else
-    # Use gosu to switch to node user and execute the command
-    echo "Using gosu to switch to node user"
-    exec gosu 1000:1000 "$@"
 fi
