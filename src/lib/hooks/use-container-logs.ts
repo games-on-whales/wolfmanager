@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Removed socket.io-client import
 
 interface UseContainerLogsOptions {
+  containerId: string; // Required container ID
   pollingInterval?: number; // Milliseconds
   maxLogs?: number;
   timestamps?: boolean;
@@ -22,13 +23,14 @@ interface UseContainerLogsResult {
 const DEFAULT_POLLING_INTERVAL = 3000; // Default to 3 seconds
 
 /**
- * Hook for polling Wolf container logs via the sample API endpoint
+ * Hook for polling Wolf container logs via the system API endpoint
  */
 export function useContainerLogs({
+  containerId,
   pollingInterval = DEFAULT_POLLING_INTERVAL,
   maxLogs = 1000,
   timestamps = true,
-}: UseContainerLogsOptions = {}): UseContainerLogsResult {
+}: UseContainerLogsOptions): UseContainerLogsResult {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [container, setContainer] = useState<ContainerInfo | null>(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -50,6 +52,7 @@ export function useContainerLogs({
 
     try {
       const queryParams = new URLSearchParams();
+      queryParams.set("containerId", containerId);
       queryParams.set("timestamps", String(timestamps));
 
       // Use 'since' if we have a timestamp from the last log (+1 second to avoid duplicates)
@@ -61,7 +64,7 @@ export function useContainerLogs({
       }
 
       const response = await fetch(
-        `/api/wolf/logs/sample?${queryParams.toString()}`
+        `/api/system/container-logs?${queryParams.toString()}`
       );
 
       if (!response.ok) {
@@ -133,7 +136,7 @@ export function useContainerLogs({
     } finally {
       setIsLoading(false);
     }
-  }, [timestamps, maxLogs, isLoading]); // Include isLoading dependency
+  }, [containerId, timestamps, maxLogs, isLoading]); // Include containerId and isLoading dependencies
 
   // Clear logs
   const clearLogs = useCallback(() => {
