@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Removed socket.io-client import
 
 interface UseContainerLogsOptions {
-  containerId: string; // Required container ID
+  containerId?: string; // Optional container ID - if not provided, will auto-detect Wolf container
   pollingInterval?: number; // Milliseconds
   maxLogs?: number;
   timestamps?: boolean;
@@ -52,7 +52,6 @@ export function useContainerLogs({
 
     try {
       const queryParams = new URLSearchParams();
-      queryParams.set("containerId", containerId);
       queryParams.set("timestamps", String(timestamps));
 
       // Use 'since' if we have a timestamp from the last log (+1 second to avoid duplicates)
@@ -63,9 +62,17 @@ export function useContainerLogs({
         queryParams.set("tail", String(maxLogs)); // Fetch up to maxLogs initially
       }
 
-      const response = await fetch(
-        `/api/system/container-logs?${queryParams.toString()}`
-      );
+      // Choose API endpoint based on whether containerId is provided
+      let apiEndpoint: string;
+      if (containerId) {
+        queryParams.set("containerId", containerId);
+        apiEndpoint = `/api/system/container-logs?${queryParams.toString()}`;
+      } else {
+        // Use Wolf-specific endpoint that auto-detects the container
+        apiEndpoint = `/api/system/wolf-container-logs?${queryParams.toString()}`;
+      }
+
+      const response = await fetch(apiEndpoint);
 
       if (!response.ok) {
         let errorMsg = `HTTP error! status: ${response.status}`;

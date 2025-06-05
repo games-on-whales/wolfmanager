@@ -54,7 +54,9 @@ export default function WolfLogsPage() {
           </CardContent>
         </Card>
 
-        <ContainerLogViewer maxHeight="600px" />
+        <ContainerLogViewer
+          maxHeight="600px"
+        />
       </div>
     </div>
   );

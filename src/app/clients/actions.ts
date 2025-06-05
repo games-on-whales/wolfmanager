@@ -1148,10 +1148,44 @@ export async function getPendingRequestsAction(): Promise<
       { requestingUser: username }
     );
 
-    // Import wolfPairApi here, inside the action, to avoid potential issues
-    // if wolf-pair itself has client-side dependencies (though it shouldn't based on previous analysis)
-    const { wolfPairApi } = await import("@/lib/api/wolf-pair");
-    const requests = await wolfPairApi.getPendingRequests();
+    // Use authenticated HTTP call to our own API proxy
+    // Server actions have access to session context, so we can make authenticated calls
+    const { getServerSession } = await import("next-auth");
+    const { authOptions } = await import("@/lib/auth");
+    
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      throw new Error("No session available for API call");
+    }
+
+    // Make authenticated request to our own API proxy
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:4000';
+    const response = await fetch(`${baseUrl}/api/wolf/pair/pending`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Cookie": `next-auth.session-token=${session.user?.id}`, // Pass session info
+      },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed with status: ${response.status}`);
+    }
+
+    const data = await response.json() as { success: boolean; requests: Array<{ pair_secret: string; client_ip: string; }> };
+
+    if (!data || !data.success) {
+      throw new Error(`Wolf API returned unsuccessful response: ${JSON.stringify(data)}`);
+    }
+
+    // Transform the response to match PendingPairRequest interface
+    const requests = data.requests.map((request) => ({
+      id: request.pair_secret,
+      deviceType: `Device at ${request.client_ip}`,
+      timestamp: Date.now(),
+      pair_secret: request.pair_secret,
+    }));
     
     // NOTE: Pending requests are intentionally global - any authenticated user can pair with any pending request
     // This is by design as clients don't have user association until after pairing

@@ -1,5 +1,3 @@
-import { isValidWolfEndpoint } from "@/app/api/wolf/lib/schema";
-import { callWolfApi } from "@/app/api/wolf/lib/wolf-socket.server"; // Added import
 import { LogComponent, logger } from "@/lib/logger";
 
 interface WolfPairResponse {
@@ -42,16 +40,20 @@ export const wolfPairApi = {
   // Fetch pending pair requests
   getPendingRequests: async (): Promise<PendingPairRequest[]> => {
     try {
-      // Validate endpoint exists - remove /api/wolf prefix for validation
-      const isValid = await isValidWolfEndpoint("/pair/pending", "GET");
-      if (!isValid) {
-        throw new Error("Endpoint /pair/pending is not available");
+      // Use fetch to call through the proxy route
+      const response = await fetch("/api/wolf/pair/pending", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Use callWolfApi instead of fetch
-      const data = (await callWolfApi("/pair/pending", {
-        method: "GET",
-      })) as WolfPairResponse;
+      const data = (await response.json()) as WolfPairResponse;
 
       if (!data || !data.success) {
         // Check if data itself is null/undefined or success is false
@@ -99,23 +101,25 @@ export const wolfPairApi = {
         friendlyName: data.friendlyName,
       });
 
-      // Validate endpoint exists - remove /api/wolf prefix for validation
-      const isValid = await isValidWolfEndpoint("/pair/client", "POST");
-      if (!isValid) {
-        const error = "Endpoint /pair/client is not available";
-        await logger.error(LogComponent.WOLF_UI, error);
-        throw new Error(error);
-      }
-
-      // Use callWolfApi instead of fetch
-      const responseData = (await callWolfApi("/pair/client", {
+      // Use fetch to call through the proxy route
+      const response = await fetch("/api/wolf/pair/client", {
         method: "POST",
-        body: {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
           pair_secret: data.requestId,
           friendly_name: data.friendlyName,
           pin: data.pin,
-        },
-      })) as { success: boolean; error?: string; client_id?: string }; // Define expected response shape
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const responseData = (await response.json()) as { success: boolean; error?: string; client_id?: string }; // Define expected response shape
 
       // Check the response structure and success status
       if (!responseData || !responseData.success) {
@@ -151,16 +155,20 @@ export const wolfPairApi = {
   // Get paired clients
   getClients: async (): Promise<PairedClient[]> => {
     try {
-      // Validate endpoint exists - remove /api/wolf prefix for validation
-      const isValid = await isValidWolfEndpoint("/clients", "GET");
-      if (!isValid) {
-        throw new Error("Endpoint /clients is not available");
+      // Use fetch to call through the proxy route
+      const response = await fetch("/api/wolf/clients", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Use callWolfApi instead of fetch
-      const data = (await callWolfApi("/clients", {
-        method: "GET",
-      })) as WolfClientsResponse;
+      const data = (await response.json()) as WolfClientsResponse;
 
       if (!data || !data.success) {
         // Check if data itself is null/undefined or success is false

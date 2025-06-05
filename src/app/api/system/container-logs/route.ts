@@ -45,16 +45,40 @@ export async function GET(request: NextRequest) {
     if (!logResponse.success) {
       const statusCode = logResponse.error?.code === API_ERROR_CODES.NOT_FOUND ? 404 : 500;
       return NextResponse.json(
-        { 
+        {
           error: logResponse.error?.message || 'Failed to fetch container logs',
-          code: logResponse.error?.code 
+          code: logResponse.error?.code
         },
         { status: statusCode }
       );
     }
 
-    // Return successful response with logs
-    return NextResponse.json(logResponse.data, { status: 200 });
+    // Also get container info for the response
+    const docker = DockerLogService.getDockerClient();
+    let containerInfo = null;
+    try {
+      const container = docker.getContainer(containerId);
+      const containerData = await container.inspect();
+      containerInfo = {
+        id: containerData.Id,
+        name: containerData.Name.replace(/^\//, ''), // Remove leading slash
+        image: containerData.Config.Image,
+        status: containerData.State.Status,
+        created: new Date(containerData.Created).getTime() / 1000, // Convert to Unix timestamp
+      };
+    } catch (error) {
+      // If we can't get container info, still return logs but with null container
+      console.warn('Could not fetch container info:', error);
+    }
+
+    // Return successful response with logs and container info
+    return NextResponse.json({
+      success: true,
+      data: {
+        logs: logResponse.data,
+        container: containerInfo,
+      }
+    }, { status: 200 });
 
   } catch (error) {
     console.error('Error fetching container logs:', error);

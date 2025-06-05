@@ -17,12 +17,14 @@ import { Loader2, Play, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react"; // Ensure React is imported for JSX type
 
 interface ContainerLogViewerProps {
+  containerId?: string; // Optional container ID - if not provided, will auto-detect Wolf container
   maxHeight?: string;
   maxLogs?: number;
   pollingInterval?: number; // Use polling interval instead of autoConnect
 }
 
 export function ContainerLogViewer({
+  containerId,
   maxHeight = "500px",
   maxLogs = 1000,
   pollingInterval, // Get pollingInterval from props
@@ -42,6 +44,7 @@ export function ContainerLogViewer({
     stopPolling, // Renamed from stopStreaming
     clearLogs,
   } = useContainerLogs({
+    containerId,
     pollingInterval, // Pass pollingInterval
     maxLogs,
     timestamps: showTimestamps,

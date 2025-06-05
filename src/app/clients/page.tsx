@@ -1,5 +1,5 @@
-import { listClientsAndOwners, getAllPairedClientsInternal } from "@/app/clients/actions";
-import { type PendingPairRequest, wolfPairApi } from "@/lib/api/wolf-pair";
+import { listClientsAndOwners, getAllPairedClientsInternal, getPendingRequestsAction } from "@/app/clients/actions";
+import { type PendingPairRequest } from "@/lib/api/wolf-pair-server";
 import { ClientDevice } from "@/types/client"; // Import ClientDevice type
 import ClientPageContent from "./components/ClientPageContent";
 
@@ -18,8 +18,16 @@ export default async function ClientsPage() {
   let error: string | null = null;
 
   try {
-    // Fetch pending requests from Wolf API
-    const pendingRequests = await wolfPairApi.getPendingRequests();
+    // Use server actions instead of direct API calls for server-side rendering
+    const pendingRequestsResponse = await getPendingRequestsAction();
+    if (!pendingRequestsResponse.success) {
+      const errorMessage = typeof pendingRequestsResponse.error === 'string'
+        ? pendingRequestsResponse.error
+        : pendingRequestsResponse.error?.message || "Failed to fetch pending requests";
+      throw new Error(errorMessage);
+    }
+    const pendingRequests = pendingRequestsResponse.data;
+    
     if (!Array.isArray(pendingRequests)) {
       throw new Error("Invalid response format for pending requests");
     }
@@ -48,7 +56,7 @@ export default async function ClientsPage() {
     // Show only user's own paired clients
     initialPairedClients = userPairedClientsData;
   } catch (e) {
-    error = "Failed to load client data.";
+    error = `Failed to load client data: ${e instanceof Error ? e.message : String(e)}`;
     console.error("Error fetching initial client data:", e);
   }
 

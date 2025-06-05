@@ -62,9 +62,34 @@ const nextConfig = {
       use: "node-loader",
     });
 
+    // If it's a server-side build, add ssh2 to externals
+    if (isServer) {
+      // Handle externals properly - it could be an array, function, or object
+      if (Array.isArray(config.externals)) {
+        config.externals.push('ssh2');
+      } else if (typeof config.externals === 'function') {
+        const originalExternals = config.externals;
+        config.externals = (context, request, callback) => {
+          if (request === 'ssh2') {
+            return callback(null, 'commonjs ssh2');
+          }
+          return originalExternals(context, request, callback);
+        };
+      } else if (typeof config.externals === 'object') {
+        config.externals = {
+          ...config.externals,
+          'ssh2': 'commonjs ssh2'
+        };
+      } else {
+        // If externals is undefined or something else, initialize as array
+        config.externals = ['ssh2'];
+      }
+    }
+
     // Ignore cpu-features module for server-side builds, as it's likely not needed for socket connections
     // and causes build issues with its native addon.
     // Reverting the IgnorePlugin change. We need to address the native addon build issues directly.
+    // The above externals change for ssh2 should handle this.
 
     return config;
   },
