@@ -1,6 +1,6 @@
 "use server";
 
-import { callWolfApi } from "@/app/api/wolf/lib/wolf-socket.server";
+import { SocketService } from "@/lib/services/socket-service";
 import {
   API_ERROR_CODES,
   createErrorResponse,
@@ -43,15 +43,40 @@ async function getUsername(): Promise<string | null> {
 // Helper to get a client directly from Wolf API (Server-side only)
 async function getWolfClient(deviceId: string): Promise<any | null> {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      logger.warn(LogComponent.WOLF_UI, "[Action] No session for Wolf client request", {
+        deviceId,
+      });
+      return null;
+    }
+
     logger.debug(LogComponent.WOLF_UI, "[Action] Getting Wolf client", {
       deviceId,
+      userId: session.user.id,
     });
-    const response = await callWolfApi(`/clients/${deviceId}`);
+
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, `/clients/${deviceId}`, {
+      method: "GET",
+    });
+
+    if (!response.success) {
+      logger.error(
+        LogComponent.WOLF_UI,
+        "[Action] Failed to get client from Wolf",
+        new Error(response.error || "Unknown error"),
+        { deviceId, userId: session.user.id }
+      );
+      return null;
+    }
+
     logger.debug(LogComponent.WOLF_UI, "[Action] Got Wolf client", {
       deviceId,
-      hasResponse: !!response,
+      userId: session.user.id,
+      hasResponse: !!response.data,
     });
-    return response;
+    return response.data;
   } catch (error) {
     logger.error(
       LogComponent.WOLF_UI,
@@ -67,12 +92,34 @@ async function getWolfClient(deviceId: string): Promise<any | null> {
 async function getWolfClients(): Promise<any[]> {
   let responseData: any = null; // Variable to store the parsed response
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      logger.warn(LogComponent.WOLF_UI, "[Action] No session for Wolf clients request");
+      return [];
+    }
+
     logger.debug(
       LogComponent.WOLF_UI,
-      "[Action] Getting all Wolf clients (getWolfClients)"
+      "[Action] Getting all Wolf clients (getWolfClients)",
+      { userId: session.user.id }
     );
-    // callWolfApi returns the parsed JSON object or throws an error
-    responseData = await callWolfApi("/clients");
+
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, "/clients", {
+      method: "GET",
+    });
+
+    if (!response.success) {
+      logger.error(
+        LogComponent.WOLF_UI,
+        "[Action] Failed to get clients from Wolf",
+        new Error(response.error || "Unknown error"),
+        { userId: session.user.id }
+      );
+      return [];
+    }
+
+    responseData = response.data;
 
     // Check the structure of the response
     if (
@@ -216,36 +263,54 @@ async function attemptPairingWithWolf(
   pair_secret: string
 ): Promise<WolfPairResponse> {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      logger.warn(LogComponent.WOLF_UI, "[Action] No session for pairing attempt");
+      return { success: false, error: "Authentication required" };
+    }
+
     logger.debug(
       LogComponent.WOLF_UI,
       "[Action] Attempting pairing with Wolf API",
       {
         pinLength: pin.length,
         hasPairSecret: !!pair_secret,
+        userId: session.user.id,
       }
     );
 
-    // Note: deviceId is not sent here, as it's assigned during pairing
-    const response = (await callWolfApi("/pair/client", {
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, "/pair/client", {
       method: "POST",
       body: {
         pair_secret,
         pin,
       },
-    })) as WolfPairResponse;
+    });
+
+    if (!response.success) {
+      logger.error(
+        LogComponent.WOLF_UI,
+        "[Action] Pairing attempt failed",
+        new Error(response.error || "Unknown error"),
+        { userId: session.user.id }
+      );
+      return { success: false, error: response.error || "Pairing failed" };
+    }
+
+    const pairResponse = response.data as WolfPairResponse;
 
     logger.debug(
       LogComponent.WOLF_UI,
       "[Action] Pairing attempt response",
       {
-        success: response?.success ?? false,
-        error: response?.error,
-        // Avoid logging full response in production if it contains sensitive info
-        // fullResponse: response,
+        success: pairResponse?.success ?? false,
+        error: pairResponse?.error,
+        userId: session.user.id,
       }
     );
     // Return the raw response object
-    return response ?? { success: false, error: "No response from API" };
+    return pairResponse ?? { success: false, error: "No response from API" };
   } catch (error) {
     logger.error(
       LogComponent.WOLF_UI,
@@ -267,32 +332,50 @@ async function attemptPairingWithWolf(
 // Helper to unpair client with Wolf API
 async function unpairClientWithWolf(deviceId: string): Promise<boolean> {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      logger.warn(LogComponent.WOLF_UI, "[Action] No session for unpair attempt", {
+        deviceId,
+      });
+      return false;
+    }
+
     logger.debug(
       LogComponent.WOLF_UI,
       "[Action] Unpairing client with Wolf API",
-      { deviceId, requestBody: { client_id: deviceId } }
+      { deviceId, userId: session.user.id, requestBody: { client_id: deviceId } }
     );
 
-    const response = (await callWolfApi("/unpair/client", {
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, "/unpair/client", {
       method: "POST",
       body: {
         client_id: deviceId,
       },
-    })) as WolfPairResponse;
-
-    logger.debug(LogComponent.WOLF_UI, "[Action] Unpair response", {
-      deviceId,
-      requestBody: { client_id: deviceId },
-      success: response?.success ?? false,
-      error: response?.error,
-      fullResponse: response,
     });
 
-    if (!response?.success) {
+    if (!response.success) {
       logger.warn(LogComponent.WOLF_UI, "[Action] Unpair failed", {
         deviceId,
-        requestBody: { client_id: deviceId },
-        error: response?.error,
+        userId: session.user.id,
+        error: response.error,
+      });
+      return false;
+    }
+
+    const unpairResponse = response.data as WolfPairResponse;
+    logger.debug(LogComponent.WOLF_UI, "[Action] Unpair response", {
+      deviceId,
+      userId: session.user.id,
+      success: unpairResponse?.success ?? false,
+      error: unpairResponse?.error,
+    });
+
+    if (!unpairResponse?.success) {
+      logger.warn(LogComponent.WOLF_UI, "[Action] Unpair response indicated failure", {
+        deviceId,
+        userId: session.user.id,
+        error: unpairResponse?.error,
       });
       return false;
     }
@@ -303,7 +386,7 @@ async function unpairClientWithWolf(deviceId: string): Promise<boolean> {
       LogComponent.WOLF_UI,
       "[Action] Failed to unpair client with Wolf",
       error instanceof Error ? error : new Error(String(error)),
-      { deviceId, requestBody: { client_id: deviceId } }
+      { deviceId }
     );
     return false;
   }

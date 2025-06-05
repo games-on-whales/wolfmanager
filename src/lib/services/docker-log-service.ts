@@ -4,7 +4,8 @@ import {
   type ApiResponse,
 } from "@/lib/api-utils";
 import { LogComponent, logger } from "@/lib/logger";
-import Docker from "dockerode";
+import { SocketService, type SocketServiceResponse } from "@/lib/services/socket-service";
+import { Session } from "next-auth";
 
 // Type definitions
 export interface ContainerInfo {
@@ -30,35 +31,41 @@ export interface LogEntry {
 
 // Docker Log Service
 export const DockerLogService = {
-  // Docker socket path
-  DOCKER_SOCKET_PATH: "/var/run/docker.sock", // Updated to match the volume mount
-
   // Target container image
   TARGET_IMAGE: "ghcr.io/games-on-whales/wolf",
 
-  // Get Docker client instance
-  getDockerClient(): Docker {
-    try {
-      return new Docker({ socketPath: this.DOCKER_SOCKET_PATH });
-    } catch (error) {
-      logger.error(
-        LogComponent.CONTAINER,
-        "Failed to create Docker client",
-        error instanceof Error ? error : new Error(String(error))
-      );
-      throw error;
-    }
+  // Get SocketService instance
+  getSocketService(): SocketService {
+    return SocketService.getInstance();
   },
 
   // Find Wolf container by image name
-  async findWolfContainer(): Promise<ApiResponse<ContainerInfo>> {
+  async findWolfContainer(session: Session | null): Promise<ApiResponse<ContainerInfo>> {
     try {
-      const docker = this.getDockerClient();
-      const containers = await docker.listContainers({ all: false });
+      const socketService = this.getSocketService();
+      const response = await socketService.executeDockerOperation(session, {
+        operation: "list",
+        options: { all: false },
+      });
+
+      if (!response.success) {
+        logger.error(
+          LogComponent.CONTAINER,
+          "Failed to list containers via socket service",
+          new Error(response.error || "Unknown error")
+        );
+        return createErrorResponse(
+          response.error || "Failed to list containers",
+          response.statusCode === 403 ? API_ERROR_CODES.UNAUTHORIZED : API_ERROR_CODES.INTERNAL_ERROR
+        );
+      }
+
+      const containers = response.data as any[];
 
       logger.debug(LogComponent.CONTAINER, "Searching for Wolf container", {
         totalContainers: containers.length,
         targetImage: this.TARGET_IMAGE,
+        userId: session?.user?.id,
       });
 
       // Filter containers by image name
@@ -70,7 +77,7 @@ export const DockerLogService = {
         logger.warn(
           LogComponent.CONTAINER,
           "No running Wolf containers found",
-          { targetImage: this.TARGET_IMAGE }
+          { targetImage: this.TARGET_IMAGE, userId: session?.user?.id }
         );
         return createErrorResponse(
           "No running Wolf containers found",
@@ -85,6 +92,7 @@ export const DockerLogService = {
           {
             count: wolfContainers.length,
             containerIds: wolfContainers.map((c) => c.Id).join(", "),
+            userId: session?.user?.id,
           }
         );
       }
@@ -105,7 +113,7 @@ export const DockerLogService = {
       logger.info(
         LogComponent.CONTAINER,
         "Found Wolf container",
-        containerInfo
+        { ...containerInfo, userId: session?.user?.id }
       );
 
       return {
@@ -116,7 +124,8 @@ export const DockerLogService = {
       logger.error(
         LogComponent.CONTAINER,
         "Error finding Wolf container",
-        error instanceof Error ? error : new Error(String(error))
+        error instanceof Error ? error : new Error(String(error)),
+        { userId: session?.user?.id }
       );
 
       return createErrorResponse(
@@ -130,22 +139,22 @@ export const DockerLogService = {
 
   // Get container logs (sample)
   async getContainerLogs(
+    session: Session | null,
     containerId: string,
     // Default options if none provided
     options: LogOptions = { tail: 100, timestamps: true }
   ): Promise<ApiResponse<LogEntry[]>> {
     try {
-      const docker = this.getDockerClient();
-      const container = docker.getContainer(containerId);
+      const socketService = this.getSocketService();
 
       logger.debug(LogComponent.CONTAINER, "Retrieving container logs sample", {
-        // Updated log message
         containerId,
         options,
+        userId: session?.user?.id,
       });
 
-      // Prepare log options for dockerode
-      const logOptions: Docker.ContainerLogsOptions = {
+      // Prepare log options for Docker socket service
+      const dockerOptions: Record<string, unknown> = {
         stdout: true,
         stderr: true,
         timestamps: options.timestamps !== false,
@@ -154,31 +163,47 @@ export const DockerLogService = {
 
       // Add 'since' or 'tail' based on options provided
       if (options.since && options.since > 0) {
-        // Ensure since is a valid timestamp > 0
-        logOptions.since = options.since;
-        // If 'since' is used, 'tail' might behave unexpectedly or be ignored by Docker,
-        // so we don't set tail when since is present.
+        dockerOptions.since = options.since;
         logger.debug(LogComponent.CONTAINER, "Using 'since' option for logs", {
           since: options.since,
+          userId: session?.user?.id,
         });
       } else {
-        // Default to tail if since is not provided or invalid
-        logOptions.tail = options.tail || 100;
+        dockerOptions.tail = options.tail || 100;
         logger.debug(LogComponent.CONTAINER, "Using 'tail' option for logs", {
-          tail: logOptions.tail,
+          tail: dockerOptions.tail,
+          userId: session?.user?.id,
         });
       }
 
-      // When follow is false, container.logs() returns a Buffer
-      // TypeScript casting needed due to complex overload types
-      const logBuffer = await container.logs(logOptions as any) as unknown as Buffer;
+      // Execute Docker logs operation through socket service
+      const response = await socketService.executeDockerOperation(session, {
+        operation: "logs",
+        containerId,
+        options: dockerOptions,
+      });
+
+      if (!response.success) {
+        logger.error(
+          LogComponent.CONTAINER,
+          "Failed to retrieve container logs via socket service",
+          new Error(response.error || "Unknown error"),
+          { containerId, userId: session?.user?.id }
+        );
+        return createErrorResponse(
+          response.error || "Failed to retrieve container logs",
+          response.statusCode === 403 ? API_ERROR_CODES.UNAUTHORIZED : API_ERROR_CODES.INTERNAL_ERROR
+        );
+      }
+
+      const logBuffer = response.data as Buffer;
 
       // Ensure logBuffer is a Buffer before parsing
       if (!Buffer.isBuffer(logBuffer)) {
         logger.warn(
           LogComponent.CONTAINER,
-          "container.logs did not return a Buffer as expected",
-          { containerId, resultType: typeof logBuffer }
+          "Socket service did not return a Buffer as expected",
+          { containerId, resultType: typeof logBuffer, userId: session?.user?.id }
         );
         // Return empty logs if the result is not a buffer
         return {
@@ -190,9 +215,9 @@ export const DockerLogService = {
       const logs = this.parseDockerLogs(logBuffer);
 
       logger.debug(LogComponent.CONTAINER, "Retrieved container logs sample", {
-        // Updated log message
         containerId,
         count: logs.length,
+        userId: session?.user?.id,
       });
 
       return {
@@ -202,14 +227,79 @@ export const DockerLogService = {
     } catch (error) {
       logger.error(
         LogComponent.CONTAINER,
-        "Error retrieving container logs sample", // Updated log message
+        "Error retrieving container logs sample",
         error instanceof Error ? error : new Error(String(error)),
-        { containerId }
+        { containerId, userId: session?.user?.id }
       );
 
       return createErrorResponse(
         `Failed to retrieve container logs sample: ${
-          // Updated message
+          error instanceof Error ? error.message : String(error)
+        }`,
+        API_ERROR_CODES.INTERNAL_ERROR
+      );
+    }
+  },
+
+  // Get container information
+  async getContainerInfo(
+    session: Session | null,
+    containerId: string
+  ): Promise<ApiResponse<ContainerInfo>> {
+    try {
+      const socketService = this.getSocketService();
+
+      logger.debug(LogComponent.CONTAINER, "Retrieving container info", {
+        containerId,
+        userId: session?.user?.id,
+      });
+
+      const response = await socketService.executeDockerOperation(session, {
+        operation: "inspect",
+        containerId,
+      });
+
+      if (!response.success) {
+        logger.error(
+          LogComponent.CONTAINER,
+          "Failed to inspect container via socket service",
+          new Error(response.error || "Unknown error"),
+          { containerId, userId: session?.user?.id }
+        );
+        return createErrorResponse(
+          response.error || "Failed to inspect container",
+          response.statusCode === 403 ? API_ERROR_CODES.UNAUTHORIZED : API_ERROR_CODES.NOT_FOUND
+        );
+      }
+
+      const containerData = response.data as any;
+      const containerInfo: ContainerInfo = {
+        id: containerData.Id,
+        name: containerData.Name.replace(/^\//, ''),
+        image: containerData.Config.Image,
+        status: containerData.State.Status,
+        created: new Date(containerData.Created).getTime() / 1000,
+      };
+
+      logger.debug(LogComponent.CONTAINER, "Retrieved container info", {
+        containerInfo,
+        userId: session?.user?.id,
+      });
+
+      return {
+        success: true,
+        data: containerInfo,
+      };
+    } catch (error) {
+      logger.error(
+        LogComponent.CONTAINER,
+        "Error retrieving container info",
+        error instanceof Error ? error : new Error(String(error)),
+        { containerId, userId: session?.user?.id }
+      );
+
+      return createErrorResponse(
+        `Failed to retrieve container info: ${
           error instanceof Error ? error.message : String(error)
         }`,
         API_ERROR_CODES.INTERNAL_ERROR

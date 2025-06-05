@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { type ClientDevice } from "@/types/client";
-import { Laptop, Loader2, X } from "lucide-react";
+import { Laptop, Loader2, X, Play, Square } from "lucide-react";
 import React from "react";
 
 // Define a type for the client data including the optional owner and additional properties
@@ -32,14 +32,22 @@ interface PairedClientsCardProps {
   pairedClients: ClientWithOwner[];
   isLoading: boolean;
   unpairingId: string | null;
+  startingId: string | null;
+  stoppingId: string | null;
   onUnpair: (deviceId: string) => void;
+  onStart: (deviceId: string) => void;
+  onStop: (deviceId: string) => void;
 }
 
 const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
   pairedClients,
   isLoading,
   unpairingId,
+  startingId,
+  stoppingId,
   onUnpair,
+  onStart,
+  onStop,
 }) => {
   return (
     <Card className="glass-card border-none mt-6">
@@ -113,21 +121,50 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                 </TableCell>
                 <TableCell className="text-right py-3 px-4">
                   <div className="flex justify-end gap-2">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-gray-400 hover:text-white"
-                      disabled // Placeholder for future functionality
-                    >
-                      <Laptop className="h-4 w-4" />
-                      <span className="sr-only">View Details</span>
-                    </Button>
+                    {client.status === "online" ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-red-400 hover:text-red-300"
+                        onClick={() => onStop(client.id)}
+                        disabled={stoppingId === client.id}
+                        title="Stop Client"
+                      >
+                        {stoppingId === client.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">
+                          {stoppingId === client.id ? "Stopping..." : "Stop"}
+                        </span>
+                      </Button>
+                    ) : (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-green-400 hover:text-green-300"
+                        onClick={() => onStart(client.id)}
+                        disabled={startingId === client.id}
+                        title="Start Client"
+                      >
+                        {startingId === client.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Play className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">
+                          {startingId === client.id ? "Starting..." : "Start"}
+                        </span>
+                      </Button>
+                    )}
                     <Button
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 text-[#0077B6] hover:text-[#0077B6]/80"
                       onClick={() => onUnpair(client.id)}
                       disabled={unpairingId === client.id}
+                      title="Unpair Client"
                     >
                       {unpairingId === client.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
