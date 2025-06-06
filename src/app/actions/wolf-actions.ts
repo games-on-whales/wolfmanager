@@ -78,6 +78,36 @@ async function getAuthenticatedSession() {
 }
 
 /**
+ * Helper function to deduplicate Wolf client list by client_id
+ * Takes the most recent entry for each client_id (last one in the array)
+ */
+function deduplicateWolfClients(clients: any[]): any[] {
+  const clientMap = new Map<string, any>();
+  
+  for (const client of clients) {
+    const clientId = client.client_id || client.id;
+    if (clientId) {
+      // Always take the latest entry (overwrites previous)
+      clientMap.set(clientId, client);
+    }
+  }
+  
+  return Array.from(clientMap.values());
+}
+
+/**
+ * Helper function to extract unique client IDs from Wolf clients
+ */
+function extractUniqueClientIds(clients: any[]): Set<string> {
+  const deduplicatedClients = deduplicateWolfClients(clients);
+  return new Set(
+    deduplicatedClients
+      .map(c => c.client_id || c.id)
+      .filter(Boolean)
+  );
+}
+
+/**
  * Get client data from Wolf API with config integration
  * Used by the Clients page to display paired clients for the authenticated user
  */
@@ -148,10 +178,19 @@ export async function getWolfClientsAction(): Promise<ApiResponse<{ clients: Wol
     const userConfig = config.users?.[username];
     const userClientIds = new Set(userConfig?.clients?.map((c) => c.id) || []);
 
-    // 4. Filter and map Wolf clients to only include user's clients
+    // 4. Deduplicate Wolf clients and filter to only include user's clients
+    const deduplicatedClients = deduplicateWolfClients(data.clients);
     const userClients: WolfClientWithMetadata[] = [];
 
-    for (const wolfClient of data.clients) {
+    await logger.debug(LogComponent.WOLF_UI, "Processing Wolf clients for user filtering", {
+      userId: session.user.id,
+      username,
+      totalWolfClients: data.clients.length,
+      deduplicatedWolfClients: deduplicatedClients.length,
+      duplicatesRemoved: data.clients.length - deduplicatedClients.length,
+    });
+
+    for (const wolfClient of deduplicatedClients) {
       const clientId = wolfClient.client_id || wolfClient.id;
       if (!clientId || !userClientIds.has(clientId)) {
         continue; // Skip clients not owned by this user
@@ -299,22 +338,77 @@ export async function getPendingPairRequestsAction(): Promise<ApiResponse<{ requ
     }
 
     // Handle different possible response structures
-    let requests: any[] = [];
+    let rawRequests: any[] = [];
     if (Array.isArray(data.requests)) {
-      requests = data.requests;
+      rawRequests = data.requests;
     } else if (Array.isArray(data)) {
-      requests = data;
+      rawRequests = data;
     } else if (data.success && Array.isArray(data.data)) {
-      requests = data.data;
+      rawRequests = data.data;
     }
 
-    await logger.debug(LogComponent.WOLF_UI, "Successfully retrieved pending requests", {
+    await logger.debug(LogComponent.WOLF_UI, "Raw pending requests retrieved", {
       userId: session.user.id,
-      count: requests.length,
-      sampleRequest: requests[0] || "none",
+      rawCount: rawRequests.length,
+      sampleRequest: rawRequests[0] || "none",
     });
 
-    return createSuccessResponse({ requests });
+    // Load config to get all paired clients across all users
+    let config: Config;
+    try {
+      config = (await loadConfig(false)) as Config; // Read-only config load
+    } catch (error) {
+      await logger.error(LogComponent.WOLF_UI, "Failed to load config for pending request filtering", error);
+      // Return raw requests if config load fails
+      return createSuccessResponse({ requests: rawRequests });
+    }
+
+    // Extract all pair_secret values from all users' paired clients
+    const pairedSecrets = new Set<string>();
+    if (config.users) {
+      for (const userConfig of Object.values(config.users)) {
+        if (userConfig.clients) {
+          for (const client of userConfig.clients) {
+            if (client.pair_secret) {
+              pairedSecrets.add(client.pair_secret);
+            }
+          }
+        }
+      }
+    }
+
+    await logger.debug(LogComponent.WOLF_UI, "Extracted paired secrets for filtering", {
+      userId: session.user.id,
+      totalPairedSecrets: pairedSecrets.size,
+      pairedSecrets: Array.from(pairedSecrets),
+    });
+
+    // Filter out pending requests that are already paired
+    const filteredRequests: any[] = [];
+    const filteredOutRequests: any[] = [];
+
+    for (const request of rawRequests) {
+      const isPaired = pairedSecrets.has(request.pair_secret);
+      if (isPaired) {
+        filteredOutRequests.push(request);
+        await logger.debug(LogComponent.WOLF_UI, "Filtering out already-paired request", {
+          userId: session.user.id,
+          pairSecret: request.pair_secret,
+          clientIp: request.client_ip,
+        });
+      } else {
+        filteredRequests.push(request);
+      }
+    }
+
+    await logger.debug(LogComponent.WOLF_UI, "Successfully filtered pending requests", {
+      userId: session.user.id,
+      rawCount: rawRequests.length,
+      filteredCount: filteredRequests.length,
+      filteredOut: rawRequests.length - filteredRequests.length,
+    });
+
+    return createSuccessResponse({ requests: filteredRequests });
   } catch (error) {
     await logger.error(LogComponent.WOLF_UI, "Error getting pending requests", error);
     return createErrorResponse(
@@ -381,13 +475,14 @@ export async function pairWolfClientAction(
     }
 
     const initialClientsData = initialClientsResponse.data as any;
-    const initialClientIds = new Set(
-      (initialClientsData.clients || []).map((c: any) => c.client_id).filter(Boolean)
-    );
+    const initialClients = initialClientsData.clients || [];
+    const initialClientIds = extractUniqueClientIds(initialClients);
 
     await logger.debug(LogComponent.WOLF_UI, "Initial client list retrieved for pairing", {
       userId: session.user.id,
-      initialClientCount: initialClientIds.size,
+      totalInitialClients: initialClients.length,
+      uniqueInitialClientIds: initialClientIds.size,
+      duplicatesDetected: initialClients.length > initialClientIds.size,
     });
 
     // Step 2: Perform pairing
@@ -442,16 +537,28 @@ export async function pairWolfClientAction(
       }
 
       const currentClientsData = currentClientsResponse.data as any;
-      const currentClientIds = (currentClientsData.clients || []).map((c: any) => c.client_id).filter(Boolean);
+      const currentClients = currentClientsData.clients || [];
+      const currentClientIds = extractUniqueClientIds(currentClients);
 
-      // Find new client ID
-      for (const clientId of currentClientIds) {
+      await logger.debug(LogComponent.WOLF_UI, `Client detection attempt ${attempt}`, {
+        userId: session.user.id,
+        totalCurrentClients: currentClients.length,
+        uniqueCurrentClientIds: currentClientIds.size,
+        duplicatesDetected: currentClients.length > currentClientIds.size,
+        initialClientIds: Array.from(initialClientIds),
+        currentClientIds: Array.from(currentClientIds),
+      });
+
+      // Find new client ID by comparing unique sets
+      for (const clientId of Array.from(currentClientIds)) {
         if (!initialClientIds.has(clientId)) {
           newClientId = clientId;
           await logger.debug(LogComponent.WOLF_UI, "New client detected after pairing", {
             userId: session.user.id,
             newClientId,
             attempt,
+            totalClientsBeforePairing: initialClientIds.size,
+            totalClientsAfterPairing: currentClientIds.size,
           });
           break;
         }
