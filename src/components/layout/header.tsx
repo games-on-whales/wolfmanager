@@ -29,7 +29,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-[rgba(255,255,255,0.1)] bg-[rgba(0,0,0,0.5)] backdrop-blur-md px-4 md:px-6 w-full">
-      <div className="w-full flex-1 md:grow-0 md:w-auto">
+      <div className="w-full flex-1 md:grow-0 md:w-auto hidden">
         <Button
           variant="outline"
           className="border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.05)] text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.1)]"
