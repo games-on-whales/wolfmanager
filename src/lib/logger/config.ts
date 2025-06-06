@@ -37,7 +37,7 @@ const containerConfig: LoggerConfig = {
   },
   file: {
     enabled: !isClient, // Disable file transport in client
-    path: "/config/logs/wolf-ui.log", // Absolute path for container
+    path: "/app/config/logs/wolfmanager.log", // Correct Docker container path
     maxSize: 10 * 1024 * 1024,
     maxFiles: 5,
     format: "json",
@@ -60,7 +60,7 @@ const prodConfig: LoggerConfig = {
   },
   file: {
     enabled: !isClient, // Disable file transport in client
-    path: "/config/logs/wolf-ui.log", // Assume standard path if not container
+    path: "/app/config/logs/wolfmanager.log", // Use consistent path
     maxSize: 10 * 1024 * 1024, // 10MB
     maxFiles: 10,
     format: "json",
@@ -95,7 +95,7 @@ export function getLoggerConfig(): LoggerConfig {
         process.cwd(),
         "config",
         "logs",
-        "wolf-ui.log"
+        "wolfmanager.log"
       );
     } catch (error) {
       console.error("Failed to require 'path' module for dev log path:", error);

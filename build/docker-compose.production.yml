@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  wolf:
+    image: ghcr.io/games-on-whales/wolf:stable
+    environment:
+      - XDG_RUNTIME_DIR=/tmp/sockets
+      - WOLF_LOG_LEVEL=INFO
+    volumes:
+      - /tmp/sockets:/tmp/sockets
+      - wolf_socket:/var/run/wolf
+      - wolf_cfg:/etc/wolf
+      - /dev/dri:/dev/dri
+      - /dev/uinput:/dev/uinput
+    devices:
+      - /dev/dri
+      - /dev/uinput
+    network_mode: host
+    privileged: true
+    restart: unless-stopped
+
+  wolf-admin:
+    build:
+      context: ..
+      dockerfile: build/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-generated-secret-here}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-32-character-encryption-key}
+    volumes:
+      - wolf_socket:/var/run/wolf:ro
+      - wolf_admin_data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - wolf
+
+volumes:
+  wolf_socket:
+  wolf_cfg:
+  wolf_admin_data:

@@ -1,12 +1,11 @@
 "use client";
 
 import {
-  getPendingRequestsAction,
-  listClientsAndOwners,
-  getAllPairedClientsInternal,
-  pairAndAddClientAction,
-  removeClientAction,
-} from "@/app/clients/actions"; // Import Server Actions
+  getWolfClientsAction,
+  getPendingPairRequestsAction,
+  pairWolfClientAction,
+  unpairWolfClientAction,
+} from "@/app/actions/wolf-actions"; // Import new Server Actions
 import { Button } from "@/components/ui/button"; // Import Button
 import { useToast } from "@/components/ui/use-toast";
 import { type PendingPairRequest } from "@/lib/api/wolf-pair";
@@ -88,40 +87,42 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
       setErrorRequests(null);
       setErrorPairedClients(null);
 
-      // Call the Server Action to get pending requests
-      const pendingResult = await getPendingRequestsAction();
+      // Call the new Server Action to get pending requests
+      const pendingResult = await getPendingPairRequestsAction();
 
-      if (!pendingResult.success || !Array.isArray(pendingResult.data)) {
+      if (!pendingResult.success) {
         throw new Error(
-          pendingResult.error?.message ||
-            "Invalid response format for pending requests via action"
+          typeof pendingResult.error === 'string'
+            ? pendingResult.error
+            : pendingResult.error?.message || "Failed to fetch pending requests"
         );
       }
-      const pendingRequests = pendingResult.data;
+      const wolfPendingRequests = pendingResult.data?.requests || [];
 
-      // Get ALL confirmed paired clients (from all users) for filtering pending requests
-      const allPairedClientsResponse = await getAllPairedClientsInternal();
-      const allPairedClientsData: ClientWithOwner[] = allPairedClientsResponse.success
-        ? allPairedClientsResponse.data?.clients || []
+      // Map Wolf API pending requests to match expected interface
+      const mappedRequests = wolfPendingRequests.map((request: any) => ({
+        id: request.pair_secret, // Use pair_secret as the unique ID
+        deviceType: `Device at ${request.client_ip}`, // Show client IP as device type
+        timestamp: Date.now(), // Wolf API doesn't provide timestamp, use current time
+        pair_secret: request.pair_secret,
+      }));
+
+      // Get paired clients using new server action
+      const pairedClientsResponse = await getWolfClientsAction();
+      const pairedClientsData: ClientWithOwner[] = pairedClientsResponse.success
+        ? (pairedClientsResponse.data?.clients || []).map((client: any) => ({
+            id: client.id || client.client_id,
+            friendly_name: client.hostname || client.friendly_name || `Client ${client.id}`,
+            device_type: client.device_type || 'Unknown',
+            last_seen: client.last_seen,
+            status: client.status || 'Unknown',
+            owner: 'Current User', // Since we're getting user-specific clients
+            pair_secret: client.pair_secret,
+          }))
         : [];
 
-      // Get user-specific paired clients for display
-      const userPairedClientsResponse = await listClientsAndOwners();
-      const userPairedClientsData: ClientWithOwner[] = userPairedClientsResponse.success
-        ? userPairedClientsResponse.data?.clients || []
-        : [];
-
-      // Filter out pending requests whose pair_secret matches a secret stored for ANY paired client (from any user)
-      const filteredRequests = pendingRequests.filter(
-        (request: PendingPairRequest) =>
-          !allPairedClientsData.some(
-            (client: ClientWithOwner) =>
-              client.pair_secret && client.pair_secret === request.pair_secret
-          )
-      );
-
-      setRequests(filteredRequests);
-      setPairedClients(userPairedClientsData); // Show only user's own paired clients
+      setRequests(mappedRequests);
+      setPairedClients(pairedClientsData);
     } catch (error) {
       setErrorRequests("Failed to load pending requests");
       setErrorPairedClients("Failed to load paired clients"); // Keep setting both errors if fetch fails
@@ -196,35 +197,32 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           }
         );
 
-        const pairResult = await pairAndAddClientAction(
+        const pairResult = await pairWolfClientAction(
           pin,
-          friendlyName,
-          pairSecret
+          pairSecret,
+          friendlyName
         );
 
         if (!pairResult.success) {
-          const errorToLog = pairResult.error
-            ? new Error(pairResult.error.message)
-            : new Error(
-                "[ClientPageContent] Pairing failed with unknown reason"
-              );
-          const metadata = { errorCode: pairResult.error?.code };
+          const errorMessage = typeof pairResult.error === 'string'
+            ? pairResult.error
+            : pairResult.error?.message || "Failed to pair device";
+          const errorToLog = new Error(errorMessage);
 
           clientLogger.error(
             LogComponent.PAIRING,
             "[ClientPageContent] Pairing failed",
-            errorToLog,
-            metadata
+            errorToLog
           );
 
-          throw new Error(pairResult.error?.message || "Failed to pair device");
+          throw new Error(errorMessage);
         }
 
         clientLogger.info(
           LogComponent.PAIRING,
           "[ClientPageContent] Pairing successful",
           {
-            clientId: pairResult.data?.client?.id,
+            clientId: pairResult.data?.clientId,
           }
         );
         sonnerToast.success("Device paired successfully");
@@ -264,7 +262,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
 
     try {
       setUnpairingId(deviceId);
-      const response = await removeClientAction(deviceId);
+      const response = await unpairWolfClientAction(deviceId);
 
       if (response.success) {
         setPairedClients((prev: ClientWithOwner[]) =>
@@ -277,7 +275,10 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
         );
         sonnerToast.success("Device unpaired successfully");
       } else {
-        throw new Error(response.error?.message || "Failed to unpair device");
+        const errorMessage = typeof response.error === 'string'
+          ? response.error
+          : response.error?.message || "Failed to unpair device";
+        throw new Error(errorMessage);
       }
     } catch (error) {
       clientLogger.error(
@@ -293,6 +294,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
       setUnpairingId(null);
     }
   };
+
 
   // Render loading/error states based on combined loading/error states
   if (isLoadingRequests || isLoadingPairedClients) {

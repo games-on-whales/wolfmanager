@@ -1,5 +1,5 @@
-import { listClientsAndOwners, getAllPairedClientsInternal } from "@/app/clients/actions";
-import { type PendingPairRequest, wolfPairApi } from "@/lib/api/wolf-pair";
+import { getWolfClientsAction, getPendingPairRequestsAction } from "@/app/actions/wolf-actions";
+import { type PendingPairRequest } from "@/lib/api/wolf-pair-server";
 import { ClientDevice } from "@/types/client"; // Import ClientDevice type
 import ClientPageContent from "./components/ClientPageContent";
 
@@ -18,37 +18,40 @@ export default async function ClientsPage() {
   let error: string | null = null;
 
   try {
-    // Fetch pending requests from Wolf API
-    const pendingRequests = await wolfPairApi.getPendingRequests();
-    if (!Array.isArray(pendingRequests)) {
-      throw new Error("Invalid response format for pending requests");
+    // Use new server actions from wolf-actions.ts
+    const pendingRequestsResponse = await getPendingPairRequestsAction();
+    if (!pendingRequestsResponse.success) {
+      const errorMessage = typeof pendingRequestsResponse.error === 'string'
+        ? pendingRequestsResponse.error
+        : pendingRequestsResponse.error?.message || "Failed to fetch pending requests";
+      throw new Error(errorMessage);
     }
+    const wolfPendingRequests = pendingRequestsResponse.data?.requests || [];
 
-    // Get ALL confirmed paired clients (from all users) for filtering pending requests
-    const allPairedClientsResponse = await getAllPairedClientsInternal();
-    const allPairedClientsData: ClientWithOwner[] = allPairedClientsResponse.success
-      ? allPairedClientsResponse.data?.clients || []
+    // Map Wolf API pending requests to match expected interface
+    initialRequests = wolfPendingRequests.map((request: any) => ({
+      id: request.pair_secret, // Use pair_secret as the unique ID
+      deviceType: `Device at ${request.client_ip}`, // Show client IP as device type
+      timestamp: Date.now(), // Wolf API doesn't provide timestamp, use current time
+      pair_secret: request.pair_secret,
+    }));
+
+    // Get paired clients using new server action
+    const pairedClientsResponse = await getWolfClientsAction();
+    const pairedClientsData: ClientWithOwner[] = pairedClientsResponse.success
+      ? (pairedClientsResponse.data?.clients || []).map((client: any) => ({
+          id: client.id || client.client_id,
+          friendly_name: client.hostname || client.friendly_name || `Client ${client.id}`,
+          device_type: client.device_type || 'Unknown',
+          last_seen: client.last_seen,
+          status: client.status || 'Unknown',
+          owner: 'Current User', // Since we're getting user-specific clients
+          pair_secret: client.pair_secret,
+        }))
       : [];
-
-    // Get user-specific paired clients for display
-    const userPairedClientsResponse = await listClientsAndOwners();
-    const userPairedClientsData: ClientWithOwner[] = userPairedClientsResponse.success
-      ? userPairedClientsResponse.data?.clients || []
-      : [];
-
-    // Filter out pending requests whose pair_secret matches a secret stored for ANY paired client (from any user)
-    initialRequests = pendingRequests.filter(
-      (request: PendingPairRequest) =>
-        !allPairedClientsData.some(
-          (client: ClientWithOwner) =>
-            client.pair_secret && client.pair_secret === request.pair_secret
-        )
-    );
-
-    // Show only user's own paired clients
-    initialPairedClients = userPairedClientsData;
+    initialPairedClients = pairedClientsData;
   } catch (e) {
-    error = "Failed to load client data.";
+    error = `Failed to load client data: ${e instanceof Error ? e.message : String(e)}`;
     console.error("Error fetching initial client data:", e);
   }
 

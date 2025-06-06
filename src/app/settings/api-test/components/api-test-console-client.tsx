@@ -10,8 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogComponent } from "@/lib/logger";
-import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { Check, ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -19,11 +17,17 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { toast } from "sonner";
 import { MethodChip } from "./method-chip";
+import {
+  testWolfApiAction,
+  testSteamApiAction,
+  testSystemApiAction,
+} from "@/app/actions/api-test-actions";
 
 interface ApiResponse {
   status: number;
   statusText: string;
   data: any;
+  duration?: number;
 }
 
 interface Endpoint {
@@ -40,11 +44,10 @@ interface Endpoint {
 }
 
 interface ApiTestConsoleClientProps {
-  apiKey: string;
   endpoints: Endpoint[];
 }
 
-export default function ApiTestConsoleClient({ apiKey, endpoints }: ApiTestConsoleClientProps) {
+export default function ApiTestConsoleClient({ endpoints }: ApiTestConsoleClientProps) {
   const [endpoint, setEndpoint] = useState(endpoints[0]?.path || "");
   const [method, setMethod] = useState(endpoints[0]?.method || "GET");
   const [selectedEndpoint, setSelectedEndpoint] = useState<Endpoint | null>(endpoints[0] || null);
@@ -200,117 +203,96 @@ export default function ApiTestConsoleClient({ apiKey, endpoints }: ApiTestConso
 
   const handleTest = async () => {
     try {
-      if (!endpoint.startsWith("/api/")) {
-        console.warn("[API_TEST] Invalid API endpoint format", {
-          endpoint,
-          message: "API endpoints should start with /api/",
-        });
-        toast.error("Invalid API endpoint format");
-        return;
-      }
-      let finalEndpoint = endpoint;
-      let finalBody = body;
-      if (body) {
-        try {
-          const bodyData = JSON.parse(body);
-          Object.entries(bodyData).forEach(([key, value]) => {
-            if (finalEndpoint.includes(`{${key}}`)) {
-              finalEndpoint = finalEndpoint.replace(`{${key}}`, String(value));
-              const { [key]: _, ...rest } = bodyData;
-              finalBody = JSON.stringify(rest, null, 2);
-            }
-          });
-        } catch (error) {
-          console.error("[API_TEST] Failed to parse body:", error);
-        }
-      }
-      console.log("[API_TEST] Testing API endpoint", {
-        method,
-        originalEndpoint: endpoint,
-        finalEndpoint,
-        hasBody: method !== "GET" && !!finalBody,
-      });
       setIsLoading(true);
       setResponse("");
       setLatestResponse(null);
-      const baseUrl = window.location.origin;
-      const fullUrl = `${baseUrl}${finalEndpoint}`;
-      console.log("[API_TEST] Making API request", {
-        fullUrl,
-        method,
-        bodySize: finalBody ? finalBody.length : 0,
-      });
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (endpoint.startsWith("/api/wolf/")) {
-        headers["X-API-Key"] = apiKey;
+
+      // Prepare the request body
+      let requestBody: Record<string, unknown> | undefined;
+      let processedEndpoint = endpoint;
+
+      if (body && body.trim()) {
+        try {
+          requestBody = JSON.parse(body);
+          
+          // Handle path parameters - replace {param} with values from body
+          if (requestBody) {
+            Object.entries(requestBody).forEach(([key, value]) => {
+              if (processedEndpoint.includes(`{${key}}`)) {
+                processedEndpoint = processedEndpoint.replace(`{${key}}`, String(value));
+                // Remove the parameter from the body since it's now in the path
+                delete requestBody![key];
+              }
+            });
+          }
+        } catch (error) {
+          showToast.error("Invalid JSON", "Request body must be valid JSON");
+          return;
+        }
       }
-      const response = await fetch(fullUrl, {
-        method,
-        headers,
-        body: method !== "GET" ? finalBody : undefined,
-        credentials: "include",
-      });
-      let data;
-      const responseText = await response.text();
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        const err = new Error(
-          `Invalid JSON response: ${responseText.substring(0, 100)}...`
-        );
-        console.error("[API_TEST] Failed to parse API response", {
-          error: err,
-          responseText: responseText.substring(0, 200) + "...",
-          contentType: response.headers.get("content-type"),
-        });
-        throw err;
+
+      // Determine which action to use based on endpoint
+      let testAction;
+      if (processedEndpoint.startsWith("/api/wolf/")) {
+        // Convert /api/wolf/path to /path for Wolf API
+        processedEndpoint = processedEndpoint.replace("/api/wolf", "");
+        testAction = testWolfApiAction;
+      } else if (processedEndpoint.startsWith("/api/libraries/steam/")) {
+        testAction = testSteamApiAction;
+      } else if (processedEndpoint.startsWith("/api/system/")) {
+        testAction = testSystemApiAction;
+      } else {
+        showToast.error("Invalid Endpoint", "Endpoint must start with /api/wolf/, /api/libraries/steam/, or /api/system/");
+        return;
       }
-      const newResponse: ApiResponse = {
-        status: response.status,
-        statusText: response.statusText,
-        data,
-      };
-      setLatestResponse(newResponse);
-      setResponse(JSON.stringify(data, null, 2));
-      if (response.ok) {
+
+      // Call the appropriate server action
+      const result = await testAction({
+        endpoint: processedEndpoint,
+        method: method as "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
+        body: method !== "GET" ? requestBody : undefined,
+      });
+
+      if (!result.success) {
+        const errorMessage = typeof result.error === 'string' ? result.error : "Unknown error";
+        showToast.error("Test Failed", errorMessage);
+        const failedResponse: ApiResponse = {
+          status: 500,
+          statusText: "Server Action Error",
+          data: { error: errorMessage },
+        };
+        setLatestResponse(failedResponse);
+        setResponse(JSON.stringify(failedResponse.data, null, 2));
+        return;
+      }
+
+      const apiResponse = result.data;
+      if (!apiResponse) {
+        showToast.error("Test Failed", "No response data received");
+        return;
+      }
+
+      setLatestResponse(apiResponse);
+      setResponse(JSON.stringify(apiResponse.data, null, 2));
+
+      if (apiResponse.status >= 200 && apiResponse.status < 300) {
         showToast.success("Test Successful", {
-          description: "API endpoint test completed successfully",
-        });
-        console.log("[API_TEST] API request successful", {
-          endpoint,
-          responseSize: responseText.length,
+          description: `API test completed successfully${apiResponse.duration ? ` in ${apiResponse.duration}ms` : ""}`,
         });
       } else {
-        let errorMessage = `API request failed: ${response.statusText}`;
-        if (data?.error?.message) {
-          errorMessage += ` - ${data.error.message}`;
-        }
-        const err = new Error(errorMessage);
-        console.error("[API_TEST] API request failed", {
-          error: err,
-          endpoint,
-          method,
-        });
-        showToast.error("Test Failed", err);
+        showToast.error("Test Failed", `API returned status ${apiResponse.status}: ${apiResponse.statusText}`);
       }
     } catch (error) {
-      const err = error instanceof Error ? error : new Error("API request error");
-      console.error("[API_TEST] API request error", {
-        error: err,
-        endpoint,
-        method,
-        requestBody: method !== "GET" ? body : undefined,
-      });
+      const err = error instanceof Error ? error : new Error("API test error");
+      showToast.error("Test Failed", err.message);
+      
       const failedResponse: ApiResponse = {
         status: 0,
-        statusText: "Request Failed",
+        statusText: "Client Error",
         data: { error: err.message },
       };
       setLatestResponse(failedResponse);
       setResponse(JSON.stringify(failedResponse.data, null, 2));
-      showToast.error("Test Failed", err);
     } finally {
       setIsLoading(false);
     }

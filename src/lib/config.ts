@@ -96,14 +96,36 @@ export function isValidConfig(config: unknown): config is Config {
 const configPath = path.join(process.cwd(), "config", "default.toml");
 const TASKS_CONFIG_PATH = path.resolve(process.cwd(), "config/tasks.toml"); // Define tasks config path
 
-// Ensure config directory exists
-if (!fs.existsSync(path.dirname(configPath))) {
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+// Ensure config directory exists with proper permissions
+function ensureConfigDirectory() {
+  const configDir = path.dirname(configPath);
+  const tasksConfigDir = path.dirname(TASKS_CONFIG_PATH);
+  
+  // Create config directory if it doesn't exist
+  if (!fs.existsSync(configDir)) {
+    try {
+      fs.mkdirSync(configDir, { recursive: true, mode: 0o755 });
+      logger.info(LogComponent.SYSTEM, "Created config directory", { configDir });
+    } catch (error) {
+      logger.error(LogComponent.SYSTEM, "Failed to create config directory",
+        error instanceof Error ? error : new Error(String(error)), { configDir });
+    }
+  }
+  
+  // Create tasks config directory if it doesn't exist (might be the same)
+  if (!fs.existsSync(tasksConfigDir)) {
+    try {
+      fs.mkdirSync(tasksConfigDir, { recursive: true, mode: 0o755 });
+      logger.info(LogComponent.SYSTEM, "Created tasks config directory", { tasksConfigDir });
+    } catch (error) {
+      logger.error(LogComponent.SYSTEM, "Failed to create tasks config directory",
+        error instanceof Error ? error : new Error(String(error)), { tasksConfigDir });
+    }
+  }
 }
-// Ensure tasks config directory exists (might be the same, but good practice)
-if (!fs.existsSync(path.dirname(TASKS_CONFIG_PATH))) {
-  fs.mkdirSync(path.dirname(TASKS_CONFIG_PATH), { recursive: true });
-}
+
+// Call the function to ensure directories exist
+ensureConfigDirectory();
 
 // Generate a hash for password "admin"
 const defaultAdminHash = bcrypt.hashSync("admin", 10);

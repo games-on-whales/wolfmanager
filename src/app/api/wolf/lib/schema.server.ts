@@ -1,5 +1,8 @@
 import "server-only";
-import { callWolfApi } from "./wolf-socket.server";
+import { SocketService } from "@/lib/services/socket-service";
+import { LogComponent, logger } from "@/lib/logger";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export interface WolfApiSchema {
   paths: Record<
@@ -19,40 +22,46 @@ export interface WolfApiSchema {
 let cachedSchema: WolfApiSchema | null = null;
 
 export async function getWolfSchema(): Promise<WolfApiSchema> {
-  console.log("[WOLF_SCHEMA_DEBUG] getWolfSchema called", {
+  await logger.debug(LogComponent.API, "Getting Wolf schema", {
     hasCachedSchema: !!cachedSchema,
-    timestamp: new Date().toISOString(),
   });
 
   if (cachedSchema) {
-    console.log("[WOLF_SCHEMA_DEBUG] Returning cached schema", {
+    await logger.debug(LogComponent.API, "Returning cached Wolf schema", {
       pathCount: Object.keys(cachedSchema.paths || {}).length,
     });
     return cachedSchema;
   }
 
   try {
-    console.log("[WOLF_SCHEMA_DEBUG] Fetching schema from wolf socket...");
-    const response = await callWolfApi("/openapi-schema", { method: "GET" });
-    console.log("[WOLF_SCHEMA_DEBUG] Schema fetched successfully", {
-      responseType: typeof response,
-      hasResponse: !!response,
-      pathCount: response && typeof response === 'object' && 'paths' in response
-        ? Object.keys((response as any).paths || {}).length
-        : 'unknown',
+    // Get current session for schema fetching
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      await logger.warn(LogComponent.API, "No session available for schema fetch");
+      throw new Error("Authentication required for schema access");
+    }
+
+    await logger.debug(LogComponent.API, "Fetching Wolf schema from socket service");
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, "/openapi-schema", {
+      method: "GET",
     });
-    
-    cachedSchema = response as WolfApiSchema;
-    console.log("[WOLF_SCHEMA_DEBUG] Schema cached", {
+
+    if (!response.success) {
+      await logger.error(LogComponent.API, "Failed to fetch Wolf schema", new Error(response.error || "Unknown error"), {
+        statusCode: response.statusCode,
+      });
+      throw new Error(response.error || "Failed to fetch schema");
+    }
+
+    cachedSchema = response.data as WolfApiSchema;
+    await logger.debug(LogComponent.API, "Wolf schema cached successfully", {
       pathCount: Object.keys(cachedSchema.paths || {}).length,
     });
+    
     return cachedSchema;
   } catch (error) {
-    console.error("[WOLF_SCHEMA_DEBUG] Failed to load schema:", {
-      error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
-    });
+    await logger.error(LogComponent.API, "Error loading Wolf schema", error);
     throw error;
   }
 }
@@ -61,25 +70,17 @@ export async function isValidWolfEndpoint(
   endpoint: string,
   method: string
 ): Promise<boolean> {
-  console.log("[WOLF_ENDPOINT_DEBUG] Validating endpoint", {
+  await logger.debug(LogComponent.API, "Validating Wolf endpoint", {
     endpoint,
     method,
-    timestamp: new Date().toISOString(),
   });
 
   try {
-    console.log("[WOLF_ENDPOINT_DEBUG] Getting wolf schema...");
     const schema = await getWolfSchema();
-    console.log("[WOLF_ENDPOINT_DEBUG] Schema retrieved", {
-      hasSchema: !!schema,
-      pathCount: Object.keys(schema.paths || {}).length,
-    });
-
     const apiPath = `/api/v1${endpoint}`;
-    const methodKey =
-      method.toLowerCase() as keyof WolfApiSchema["paths"][string];
+    const methodKey = method.toLowerCase() as keyof WolfApiSchema["paths"][string];
     
-    console.log("[WOLF_ENDPOINT_DEBUG] Checking endpoint validity", {
+    await logger.debug(LogComponent.API, "Checking endpoint validity", {
       apiPath,
       methodKey,
       hasPath: !!schema.paths[apiPath],
@@ -88,7 +89,8 @@ export async function isValidWolfEndpoint(
     });
 
     const isValid = !!schema.paths[apiPath]?.[methodKey];
-    console.log("[WOLF_ENDPOINT_DEBUG] Validation result", {
+    
+    await logger.debug(LogComponent.API, "Endpoint validation result", {
       endpoint,
       method,
       apiPath,
@@ -97,12 +99,9 @@ export async function isValidWolfEndpoint(
 
     return isValid;
   } catch (error) {
-    console.error("[WOLF_ENDPOINT_DEBUG] Error validating endpoint:", {
+    await logger.error(LogComponent.API, "Error validating Wolf endpoint", error, {
       endpoint,
       method,
-      error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
     });
     return false;
   }

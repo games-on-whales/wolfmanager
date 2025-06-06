@@ -1,309 +1,241 @@
 # WolfManager
 
-A web interface for managing Wolf, providing a centralized dashboard for game library management and Wolf configuration.
+A modern web interface for managing [Wolf](https://github.com/games-on-whales/wolf) - the self hosted game streaming solution that lets you stream your games to any device using the Moonlight client. WolfManager provides an intuitive dashboard for configuring Wolf, managing game libraries, user management, and monitoring your streaming setup.
 
-## Table of Contents
+## What is WolfManager?
 
-- [Features](#features)
-  - [Implemented](#implemented)
-  - [Work in Progress](#work-in-progress)
-- [Technology Stack](#technology-stack)
-  - [Frontend](#frontend)
-  - [Backend](#backend)
-  - [Development Tools](#development-tools)
-- [Architecture](#architecture)
-  - [Key Components](#key-components)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Development Setup](#development-setup)
-  - [Alternative: Local Development](#alternative-local-development)
-- [Contributing](#contributing)
-  - [Development Workflow](#development-workflow)
-  - [Code Style](#code-style)
-- [Known Issues](#known-issues)
-- [FAQ](#faq)
-  - [How does this help with shared libraries?](#how-does-this-help-with-shared-libraries)
-  - [User and Device Management](#user-and-device-management)
+WolfManager is a comprehensive web-based management interface designed to simplify the administration of Wolf game streaming instances. Whether you're running a personal game streaming setup or managing multiple users and devices, WolfManager provides the tools you need to:
 
-## Features
+- **Manage Users & Devices**: Handle user accounts, device pairing, and access permissions 
+- **Logging Viewer**: View logs for both Wolf container and wolfmanger
 
-> - ✅ Implemented
-> - 🚧 Partially Implemented
-> - ❌ Not Started
+These are the current features for now with more capabilities to come in the future.
 
-### Implemented
+## AI Development Story
 
-- **Service Architecture**
+WolfManager began as a proof of concept (POC) in early 2025 to explore using AI for software development. Its initial success led to a complete refactor of the original codebase, adopting technologies like Next.js, NextAuth, and ShadCN. These frameworks were selected for their strong documentation, broad adoption, and excellent support in AI models such as Claude and ChatGPT.
 
-  - ✅ Wolf API integration with OpenAPI schema validation
-  - ✅ Next.js App Router with server components
-  - ✅ Authentication with NextAuth.js
-  - ✅ Server-side API validation and type safety
-  - ✅ Zod schema validation for API requests
-  - ✅ React Server Components for improved performance
+Development originally took place using Cursor, but I later transitioned to the RooCode extension due to its Orchestration mode and other advanced features that made managing more complex codebases easier. That said, I continue to explore and evaluate both tools as they evolve.
 
-- **UI Components**
+During this process, I also adopted the use of MCPs (Model Collaboration Plugins) with both platforms to enhance AI performance:
 
-  - ✅ Modern React component architecture with TypeScript
-  - ✅ Shadcn UI component library
-  - ✅ Radix UI primitives for accessible components
-  - ✅ Tailwind CSS for styling
-  - ✅ Dark mode support
-  - ✅ Responsive design patterns
-  - ✅ Interactive API test console
-  - ✅ User management interface
+- **Repomix** – Provides a high-level overview of the codebase, helping AI agents better understand project structure and make more accurate code edits.
+- **Context7** – Offers high-quality, vetted documentation and examples across many languages and frameworks. This significantly improves solution quality, particularly when the AI model’s training data may be outdated.
 
-- **Core Functionality**
-  - ✅ User authentication and session management
-  - ✅ Role-based access control (admin/standard user)
-    - ✅ Page-level access control
-    - ✅ Protected API routes
-    - ✅ Role-specific UI elements
-  - ✅ API endpoint testing with schema validation
-  - 🚧 Client pairing workflow
-  - 🚧 Configuration management
-  - ✅ Real-time validation of API requests
 
-### Work in Progress
+## Screenshots
 
-- **Game Management**
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <a href="docs/images/clients.png">
+          <img src="docs/images/clients.png" alt="Client Management" width="200" height="150" style="object-fit: cover;">
+        </a>
+        <br>
+        <em>Client Management</em>
+        <br>
+        <small>Manage paired devices and handle new client pairing requests</small>
+      </td>
+      <td align="center">
+        <a href="docs/images/user_management.png">
+          <img src="docs/images/user_management.png" alt="User Management" width="200" height="150" style="object-fit: cover;">
+        </a>
+        <br>
+        <em>User Management</em>
+        <br>
+        <small>Create and manage user accounts with role-based permissions</small>
+      </td>
+      <td align="center">
+        <a href="docs/images/settings.png">
+          <img src="docs/images/settings.png" alt="System Settings" width="200" height="150" style="object-fit: cover;">
+        </a>
+        <br>
+        <em>System Settings</em>
+        <br>
+        <small>Configure Wolf settings, metadata providers, and system preferences</small>
+      </td>
+      <td align="center">
+        <a href="docs/images/systemlogs.png">
+          <img src="docs/images/systemlogs.png" alt="System Logs" width="200" height="150" style="object-fit: cover;">
+        </a>
+        <br>
+        <em>System Logs</em>
+        <br>
+        <small>Monitor Wolf container logs and troubleshoot issues in real-time</small>
+      </td>
+    </tr>
+  </table>
+</div>
 
-  - ❌ SteamCMD integration for game installation
-  - ❌ Automatic Wolf app configuration
-  - ❌ Manual artwork search interface
-  - ❌ user state management (ie user save files persisted to hold folder all cases)
-
-- **Wolf Integration**
-  - ❌ Multi-device state handling
-  - ❌ Real-time event handling
-
-## Technology Stack
-
-### Frontend
-
-- **Framework**: Next.js 14 with App Router
-  - Server Components (RSC) for optimal performance
-  - Server Actions for form handling
-  - Streaming and Suspense for enhanced loading states
-  - Route Handlers for API endpoints
-  - Middleware for authentication and routing
-- **Language**: TypeScript 5.0+
-  - Strict type checking enabled
-  - Path aliases for clean imports
-  - Type-safe API routes
-  - Zod schema validation
-- **UI Components**:
-  - Shadcn UI
-    - Pre-built accessible components
-    - Customizable design system
-    - Dark mode support
-    - Form components with validation
-  - Radix UI Primitives
-    - Headless UI components
-    - ARIA compliant
-    - Keyboard navigation
-    - Focus management
-  - Tailwind CSS
-    - JIT (Just-In-Time) compilation
-    - Custom theme configuration
-    - Responsive design utilities
-    - Dark mode classes
-- **State Management**:
-  - Server State:
-    - ✅ Next.js Server Actions for mutations
-    - 🚧 React Server Components for data fetching
-    - ✅ Next.js Cache for performance optimization
-    - ✅ Server-side data validation with Zod
-  - Client State:
-    - ✅ React Hook Form for form management
-    - ✅ Optimistic updates with useOptimistic hook
-    - ✅ Local state with useState for UI interactions
-    - ✅ Shadcn UI form components with validation
-    - ✅ Client-side toast notifications
-  - Data Flow:
-    - ✅ Server Actions for server mutations
-    - ✅ Route Handlers for API endpoints
-    - ✅ Optimistic UI updates for better UX
-    - ✅ Type-safe data fetching
-    - 🚧 Direct function calls for server-side data access
-- **Authentication**:
-  - NextAuth.js with custom providers
-  - Role-based access control
-  - Secure session management
-  - Protected API routes
-- **Data Fetching**:
-  - Server Components for direct database access
-  - Route Handlers for API endpoints
-  - Cached data revalidation
-  - Optimistic updates
-
-### Backend
-
-- **Runtime**: Node.js 18+ (LTS)
-- **API Layer**:
-  - Next.js Route Handlers
-  - OpenAPI schema validation
-  - Type-safe endpoints
-  - Rate limiting and security headers
-- **Authentication**:
-  - NextAuth.js with JWT
-  - Custom session handling
-  - Role-based middleware
-- **Validation**:
-  - Zod schemas for runtime validation
-  - TypeScript for static type checking
-  - Custom validation middleware
-- **Wolf Integration**:
-  - Unix socket communication
-  - Type-safe API client
-  - Real-time event handling
-  - Error boundary management
-
-### Development Tools
-
-- **IDE**: VS Code with Cursor
-- **Build Tool**: Next.js build system
-- **Container**: Docker + Dev Containers
-- **Version Control**: Git
-- **API Testing**: Built-in API Test Console
-
-## Architecture
-
-### Key Components
-
-1. **API Layer**
-
-   - Server-side API routes with OpenAPI schema validation
-   - Type-safe request/response handling
-   - Authentication middleware
-   - Wolf socket communication
-
-2. **Authentication**
-
-   - NextAuth.js integration
-   - Role-based access control
-   - Secure session management
-
-3. **UI Architecture**
-
-   - React Server Components for static content
-   - Client components for interactive features
-   - Responsive layout system
-   - Component composition with Shadcn UI
-
-4. **Data Flow**
-   - Server-side data fetching
-   - Type-safe API communication
-   - Real-time updates (planned)
-   - Cached responses for performance
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- Docker Desktop with Dev Containers support
-- VS Code with Dev Containers extension
-- Wolf instance running with API socket enabled
-- Git for version control
+Before setting up WolfManager, you'll need a working Wolf installation. If you haven't set up Wolf yet, follow the comprehensive deployment guide:
 
-### Development Setup
+**📖 [Wolf Deployment Guide](https://games-on-whales.github.io/wolf/stable/user/quickstart.html)**
 
-1. **Wolf API Socket Setup**
+### Running WolfManager with Docker Compose
 
-   Ensure Wolf is running with the API socket enabled. The socket should be mounted at `/var/run/wolf/wolf.sock`. If using a different path, set the `WOLF_SOCKET_PATH` environment variable.
+The easiest way to deploy WolfManager is using Docker Compose. Create a `docker-compose.yml` file:
 
-   You can verify the API is working by testing with curl:
+```yaml
+services:
+  wolf-admin:
+    image: docker pull ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXTAUTH_SECRET=xyz
+      - NEXTAUTH_URL=http://localhost:3000
+    volumes:
+      - /var/run/wolf:/var/run/wolf              # Mount Wolf socket
+      - /var/run/docker.sock:/var/run/docker.sock # Mount Docker socket
+      - ./config:/app/config                      # Persist config directory
+    restart: unless-stopped
+```
 
+Then start the service:
+
+```bash
+docker-compose up -d
+```
+
+WolfManager will be available at `http://localhost:3000`
+
+### First Time Setup
+
+1. **Access the Interface**: Navigate to `http://localhost:3000` in your web browser
+2. **Complete Initial Setup**: Follow the first-time setup wizard to create your admin account
+3. **Configure Wolf Connection**: Ensure WolfManager can communicate with your Wolf instance
+4. **Add Users**: Create user accounts for people who will be streaming games
+5. **Pair Devices**: Help users pair their devices (phones, tablets, PCs) for game streaming
+
+## Key Features
+
+### ✅ Currently Available
+
+- **User Authentication & Management**
+  - Secure login system with role-based access control
+  - Admin and standard user roles
+  - User Create / Update / Delete
+  - Paired Client to User Mapping
+
+- **Client & Device Management**  
+  - Device pairing workflow for Moonlight clients
+  - Real-time pairing request handling
+  - Paired device overview and management
+  - Paired devices mapped mapped to the user who paired it
+
+- **Logs**
+  - Wolf container log viewing
+  - Wolf Manager Logs
+
+- **API Integration**
+  - Full Wolf API integration with schema validation
+  - Interactive API testing console
+  - Type-safe API communication
+
+
+### 🚧 Roadmap
+
+**Plug-In System**
+Develop a flexible plug-in system that allows the community to extend WolfManager’s capabilities. For example, plugins could be created to support external libraries such as Steam or RomM. These plugins would integrate seamlessly with the WolfManager platform to:
+- Allow users to connect and manage their preferred game libraries  
+- Automate the download and installation process for games  
+- Fetch and display artwork specific to each library
+
+
+**Wolf Launch**
+Enable the ability for WolfManager to detect your system and then correctly launch Wolf with a known good configuration
+
+
+## Technology Stack
+
+WolfManager is built with modern web technologies for optimal performance and maintainability:
+
+- **Frontend**: Next.js 14 with App Router, React Server Components
+- **UI Components**: Shadcn UI, Radix UI Primitives, Tailwind CSS
+- **Backend**: Node.js with Next.js API Routes
+- **Authentication**: NextAuth.js with secure session management
+- **Type Safety**: TypeScript with Zod schema validation
+- **Containerization**: Docker with optimized production builds
+- **TOML**: Configuration storage
+
+## Development
+
+### Development Environment
+
+For development, we recommend using VS Code with Dev Containers:
+
+1. **Clone the repository**:
    ```bash
-   curl --unix-socket /var/run/wolf/wolf.sock http://localhost/api/v1/openapi-schema
-   ```
-
-2. **Dev Container Setup**
-
-   ```bash
-   # Clone the repository
    git clone https://github.com/games-on-whales/wolfmanager
    cd wolfmanager
+   ```
 
-   # Open in VS Code
+2. **Open in VS Code**:
+   ```bash
    code .
    ```
 
-   When VS Code opens:
+3. **Reopen in Container**: When prompted, click "Reopen in Container" or use the Command Palette (F1) and select "Dev Containers: Reopen in Container"
 
-   1. Click the notification to "Reopen in Container" or
-   2. Press F1, type "Dev Containers: Reopen in Container"
+The Dev Container will automatically:
+- Install all dependencies
+- Configure the development environment  
+- Mount the Wolf API socket
+- Start the development server at `http://localhost:3000`
 
-   The Dev Container will:
+### Local Development
 
-   - Set up all required dependencies
-   - Configure the development environment
-   - Mount the Wolf API socket
-   - Start the development server
-
-3. **Access the Interface**
-   Once the Dev Container is running, open:
-   ```
-   http://localhost:3000
-   ```
-
-### Alternative: Local Development
-
-While Dev Containers are recommended, you can also develop locally if you have:
-
-- Node.js 18+
-- Access to Wolf API socket at `/var/run/wolf/wolf.sock`
-- Development tools (npm, git, etc.)
-
-Follow the standard setup:
+If you prefer local development:
 
 ```bash
+# Prerequisites: Node.js 18+, access to Wolf socket
 npm install
 npm run dev
 ```
 
 ## Contributing
 
-### Development Workflow
+We welcome contributions! Here's how to get started:
 
-1. Fork the repository
-2. Create a feature branch
-3. Implement changes following the established patterns
-4. Add tests where applicable
-5. Submit a pull request
+1. **Fork the repository** and create a feature branch
+2. **Follow the established patterns** and TypeScript best practices
+3. **Test your changes** thoroughly
+4. **Submit a pull request** with a clear description
 
-### Code Style
+### Code Guidelines
 
-- Follow TypeScript best practices
-- Use functional components
+- Use TypeScript with strict type checking
+- Follow the established component architecture
 - Implement proper error handling
-- Add appropriate TypeScript types
-- Follow the established component structure
+- Add appropriate tests where applicable
+- Maintain accessibility standards
 
-## Known Issues
+## Architecture Overview
 
-- Some API endpoints need additional error handling
-- Real-time event handling needs implementation
-- WebSocket integration for live updates
+WolfManager follows a modern full-stack architecture:
 
-## FAQ
+- **API Layer**: Next.js Route Handlers with OpenAPI schema validation
+- **Authentication**: NextAuth.js with role-based access control
+- **UI Architecture**: React Server Components with client-side interactivity
+- **Wolf Integration**: Unix socket communication with type-safe API client
+- **Data Flow**: Server Actions for mutations, cached responses for performance
 
-### How does this help with shared libraries?
+## Support & Documentation
 
-WolfManager aims to simplify game management by creating an app entry for each game, using the appropriate container (initially Steam). Game files will be mounted into the container as a read-only layer, while the writable layer will point to the user's profile path. This setup ensures that:
+- **Wolf Documentation**: [games-on-whales.github.io/wolf](https://games-on-whales.github.io/wolf/)
+- **Issues & Bug Reports**: [GitHub Issues](https://github.com/games-on-whales/wolfmanager/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/games-on-whales/wolfmanager/discussions)
 
-1. **Seamless User Experience:** Users can launch Moonlight, select a game, and start playing.
-2. **Persistent Game State:** Game progress and settings are saved directly to the user's profile path.
-3. **Automated Updates:** WolfManager handles game updates via SteamCMD, keeping everything up to date without manual intervention.
+## License
 
-### User and Device Management
+WolfManager is open source software. See [LICENSE](LICENSE) for details.
 
-Wolf operates based on devices, not users, with each device having its own state folder. However, Wolf does support sharing a single state folder across multiple devices.
+---
 
-To simplify user management, WolfManager will:
-
-1. **Create User State Folders:** Each user will have a dedicated state folder.
-2. **Link Devices to Users:** All devices for a user will point to the same state folder.
-3. **Manage Pairing:** User and device pairing will be handled through WolfManager.
-
-This approach is part of future development and may evolve as the project progresses.
+*Built with ❤️ for the Wolf game streaming community*

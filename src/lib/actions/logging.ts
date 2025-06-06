@@ -104,9 +104,9 @@ function getLogPath() {
   // Production paths with fallbacks
   if (process.env.NODE_ENV === "production") {
     const possiblePaths = [
-      "/config/logs/wolf-ui.log",
-      path.join(process.cwd(), "config", "logs", "wolf-ui.log"),
-      path.join("/app", "config", "logs", "wolf-ui.log"), // Docker container path
+      "/app/config/logs/wolfmanager.log", // Correct Docker container path
+      path.join(process.cwd(), "config", "logs", "wolfmanager.log"),
+      "/config/logs/wolfmanager.log",
     ];
     
     // Return the first path that exists, or fallback to the primary one
@@ -120,11 +120,11 @@ function getLogPath() {
     }
     
     // Fallback to primary production path
-    return "/config/logs/wolf-ui.log";
+    return "/app/config/logs/wolfmanager.log";
   }
   
   // Development path
-  return path.join(process.cwd(), "config", "logs", "wolf-ui.log");
+  return path.join(process.cwd(), "config", "logs", "wolfmanager.log");
 }
 
 export async function getLogs(): Promise<
@@ -169,9 +169,9 @@ export async function getLogs(): Promise<
       // Try alternative paths in production
       if (process.env.NODE_ENV === "production") {
         const alternativePaths = [
-          path.join(process.cwd(), "config", "logs", "wolf-ui.log"),
-          path.join("/app", "config", "logs", "wolf-ui.log"),
-          "./config/logs/wolf-ui.log",
+          path.join(process.cwd(), "config", "logs", "wolfmanager.log"),
+          path.join("/app", "config", "logs", "wolfmanager.log"),
+          "./config/logs/wolfmanager.log",
         ];
         
         console.log("[LOGS_DEBUG] Trying alternative paths:", alternativePaths);

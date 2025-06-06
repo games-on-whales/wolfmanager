@@ -1,8 +1,9 @@
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
+import { SocketService } from "@/lib/services/socket-service";
+import { LogComponent, logger } from "@/lib/logger";
 import { isValidWolfEndpoint } from "../lib/schema.server";
-import { callWolfApi } from "../lib/wolf-socket.server";
 
 // This is a dynamic route that will handle all requests to /api/wolf/*
 export async function GET(
@@ -10,44 +11,33 @@ export async function GET(
   { params }: { params: { path: string[] } }
 ) {
   const path = `/${params.path.join("/")}`;
-  console.log("[WOLF_API_DEBUG] GET request started", {
-    path,
-    params: params.path,
-    url: request.url,
-    timestamp: new Date().toISOString(),
-  });
-
   try {
-    console.log("[WOLF_API_DEBUG] Checking authentication...");
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      console.log("[WOLF_API_DEBUG] Authentication failed - no session or user");
+      await logger.warn(LogComponent.API, "Wolf API access denied - no session", {
+        path,
+        method: "GET",
+        url: request.url,
+      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    console.log("[WOLF_API_DEBUG] Authentication successful", {
+
+    await logger.debug(LogComponent.API, "Wolf API GET request", {
+      path,
+      method: "GET",
+      userId: session.user.id,
       username: session.user.name,
     });
 
-    console.log("[WOLF_API_DEBUG] Starting endpoint validation...", {
-      path,
-      method: "GET",
-    });
-    
+    // Validate endpoint
     let isValid: boolean;
     try {
       isValid = await isValidWolfEndpoint(path, "GET");
-      console.log("[WOLF_API_DEBUG] Endpoint validation completed", {
-        path,
-        method: "GET",
-        isValid,
-      });
     } catch (validationError) {
-      console.error("[WOLF_API_DEBUG] Endpoint validation failed with error", {
+      await logger.error(LogComponent.API, "Wolf API endpoint validation failed", validationError, {
         path,
         method: "GET",
-        error: validationError,
-        errorMessage: validationError instanceof Error ? validationError.message : String(validationError),
-        errorStack: validationError instanceof Error ? validationError.stack : undefined,
+        userId: session.user.id,
       });
       return NextResponse.json(
         {
@@ -59,9 +49,10 @@ export async function GET(
     }
 
     if (!isValid) {
-      console.log("[WOLF_API_DEBUG] Endpoint validation failed - invalid endpoint", {
+      await logger.warn(LogComponent.API, "Wolf API invalid endpoint", {
         path,
         method: "GET",
+        userId: session.user.id,
       });
       return NextResponse.json(
         { error: "Invalid endpoint or method" },
@@ -69,24 +60,35 @@ export async function GET(
       );
     }
 
-    console.log("[WOLF_API_DEBUG] Calling Wolf API...", {
+    // Use centralized socket service
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, path, { method: "GET" });
+
+    if (!response.success) {
+      await logger.error(LogComponent.API, "Wolf API call failed", new Error(response.error || "Unknown error"), {
+        path,
+        method: "GET",
+        userId: session.user.id,
+        statusCode: response.statusCode,
+      });
+      return NextResponse.json(
+        { error: response.error || "Wolf API call failed" },
+        { status: response.statusCode || 500 }
+      );
+    }
+
+    await logger.debug(LogComponent.API, "Wolf API call successful", {
       path,
       method: "GET",
+      userId: session.user.id,
+      statusCode: response.statusCode,
     });
-    const response = await callWolfApi(path, { method: "GET" });
-    console.log("[WOLF_API_DEBUG] Wolf API call successful", {
-      path,
-      method: "GET",
-      responseType: typeof response,
-    });
-    return NextResponse.json(response);
+
+    return NextResponse.json(response.data);
   } catch (error) {
-    console.error("[WOLF_API_DEBUG] Overall request failed", {
+    await logger.error(LogComponent.API, "Wolf API GET request failed", error, {
       path,
       method: "GET",
-      error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
     });
     return NextResponse.json(
       {
@@ -103,44 +105,34 @@ export async function POST(
   { params }: { params: { path: string[] } }
 ) {
   const path = `/${params.path.join("/")}`;
-  console.log("[WOLF_API_DEBUG] POST request started", {
-    path,
-    params: params.path,
-    url: request.url,
-    timestamp: new Date().toISOString(),
-  });
 
   try {
-    console.log("[WOLF_API_DEBUG] Checking authentication...");
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      console.log("[WOLF_API_DEBUG] Authentication failed - no session or user");
+      await logger.warn(LogComponent.API, "Wolf API access denied - no session", {
+        path,
+        method: "POST",
+        url: request.url,
+      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    console.log("[WOLF_API_DEBUG] Authentication successful", {
+
+    await logger.debug(LogComponent.API, "Wolf API POST request", {
+      path,
+      method: "POST",
+      userId: session.user.id,
       username: session.user.name,
     });
 
-    console.log("[WOLF_API_DEBUG] Starting endpoint validation...", {
-      path,
-      method: "POST",
-    });
-    
+    // Validate endpoint
     let isValid: boolean;
     try {
       isValid = await isValidWolfEndpoint(path, "POST");
-      console.log("[WOLF_API_DEBUG] Endpoint validation completed", {
-        path,
-        method: "POST",
-        isValid,
-      });
     } catch (validationError) {
-      console.error("[WOLF_API_DEBUG] Endpoint validation failed with error", {
+      await logger.error(LogComponent.API, "Wolf API endpoint validation failed", validationError, {
         path,
         method: "POST",
-        error: validationError,
-        errorMessage: validationError instanceof Error ? validationError.message : String(validationError),
-        errorStack: validationError instanceof Error ? validationError.stack : undefined,
+        userId: session.user.id,
       });
       return NextResponse.json(
         {
@@ -152,9 +144,10 @@ export async function POST(
     }
 
     if (!isValid) {
-      console.log("[WOLF_API_DEBUG] Endpoint validation failed - invalid endpoint", {
+      await logger.warn(LogComponent.API, "Wolf API invalid endpoint", {
         path,
         method: "POST",
+        userId: session.user.id,
       });
       return NextResponse.json(
         { error: "Invalid endpoint or method" },
@@ -162,18 +155,15 @@ export async function POST(
       );
     }
 
-    console.log("[WOLF_API_DEBUG] Parsing request body...");
+    // Parse request body
     let body;
     try {
       body = await request.json();
-      console.log("[WOLF_API_DEBUG] Request body parsed successfully", {
-        bodyType: typeof body,
-        bodyKeys: body && typeof body === 'object' ? Object.keys(body) : undefined,
-      });
     } catch (bodyError) {
-      console.error("[WOLF_API_DEBUG] Failed to parse request body", {
-        error: bodyError,
-        errorMessage: bodyError instanceof Error ? bodyError.message : String(bodyError),
+      await logger.error(LogComponent.API, "Failed to parse request body", bodyError, {
+        path,
+        method: "POST",
+        userId: session.user.id,
       });
       return NextResponse.json(
         { error: "Invalid JSON in request body" },
@@ -181,27 +171,38 @@ export async function POST(
       );
     }
 
-    console.log("[WOLF_API_DEBUG] Calling Wolf API...", {
-      path,
-      method: "POST",
-    });
-    const response = await callWolfApi(path, {
+    // Use centralized socket service
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, path, {
       method: "POST",
       body,
     });
-    console.log("[WOLF_API_DEBUG] Wolf API call successful", {
+
+    if (!response.success) {
+      await logger.error(LogComponent.API, "Wolf API call failed", new Error(response.error || "Unknown error"), {
+        path,
+        method: "POST",
+        userId: session.user.id,
+        statusCode: response.statusCode,
+      });
+      return NextResponse.json(
+        { error: response.error || "Wolf API call failed" },
+        { status: response.statusCode || 500 }
+      );
+    }
+
+    await logger.debug(LogComponent.API, "Wolf API call successful", {
       path,
       method: "POST",
-      responseType: typeof response,
+      userId: session.user.id,
+      statusCode: response.statusCode,
     });
-    return NextResponse.json(response);
+
+    return NextResponse.json(response.data);
   } catch (error) {
-    console.error("[WOLF_API_DEBUG] Overall request failed", {
+    await logger.error(LogComponent.API, "Wolf API POST request failed", error, {
       path,
       method: "POST",
-      error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
     });
     return NextResponse.json(
       {
@@ -219,44 +220,34 @@ export async function PUT(
   { params }: { params: { path: string[] } }
 ) {
   const path = `/${params.path.join("/")}`;
-  console.log("[WOLF_API_DEBUG] PUT request started", {
-    path,
-    params: params.path,
-    url: request.url,
-    timestamp: new Date().toISOString(),
-  });
 
   try {
-    console.log("[WOLF_API_DEBUG] Checking authentication...");
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      console.log("[WOLF_API_DEBUG] Authentication failed - no session or user");
+      await logger.warn(LogComponent.API, "Wolf API access denied - no session", {
+        path,
+        method: "PUT",
+        url: request.url,
+      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    console.log("[WOLF_API_DEBUG] Authentication successful", {
+
+    await logger.debug(LogComponent.API, "Wolf API PUT request", {
+      path,
+      method: "PUT",
+      userId: session.user.id,
       username: session.user.name,
     });
 
-    console.log("[WOLF_API_DEBUG] Starting endpoint validation...", {
-      path,
-      method: "PUT",
-    });
-    
+    // Validate endpoint
     let isValid: boolean;
     try {
       isValid = await isValidWolfEndpoint(path, "PUT");
-      console.log("[WOLF_API_DEBUG] Endpoint validation completed", {
-        path,
-        method: "PUT",
-        isValid,
-      });
     } catch (validationError) {
-      console.error("[WOLF_API_DEBUG] Endpoint validation failed with error", {
+      await logger.error(LogComponent.API, "Wolf API endpoint validation failed", validationError, {
         path,
         method: "PUT",
-        error: validationError,
-        errorMessage: validationError instanceof Error ? validationError.message : String(validationError),
-        errorStack: validationError instanceof Error ? validationError.stack : undefined,
+        userId: session.user.id,
       });
       return NextResponse.json(
         {
@@ -268,9 +259,10 @@ export async function PUT(
     }
 
     if (!isValid) {
-      console.log("[WOLF_API_DEBUG] Endpoint validation failed - invalid endpoint", {
+      await logger.warn(LogComponent.API, "Wolf API invalid endpoint", {
         path,
         method: "PUT",
+        userId: session.user.id,
       });
       return NextResponse.json(
         { error: "Invalid endpoint or method" },
@@ -278,18 +270,15 @@ export async function PUT(
       );
     }
 
-    console.log("[WOLF_API_DEBUG] Parsing request body...");
+    // Parse request body
     let body;
     try {
       body = await request.json();
-      console.log("[WOLF_API_DEBUG] Request body parsed successfully", {
-        bodyType: typeof body,
-        bodyKeys: body && typeof body === 'object' ? Object.keys(body) : undefined,
-      });
     } catch (bodyError) {
-      console.error("[WOLF_API_DEBUG] Failed to parse request body", {
-        error: bodyError,
-        errorMessage: bodyError instanceof Error ? bodyError.message : String(bodyError),
+      await logger.error(LogComponent.API, "Failed to parse request body", bodyError, {
+        path,
+        method: "PUT",
+        userId: session.user.id,
       });
       return NextResponse.json(
         { error: "Invalid JSON in request body" },
@@ -297,27 +286,38 @@ export async function PUT(
       );
     }
 
-    console.log("[WOLF_API_DEBUG] Calling Wolf API...", {
-      path,
-      method: "PUT",
-    });
-    const response = await callWolfApi(path, {
+    // Use centralized socket service
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, path, {
       method: "PUT",
       body,
     });
-    console.log("[WOLF_API_DEBUG] Wolf API call successful", {
+
+    if (!response.success) {
+      await logger.error(LogComponent.API, "Wolf API call failed", new Error(response.error || "Unknown error"), {
+        path,
+        method: "PUT",
+        userId: session.user.id,
+        statusCode: response.statusCode,
+      });
+      return NextResponse.json(
+        { error: response.error || "Wolf API call failed" },
+        { status: response.statusCode || 500 }
+      );
+    }
+
+    await logger.debug(LogComponent.API, "Wolf API call successful", {
       path,
       method: "PUT",
-      responseType: typeof response,
+      userId: session.user.id,
+      statusCode: response.statusCode,
     });
-    return NextResponse.json(response);
+
+    return NextResponse.json(response.data);
   } catch (error) {
-    console.error("[WOLF_API_DEBUG] Overall request failed", {
+    await logger.error(LogComponent.API, "Wolf API PUT request failed", error, {
       path,
       method: "PUT",
-      error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
     });
     return NextResponse.json(
       {
@@ -335,44 +335,34 @@ export async function DELETE(
   { params }: { params: { path: string[] } }
 ) {
   const path = `/${params.path.join("/")}`;
-  console.log("[WOLF_API_DEBUG] DELETE request started", {
-    path,
-    params: params.path,
-    url: request.url,
-    timestamp: new Date().toISOString(),
-  });
 
   try {
-    console.log("[WOLF_API_DEBUG] Checking authentication...");
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      console.log("[WOLF_API_DEBUG] Authentication failed - no session or user");
+      await logger.warn(LogComponent.API, "Wolf API access denied - no session", {
+        path,
+        method: "DELETE",
+        url: request.url,
+      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    console.log("[WOLF_API_DEBUG] Authentication successful", {
+
+    await logger.debug(LogComponent.API, "Wolf API DELETE request", {
+      path,
+      method: "DELETE",
+      userId: session.user.id,
       username: session.user.name,
     });
 
-    console.log("[WOLF_API_DEBUG] Starting endpoint validation...", {
-      path,
-      method: "DELETE",
-    });
-    
+    // Validate endpoint
     let isValid: boolean;
     try {
       isValid = await isValidWolfEndpoint(path, "DELETE");
-      console.log("[WOLF_API_DEBUG] Endpoint validation completed", {
-        path,
-        method: "DELETE",
-        isValid,
-      });
     } catch (validationError) {
-      console.error("[WOLF_API_DEBUG] Endpoint validation failed with error", {
+      await logger.error(LogComponent.API, "Wolf API endpoint validation failed", validationError, {
         path,
         method: "DELETE",
-        error: validationError,
-        errorMessage: validationError instanceof Error ? validationError.message : String(validationError),
-        errorStack: validationError instanceof Error ? validationError.stack : undefined,
+        userId: session.user.id,
       });
       return NextResponse.json(
         {
@@ -384,9 +374,10 @@ export async function DELETE(
     }
 
     if (!isValid) {
-      console.log("[WOLF_API_DEBUG] Endpoint validation failed - invalid endpoint", {
+      await logger.warn(LogComponent.API, "Wolf API invalid endpoint", {
         path,
         method: "DELETE",
+        userId: session.user.id,
       });
       return NextResponse.json(
         { error: "Invalid endpoint or method" },
@@ -394,24 +385,35 @@ export async function DELETE(
       );
     }
 
-    console.log("[WOLF_API_DEBUG] Calling Wolf API...", {
+    // Use centralized socket service
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, path, { method: "DELETE" });
+
+    if (!response.success) {
+      await logger.error(LogComponent.API, "Wolf API call failed", new Error(response.error || "Unknown error"), {
+        path,
+        method: "DELETE",
+        userId: session.user.id,
+        statusCode: response.statusCode,
+      });
+      return NextResponse.json(
+        { error: response.error || "Wolf API call failed" },
+        { status: response.statusCode || 500 }
+      );
+    }
+
+    await logger.debug(LogComponent.API, "Wolf API call successful", {
       path,
       method: "DELETE",
+      userId: session.user.id,
+      statusCode: response.statusCode,
     });
-    const response = await callWolfApi(path, { method: "DELETE" });
-    console.log("[WOLF_API_DEBUG] Wolf API call successful", {
-      path,
-      method: "DELETE",
-      responseType: typeof response,
-    });
-    return NextResponse.json(response);
+
+    return NextResponse.json(response.data);
   } catch (error) {
-    console.error("[WOLF_API_DEBUG] Overall request failed", {
+    await logger.error(LogComponent.API, "Wolf API DELETE request failed", error, {
       path,
       method: "DELETE",
-      error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
     });
     return NextResponse.json(
       {

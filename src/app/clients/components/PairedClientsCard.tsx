@@ -112,22 +112,14 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                   </div>
                 </TableCell>
                 <TableCell className="text-right py-3 px-4">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-gray-400 hover:text-white"
-                      disabled // Placeholder for future functionality
-                    >
-                      <Laptop className="h-4 w-4" />
-                      <span className="sr-only">View Details</span>
-                    </Button>
+                  <div className="flex justify-end">
                     <Button
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 text-[#0077B6] hover:text-[#0077B6]/80"
                       onClick={() => onUnpair(client.id)}
                       disabled={unpairingId === client.id}
+                      title="Unpair Client"
                     >
                       {unpairingId === client.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

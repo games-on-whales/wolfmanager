@@ -4,9 +4,18 @@ services:
   wolf-admin:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: build/Dockerfile
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+    volumes:
+      - /var/run/wolf/wolf.sock:/var/run/wolf/wolf.sock
+      - wolf-config:/app/config
     restart: unless-stopped
+    depends_on:
+      - wolf
+
+volumes:
+  wolf-config:
+    driver: local
