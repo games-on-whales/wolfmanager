@@ -5,8 +5,6 @@ import {
   getPendingPairRequestsAction,
   pairWolfClientAction,
   unpairWolfClientAction,
-  startWolfClientAction,
-  stopWolfClientAction,
 } from "@/app/actions/wolf-actions"; // Import new Server Actions
 import { Button } from "@/components/ui/button"; // Import Button
 import { useToast } from "@/components/ui/use-toast";
@@ -68,8 +66,6 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
     null
   );
   const [unpairingId, setUnpairingId] = useState<string | null>(null);
-  const [startingId, setStartingId] = useState<string | null>(null);
-  const [stoppingId, setStoppingId] = useState<string | null>(null);
 
   // Client-side authentication check (still needed for client-side navigation)
   useEffect(() => {
@@ -299,77 +295,6 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
     }
   };
 
-  const handleStart = async (deviceId: string) => {
-    if (!session?.user?.name) {
-      sonnerToast.error("Authentication Required", {
-        description: "You must be logged in to start clients.",
-      });
-      return;
-    }
-
-    try {
-      setStartingId(deviceId);
-      const response = await startWolfClientAction(deviceId);
-
-      if (response.success) {
-        sonnerToast.success("Client started successfully");
-        fetchRequests(); // Refresh to get updated status
-      } else {
-        const errorMessage = typeof response.error === 'string'
-          ? response.error
-          : response.error?.message || "Failed to start client";
-        throw new Error(errorMessage);
-      }
-    } catch (error) {
-      clientLogger.error(
-        LogComponent.PAIRING,
-        "Failed to start client",
-        error instanceof Error ? error : new Error(String(error)),
-        { deviceId }
-      );
-      sonnerToast.error("Failed to start client", {
-        description: "Please try again.",
-      });
-    } finally {
-      setStartingId(null);
-    }
-  };
-
-  const handleStop = async (deviceId: string) => {
-    if (!session?.user?.name) {
-      sonnerToast.error("Authentication Required", {
-        description: "You must be logged in to stop clients.",
-      });
-      return;
-    }
-
-    try {
-      setStoppingId(deviceId);
-      const response = await stopWolfClientAction(deviceId);
-
-      if (response.success) {
-        sonnerToast.success("Client stopped successfully");
-        fetchRequests(); // Refresh to get updated status
-      } else {
-        const errorMessage = typeof response.error === 'string'
-          ? response.error
-          : response.error?.message || "Failed to stop client";
-        throw new Error(errorMessage);
-      }
-    } catch (error) {
-      clientLogger.error(
-        LogComponent.PAIRING,
-        "Failed to stop client",
-        error instanceof Error ? error : new Error(String(error)),
-        { deviceId }
-      );
-      sonnerToast.error("Failed to stop client", {
-        description: "Please try again.",
-      });
-    } finally {
-      setStoppingId(null);
-    }
-  };
 
   // Render loading/error states based on combined loading/error states
   if (isLoadingRequests || isLoadingPairedClients) {
@@ -435,11 +360,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
         pairedClients={pairedClients}
         isLoading={isLoadingPairedClients}
         unpairingId={unpairingId}
-        startingId={startingId}
-        stoppingId={stoppingId}
         onUnpair={handleUnpair}
-        onStart={handleStart}
-        onStop={handleStop}
       />
     </>
   );

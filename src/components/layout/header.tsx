@@ -14,25 +14,15 @@ import { signOut } from "next-auth/react";
 
 import { useState } from "react";
 
+interface Notification {
+  title: string;
+  desc: string;
+  time: string;
+}
+
 export default function Header() {
-  // Notification state
-  const [notifications, setNotifications] = useState([
-    {
-      title: "New client pairing request",
-      desc: "IP: 192.168.1.45",
-      time: "Just now",
-    },
-    {
-      title: "Game installation complete",
-      desc: "Elden Ring is ready to play",
-      time: "10m ago",
-    },
-    {
-      title: "System update available",
-      desc: "Version 2.4.1 is ready to install",
-      time: "1h ago",
-    },
-  ]);
+  // Notification state - initialized empty for production
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Handler to clear all notifications
   const handleClearAll = () => setNotifications([]);
