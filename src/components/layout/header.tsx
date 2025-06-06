@@ -12,7 +12,7 @@ import {
 import { Bell, Search } from "lucide-react";
 import { signOut } from "next-auth/react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Notification {
   title: string;
@@ -23,12 +23,36 @@ interface Notification {
 export default function Header() {
   // Notification state - initialized empty for production
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
   // Handler to clear all notifications
   const handleClearAll = () => setNotifications([]);
 
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const SIDEBAR_STATE_KEY = "wolf-sidebar-expanded";
+    
+    // Initial state from localStorage
+    const savedState = localStorage.getItem(SIDEBAR_STATE_KEY);
+    if (savedState) {
+      const { expanded } = JSON.parse(savedState);
+      setSidebarExpanded(expanded);
+    }
+
+    // Listen for custom sidebar state change events
+    const handleSidebarStateChange = (event: CustomEvent) => {
+      setSidebarExpanded(event.detail.expanded);
+    };
+
+    window.addEventListener('sidebarStateChanged', handleSidebarStateChange as EventListener);
+
+    return () => {
+      window.removeEventListener('sidebarStateChanged', handleSidebarStateChange as EventListener);
+    };
+  }, []);
+
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-[rgba(255,255,255,0.1)] bg-[rgba(0,0,0,0.5)] backdrop-blur-md px-4 md:px-6 w-full">
+    <header className={`fixed top-0 right-0 z-20 flex h-16 items-center gap-4 border-b border-[rgba(255,255,255,0.1)] bg-[rgba(0,0,0,0.5)] backdrop-blur-md px-4 md:px-6 transition-all duration-300 ${sidebarExpanded ? 'md:left-64' : 'md:left-16'}`}>
       <div className="w-full flex-1 md:grow-0 md:w-auto hidden">
         <Button
           variant="outline"
@@ -115,9 +139,6 @@ export default function Header() {
               className="cursor-pointer hover:bg-[rgba(255,255,255,0.05)]"
             >
               <a href="/settings/account">Profile</a>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer hover:bg-[rgba(255,255,255,0.05)]">
-              Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-[rgba(255,255,255,0.1)]" />
             <DropdownMenuItem

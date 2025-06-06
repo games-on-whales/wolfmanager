@@ -31,12 +31,21 @@ export default function Sidebar() {
     if (savedState) {
       const { expanded: savedExpanded } = JSON.parse(savedState);
       setExpanded(savedExpanded);
+    } else {
+      // If no saved state, ensure the main content margin matches the default expanded state
+      const mainContent = document.querySelector("div.md\\:ml-16");
+      if (mainContent) {
+        mainContent.classList.remove("md:ml-16");
+        mainContent.classList.add("md:ml-64");
+      }
     }
   }, []);
 
   // Save state when it changes
   useEffect(() => {
     localStorage.setItem(SIDEBAR_STATE_KEY, JSON.stringify({ expanded }));
+    // Dispatch custom event to notify header of sidebar state change
+    window.dispatchEvent(new CustomEvent('sidebarStateChanged', { detail: { expanded } }));
   }, [expanded]);
 
   // Update the main content margin when sidebar state changes

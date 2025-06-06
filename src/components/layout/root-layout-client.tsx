@@ -43,12 +43,13 @@ export function RootLayoutClient({ children }: RootLayoutClientProps) {
         disableTransitionOnChange
       >
         {showLayout ? (
-          <div className="flex min-h-screen">
+          <div className="flex min-h-screen relative">
             {/* Flex container for sidebar and main content */}
             <Sidebar /> {/* Add Sidebar */}
-            <div className="flex flex-col flex-1 md:ml-64">
-              {/* Main content area, adjust margin for sidebar */}
-              <Header />
+            {/* Header positioned absolutely to span full width */}
+            <Header />
+            <div className="flex flex-col flex-1 md:ml-16 pt-16">
+              {/* Main content area, adjust margin for sidebar and add top padding for header */}
               <main className="flex-1 overflow-y-auto">
                 {/* Main content scrollable area */}
                 {children}
