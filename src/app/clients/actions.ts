@@ -8,13 +8,13 @@ import {
   type ApiResponse,
 } from "@/lib/api-utils";
 import type { PendingPairRequest } from "@/lib/api/wolf-pair"; // Import PendingPairRequest
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import type { Config } from "@/lib/config";
 import { loadConfig, saveConfig } from "@/lib/config";
 import { ConfigError } from "@/lib/errors";
 import { LogComponent, logger } from "@/lib/logger";
 import type { ClientDevice } from "@/types/client";
-import { getServerSession } from "next-auth";
 
 interface WolfPairResponse {
   success: boolean;

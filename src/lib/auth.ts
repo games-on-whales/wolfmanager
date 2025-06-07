@@ -50,7 +50,8 @@ export const authOptions: AuthOptions = {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: process.env.NODE_ENV === "production",
+        secure: false, // Allow non-HTTPS for development/internal networks
+        domain: undefined, // Allow cookies to work across different hosts
       },
     },
   },
@@ -100,8 +101,17 @@ export const authOptions: AuthOptions = {
     signOut: "/login",
   },
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger, session }: any) {
       try {
+        // Log NEXTAUTH_URL for remote access debugging
+        logger.debug(LogComponent.AUTH, "DIAGNOSIS: JWT callback - NEXTAUTH_URL check", {
+          nextauthUrl: process.env.NEXTAUTH_URL,
+          nodeEnv: process.env.NODE_ENV,
+          hasUser: !!user,
+          hasTrigger: !!trigger,
+          timestamp: new Date().toISOString(),
+        });
+
         // Handle session update
         if (trigger === "update" && session?.name) {
           token.name = session.name;
@@ -129,7 +139,7 @@ export const authOptions: AuthOptions = {
         return token;
       }
     },
-    async session({ session, token }) {
+    async session({ session, token }: any) {
       try {
         if (token.error) {
           logger.info(
@@ -182,7 +192,7 @@ export const authOptions: AuthOptions = {
         return session;
       }
     },
-    async signIn({ user, account, profile, email, credentials }) {
+    async signIn({ user, account, profile, email, credentials }: any) {
       try {
         logger.debug(LogComponent.AUTH, "SignIn callback triggered", {
           userId: user.id,
@@ -194,7 +204,7 @@ export const authOptions: AuthOptions = {
         return true; // Don't block signin due to logging errors
       }
     },
-    async redirect({ url, baseUrl }) {
+    async redirect({ url, baseUrl }: any) {
       try {
         logger.info(LogComponent.AUTH, "Redirect callback triggered", {
           url,
@@ -240,7 +250,7 @@ export const authOptions: AuthOptions = {
     updateAge: 1 * 60 * 60, // 1 hour
   },
   events: {
-    async signOut({ token }) {
+    async signOut({ token }: any) {
       try {
         logger.debug(LogComponent.AUTH, "User signed out", {
           userId: token?.id,
@@ -253,3 +263,4 @@ export const authOptions: AuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
+
