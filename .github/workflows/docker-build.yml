@@ -20,6 +20,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history and tags
+          fetch-tags: true  # Explicitly fetch all tags
       
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -40,19 +43,40 @@ jobs:
             MONTH=$(date +%m)
             BASE_VERSION="${YEAR}${MONTH}"
             
+            echo "Generating version for base: ${BASE_VERSION}"
+            
+            # Ensure we have all remote tags
+            git fetch --tags origin
+            
             # Get existing tags for this month to determine next increment
             EXISTING_TAGS=$(git tag -l "${BASE_VERSION}.*" | sort -V | tail -1)
             
             if [[ -z "$EXISTING_TAGS" ]]; then
               # No existing tags for this month, start with .001
               INCREMENT="001"
+              echo "No existing tags found, starting with increment: ${INCREMENT}"
             else
               # Extract the increment number and add 1
               LAST_INCREMENT=$(echo "$EXISTING_TAGS" | sed "s/${BASE_VERSION}\.//")
               INCREMENT=$(printf "%03d" $((10#$LAST_INCREMENT + 1)))
+              echo "Found existing tag: ${EXISTING_TAGS}, next increment: ${INCREMENT}"
             fi
             
             VERSION_TAG="${BASE_VERSION}.${INCREMENT}"
+            echo "Generated version tag: ${VERSION_TAG}"
+            
+            # Check if this tag already exists (safety check)
+            if git tag -l | grep -q "^${VERSION_TAG}$"; then
+              echo "ERROR: Tag ${VERSION_TAG} already exists locally!"
+              exit 1
+            fi
+            
+            # Check if tag exists on remote
+            if git ls-remote --tags origin | grep -q "refs/tags/${VERSION_TAG}$"; then
+              echo "ERROR: Tag ${VERSION_TAG} already exists on remote!"
+              exit 1
+            fi
+            
             echo "tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
             echo "is_stable=true" >> $GITHUB_OUTPUT
           else
@@ -69,8 +93,20 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ steps.version.outputs.tag }}
-          git push origin ${{ steps.version.outputs.tag }}
+          
+          TAG="${{ steps.version.outputs.tag }}"
+          echo "Creating and pushing tag: ${TAG}"
+          
+          # Final safety check before creating tag
+          if git tag -l | grep -q "^${TAG}$"; then
+            echo "ERROR: Tag ${TAG} already exists locally, cannot create!"
+            exit 1
+          fi
+          
+          # Create and push the tag
+          git tag "${TAG}"
+          git push origin "${TAG}"
+          echo "Successfully created and pushed tag: ${TAG}"
       
       - name: Extract metadata (tags, labels) for Docker
         id: meta
