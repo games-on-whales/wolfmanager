@@ -10,6 +10,7 @@ const publicPaths = [
   "/",
   "/login",
   "/register",
+  "/first-time-setup",
   "/api/auth",
   "/_next",
   "/favicon.ico",
@@ -46,6 +47,15 @@ export default withAuth(
     if (publicPaths.some((path) => pathname.startsWith(path))) {
       // Special handling for root path
       if (pathname === "/" && token) {
+        // Check if user requires first-time setup
+        if (token.requiresFirstTimeSetup) {
+          await logger.debug(LogComponent.AUTH, "Root path redirect to first-time setup", {
+            destination: "first-time-setup",
+            userId: token.id,
+          });
+          return NextResponse.redirect(new URL("/first-time-setup", req.url));
+        }
+        
         // Log the redirect decision for debugging
         await logger.debug(LogComponent.AUTH, "Root path redirect decision", {
           destination: "clients",
@@ -62,6 +72,7 @@ export default withAuth(
       path: pathname,
       hasToken: !!token,
       userRole: token?.role || "none",
+      requiresFirstTimeSetup: token?.requiresFirstTimeSetup,
     });
 
     // Check for expired or invalid session
@@ -80,6 +91,26 @@ export default withAuth(
       const url = new URL("/error/unauthorized", req.url);
       url.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(url);
+    }
+
+    // Enforce first-time setup for users who haven't completed it
+    if (token.requiresFirstTimeSetup && pathname !== "/first-time-setup") {
+      await logger.info(LogComponent.AUTH, "Redirecting user to first-time setup", {
+        path: pathname,
+        userId: token.id,
+        destination: "/first-time-setup",
+      });
+      
+      // For API routes, return 403 with specific message
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({
+          error: "First-time setup required",
+          redirectTo: "/first-time-setup"
+        }, { status: 403 });
+      }
+      
+      // For non-API routes, redirect to first-time setup
+      return NextResponse.redirect(new URL("/first-time-setup", req.url));
     }
 
     // Check for admin-only routes

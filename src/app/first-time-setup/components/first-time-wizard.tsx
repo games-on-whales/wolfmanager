@@ -88,7 +88,12 @@ export function FirstTimeWizard() {
   const handlePasswordSubmit = async (data: z.infer<typeof passwordSchema>) => {
     setIsLoading(true);
     try {
-      await updatePassword(data.newPassword);
+      const result = await updatePassword(data.newPassword);
+      
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update password");
+      }
+      
       showToast.success("Password updated successfully");
       await clientLogger.info(
         LogComponent.AUTH,
@@ -131,10 +136,9 @@ export function FirstTimeWizard() {
         "Steam settings saved successfully"
       );
 
-      // Sign out and redirect to login after completing setup
-      await signOut({ redirect: false });
+      // Complete setup and redirect to clients
       showToast.success("Setup completed successfully");
-      router.replace("/login");
+      router.replace("/clients");
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,
@@ -157,10 +161,9 @@ export function FirstTimeWizard() {
     try {
       clientLogger.info(LogComponent.AUTH, "Skipping Steam setup");
 
-      // Just sign out and redirect, no Steam settings to save
-      await signOut({ redirect: false });
+      // Complete setup without Steam settings
       showToast.success("Setup completed successfully");
-      router.push("/login");
+      router.push("/clients");
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,
@@ -207,7 +210,7 @@ export function FirstTimeWizard() {
         LogComponent.WOLF_UI,
         "Completing first-time setup"
       );
-      router.push("/dashboard");
+      router.push("/clients");
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,

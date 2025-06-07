@@ -15,9 +15,9 @@ export default async function FirstTimeSetupPage() {
     redirect("/auth/signin");
   }
 
-  // If user has already completed first-time setup, redirect to dashboard
+  // If user has already completed first-time setup, redirect to clients
   if (session.requiresFirstTimeSetup === false) {
-    redirect("/dashboard");
+    redirect("/clients");
   }
 
   // If we don't have a clear indication of first-time setup status, check the user config
@@ -25,7 +25,7 @@ export default async function FirstTimeSetupPage() {
   const user = config.users[session.user.name];
 
   if (!user || user.has_changed_password) {
-    redirect("/dashboard");
+    redirect("/clients");
   }
 
   return (

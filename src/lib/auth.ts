@@ -185,16 +185,22 @@ export const authOptions: AuthOptions = {
     },
     async redirect({ url, baseUrl }) {
       try {
-        logger.debug(LogComponent.AUTH, "Redirect callback triggered", {
+        logger.info(LogComponent.AUTH, "Redirect callback triggered", {
           url,
           baseUrl,
+          urlType: typeof url,
+          baseUrlType: typeof baseUrl,
         });
+        
+        // For first-time setup flow, we'll rely on the signIn callback to set the correct callback URL
+        // and the middleware to enforce first-time setup requirements
         
         // If redirecting to root or dashboard, redirect to clients instead
         if (url === baseUrl || url === `${baseUrl}/` || url === `${baseUrl}/dashboard`) {
           logger.info(LogComponent.AUTH, "Redirecting post-login to clients page", {
             originalUrl: url,
             newUrl: `${baseUrl}/clients`,
+            reason: "matched_root_or_dashboard"
           });
           return `${baseUrl}/clients`;
         }
