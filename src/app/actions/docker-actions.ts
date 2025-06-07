@@ -1,6 +1,6 @@
 "use server";
 
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { DockerLogService, type ContainerInfo, type LogEntry, type LogOptions } from "@/lib/services/docker-log-service";
 import { SocketService } from "@/lib/services/socket-service";

@@ -40,8 +40,8 @@ export function LoginForm({}: LoginFormProps) {
       const result = await signIn("credentials", {
         username,
         password,
-        callbackUrl: "/clients",
         redirect: true,
+        callbackUrl: "/clients",
       });
 
       // The code won't reach here due to redirect: true

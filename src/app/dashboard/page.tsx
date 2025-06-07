@@ -10,5 +10,6 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  return <DashboardClient session={session} />;
+  // Redirect authenticated users to clients page instead
+  redirect("/clients");
 }

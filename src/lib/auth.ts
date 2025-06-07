@@ -50,7 +50,8 @@ export const authOptions: AuthOptions = {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: process.env.NODE_ENV === "production",
+        secure: false, // Allow non-HTTPS for development/internal networks
+        domain: undefined, // Allow cookies to work across different hosts
       },
     },
   },
@@ -100,8 +101,17 @@ export const authOptions: AuthOptions = {
     signOut: "/login",
   },
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger, session }: any) {
       try {
+        // Log NEXTAUTH_URL for remote access debugging
+        logger.debug(LogComponent.AUTH, "DIAGNOSIS: JWT callback - NEXTAUTH_URL check", {
+          nextauthUrl: process.env.NEXTAUTH_URL,
+          nodeEnv: process.env.NODE_ENV,
+          hasUser: !!user,
+          hasTrigger: !!trigger,
+          timestamp: new Date().toISOString(),
+        });
+
         // Handle session update
         if (trigger === "update" && session?.name) {
           token.name = session.name;
@@ -123,24 +133,57 @@ export const authOptions: AuthOptions = {
           };
         }
 
+        // For existing tokens, periodically re-check the user's first-time setup status
+        // This ensures the token reflects current config state
+        if (token.id && token.name) {
+          try {
+            const { loadConfig } = await import("./config");
+            const config = loadConfig();
+            const currentUser = config.users[token.name];
+            
+            if (currentUser) {
+              const currentRequiresSetup = !currentUser.has_changed_password;
+              
+              // Only update if the status has changed
+              if (token.requiresFirstTimeSetup !== currentRequiresSetup) {
+                logger.debug(LogComponent.AUTH, "Updating first-time setup status in token", {
+                  userId: token.id,
+                  oldStatus: token.requiresFirstTimeSetup,
+                  newStatus: currentRequiresSetup,
+                });
+                
+                return {
+                  ...token,
+                  requiresFirstTimeSetup: currentRequiresSetup,
+                };
+              }
+            }
+          } catch (error) {
+            logger.error(LogComponent.AUTH, "Error checking user setup status", error);
+          }
+        }
+
         return token;
       } catch (error) {
         logger.error(LogComponent.AUTH, "JWT callback error", error);
         return token;
       }
     },
-    async session({ session, token }) {
+    async session({ session, token }: any) {
       try {
         if (token.error) {
           logger.info(
             LogComponent.AUTH,
-            "Session validation failed - forcing logout",
+            "DIAGNOSIS: Session validation failed - forcing logout",
             {
               error: token.error,
               userId: token.id,
+              userName: token.name,
+              userRole: token.role,
               tokenExpiry: token.exp
                 ? new Date(token.exp * 1000).toISOString()
                 : undefined,
+              timestamp: new Date().toISOString(),
             }
           );
           return {
@@ -150,11 +193,15 @@ export const authOptions: AuthOptions = {
           };
         }
 
-        logger.debug(LogComponent.AUTH, "Session validated successfully", {
+        logger.debug(LogComponent.AUTH, "DIAGNOSIS: Session validated successfully", {
           userId: token.id,
+          userName: token.name,
+          userRole: token.role,
+          requiresFirstTimeSetup: token.requiresFirstTimeSetup,
           tokenExpiry: token.exp
             ? new Date(token.exp * 1000).toISOString()
             : undefined,
+          timestamp: new Date().toISOString(),
         });
 
         return {
@@ -167,11 +214,15 @@ export const authOptions: AuthOptions = {
           requiresFirstTimeSetup: token.requiresFirstTimeSetup,
         };
       } catch (error) {
-        logger.error(LogComponent.AUTH, "Session callback error", error);
+        logger.error(LogComponent.AUTH, "DIAGNOSIS: Session callback error", error, {
+          timestamp: new Date().toISOString(),
+          tokenId: token?.id,
+          tokenName: token?.name,
+        });
         return session;
       }
     },
-    async signIn({ user, account, profile, email, credentials }) {
+    async signIn({ user, account, profile, email, credentials }: any) {
       try {
         logger.debug(LogComponent.AUTH, "SignIn callback triggered", {
           userId: user.id,
@@ -183,18 +234,24 @@ export const authOptions: AuthOptions = {
         return true; // Don't block signin due to logging errors
       }
     },
-    async redirect({ url, baseUrl }) {
+    async redirect({ url, baseUrl }: any) {
       try {
-        logger.debug(LogComponent.AUTH, "Redirect callback triggered", {
+        logger.info(LogComponent.AUTH, "Redirect callback triggered", {
           url,
           baseUrl,
+          urlType: typeof url,
+          baseUrlType: typeof baseUrl,
         });
+        
+        // For first-time setup flow, we'll rely on the signIn callback to set the correct callback URL
+        // and the middleware to enforce first-time setup requirements
         
         // If redirecting to root or dashboard, redirect to clients instead
         if (url === baseUrl || url === `${baseUrl}/` || url === `${baseUrl}/dashboard`) {
           logger.info(LogComponent.AUTH, "Redirecting post-login to clients page", {
             originalUrl: url,
             newUrl: `${baseUrl}/clients`,
+            reason: "matched_root_or_dashboard"
           });
           return `${baseUrl}/clients`;
         }
@@ -223,7 +280,7 @@ export const authOptions: AuthOptions = {
     updateAge: 1 * 60 * 60, // 1 hour
   },
   events: {
-    async signOut({ token }) {
+    async signOut({ token }: any) {
       try {
         logger.debug(LogComponent.AUTH, "User signed out", {
           userId: token?.id,
@@ -236,3 +293,4 @@ export const authOptions: AuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
+

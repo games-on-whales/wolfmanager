@@ -1,6 +1,6 @@
 "use server";
 
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { SocketService } from "@/lib/services/socket-service";
 import { LogComponent, logger } from "@/lib/logger";
@@ -69,12 +69,36 @@ interface WolfPendingRequestsResponse {
  * Get authenticated session or return error response
  */
 async function getAuthenticatedSession() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    await logger.warn(LogComponent.WOLF_UI, "Wolf action attempted without authentication");
+  try {
+    // Get headers to debug cookie issues
+    const { headers } = await import('next/headers');
+    const headersList = headers();
+    const cookieHeader = headersList.get('cookie');
+    
+    const session = await getServerSession(authOptions);
+    await logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: Wolf action authentication check", {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userId: session?.user?.id,
+      userName: session?.user?.name,
+      userRole: session?.user?.role,
+      nextauthUrl: process.env.NEXTAUTH_URL,
+      nodeEnv: process.env.NODE_ENV,
+      hasCookieHeader: !!cookieHeader,
+      cookieHeaderLength: cookieHeader?.length || 0,
+      hasSessionToken: cookieHeader?.includes('next-auth.session-token') || false,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (!session?.user) {
+      await logger.warn(LogComponent.WOLF_UI, "Wolf action attempted without authentication");
+      return null;
+    }
+    return session;
+  } catch (error) {
+    await logger.error(LogComponent.WOLF_UI, "DIAGNOSIS: Error in getAuthenticatedSession", error);
     return null;
   }
-  return session;
 }
 
 /**
@@ -113,8 +137,11 @@ function extractUniqueClientIds(clients: any[]): Set<string> {
  */
 export async function getWolfClientsAction(): Promise<ApiResponse<{ clients: WolfClientWithMetadata[] }>> {
   try {
+    await logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: getWolfClientsAction called");
+    
     const session = await getAuthenticatedSession();
     if (!session) {
+      await logger.warn(LogComponent.WOLF_UI, "DIAGNOSIS: getWolfClientsAction - no session");
       return createErrorResponse(
         API_ERROR_CODES.UNAUTHORIZED,
         "Authentication required"
@@ -123,6 +150,10 @@ export async function getWolfClientsAction(): Promise<ApiResponse<{ clients: Wol
 
     const username = session.user.name;
     if (!username) {
+      await logger.warn(LogComponent.WOLF_UI, "DIAGNOSIS: getWolfClientsAction - no username", {
+        hasUser: !!session.user,
+        userId: session.user?.id
+      });
       return createErrorResponse(
         API_ERROR_CODES.UNAUTHORIZED,
         "Username required"
@@ -288,8 +319,11 @@ export async function getWolfClientAction(deviceId: string): Promise<ApiResponse
  */
 export async function getPendingPairRequestsAction(): Promise<ApiResponse<{ requests: PendingPairRequest[] }>> {
   try {
+    await logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: getPendingPairRequestsAction called");
+    
     const session = await getAuthenticatedSession();
     if (!session) {
+      await logger.warn(LogComponent.WOLF_UI, "DIAGNOSIS: getPendingPairRequestsAction - no session");
       return createErrorResponse(
         API_ERROR_CODES.UNAUTHORIZED,
         "Authentication required"

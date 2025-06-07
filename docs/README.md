@@ -13,6 +13,8 @@ docs/
 │   ├── first-time-setup.md
 │   └── user-management.md
 ├── technical/            # Technical documentation
+│   ├── authentication-architecture.md     # Authentication & session management
+│   ├── authentication-quick-reference.md  # Authentication quick reference
 │   ├── logging/
 │   │   ├── index.md     # Overview of logging system
 │   │   ├── setup.md     # Logger setup and configuration
@@ -38,6 +40,8 @@ Detailed documentation for specific features and functionality. Each feature doc
 
 Technical documentation covering system architecture, internal components, and development standards:
 
+- **Authentication Architecture** - Comprehensive guide to NextAuth.js implementation, session management, middleware protection, and cross-host cookie configuration
+- **Authentication Quick Reference** - Quick reference for common authentication patterns, troubleshooting, and configuration
 - Architecture overview
 - Component documentation
 - Standards and best practices
