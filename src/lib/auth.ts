@@ -134,13 +134,16 @@ export const authOptions: AuthOptions = {
         if (token.error) {
           logger.info(
             LogComponent.AUTH,
-            "Session validation failed - forcing logout",
+            "DIAGNOSIS: Session validation failed - forcing logout",
             {
               error: token.error,
               userId: token.id,
+              userName: token.name,
+              userRole: token.role,
               tokenExpiry: token.exp
                 ? new Date(token.exp * 1000).toISOString()
                 : undefined,
+              timestamp: new Date().toISOString(),
             }
           );
           return {
@@ -150,11 +153,15 @@ export const authOptions: AuthOptions = {
           };
         }
 
-        logger.debug(LogComponent.AUTH, "Session validated successfully", {
+        logger.debug(LogComponent.AUTH, "DIAGNOSIS: Session validated successfully", {
           userId: token.id,
+          userName: token.name,
+          userRole: token.role,
+          requiresFirstTimeSetup: token.requiresFirstTimeSetup,
           tokenExpiry: token.exp
             ? new Date(token.exp * 1000).toISOString()
             : undefined,
+          timestamp: new Date().toISOString(),
         });
 
         return {
@@ -167,7 +174,11 @@ export const authOptions: AuthOptions = {
           requiresFirstTimeSetup: token.requiresFirstTimeSetup,
         };
       } catch (error) {
-        logger.error(LogComponent.AUTH, "Session callback error", error);
+        logger.error(LogComponent.AUTH, "DIAGNOSIS: Session callback error", error, {
+          timestamp: new Date().toISOString(),
+          tokenId: token?.id,
+          tokenName: token?.name,
+        });
         return session;
       }
     },

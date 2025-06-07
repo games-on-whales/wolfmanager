@@ -25,16 +25,25 @@ interface WolfPairResponse {
 async function getUsername(): Promise<string | null> {
   try {
     const session = await getServerSession(authOptions);
-    logger.debug(LogComponent.WOLF_UI, "[Action] Got session", {
+    logger.debug(LogComponent.WOLF_UI, "[Action] DIAGNOSIS: Got session details", {
       username: session?.user?.name ?? "none",
       hasSession: !!session,
+      hasUser: !!session?.user,
+      userId: session?.user?.id ?? "none",
+      userRole: session?.user?.role ?? "none",
+      requiresFirstTimeSetup: session?.requiresFirstTimeSetup ?? false,
+      sessionError: session?.error ?? "none",
+      timestamp: new Date().toISOString()
     });
     return session?.user?.name ?? null;
   } catch (error) {
     logger.error(
       LogComponent.WOLF_UI,
-      "[Action] Failed to get session",
-      error instanceof Error ? error : new Error(String(error))
+      "[Action] DIAGNOSIS: Failed to get session",
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        timestamp: new Date().toISOString()
+      }
     );
     return null;
   }
@@ -1074,7 +1083,14 @@ export async function listClientsAndOwners(): Promise<
   if (!username) {
     logger.warn(
       LogComponent.WOLF_UI,
-      "[Action] listClientsAndOwners called without authenticated user"
+      "[Action] DIAGNOSIS: listClientsAndOwners UNAUTHORIZED - detailed session state",
+      {
+        usernameValue: username,
+        usernameType: typeof username,
+        calledFrom: "listClientsAndOwners",
+        timestamp: new Date().toISOString(),
+        // Note: session details will be logged by getUsername() above
+      }
     );
     return createErrorResponse("Unauthorized", API_ERROR_CODES.UNAUTHORIZED);
   }

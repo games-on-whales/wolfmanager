@@ -77,9 +77,15 @@ export default withAuth(
 
     // Check for expired or invalid session
     if (!token || token.error === "SessionExpired") {
-      await logger.warn(LogComponent.AUTH, "Invalid or expired session", {
+      await logger.warn(LogComponent.AUTH, "DIAGNOSIS: Invalid or expired session in middleware", {
         path: pathname,
         error: token?.error || "NoToken",
+        hasToken: !!token,
+        tokenId: token?.id,
+        tokenName: token?.name,
+        tokenRole: token?.role,
+        tokenExpiry: token?.exp ? new Date(token.exp * 1000).toISOString() : undefined,
+        timestamp: new Date().toISOString(),
       });
 
       // For API routes, return 401
