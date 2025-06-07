@@ -180,7 +180,19 @@ export default function Sidebar() {
           <div className="border-t border-[rgba(255,255,255,0.1)] p-2">
             <Button
               variant="ghost"
-              onClick={() => signOut()}
+              onClick={async () => {
+                try {
+                  // Use NextAuth's built-in redirect functionality to avoid navigation conflicts
+                  await signOut({
+                    callbackUrl: "/login",
+                    redirect: true
+                  });
+                } catch (error) {
+                  console.error("Logout error:", error);
+                  // Fallback: force navigation to login if signOut fails
+                  window.location.href = "/login";
+                }
+              }}
               className={cn(
                 "w-full text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.05)]",
                 expanded ? "justify-start px-4" : "justify-center px-0"
@@ -280,7 +292,19 @@ export default function Sidebar() {
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-[rgba(255,255,255,0.1)]">
           <Button
             variant="ghost"
-            onClick={() => signOut()}
+            onClick={async () => {
+              try {
+                // Use NextAuth's built-in redirect functionality to avoid navigation conflicts
+                await signOut({
+                  callbackUrl: "/login",
+                  redirect: true
+                });
+              } catch (error) {
+                console.error("Logout error:", error);
+                // Fallback: force navigation to login if signOut fails
+                window.location.href = "/login";
+              }
+            }}
             className="w-full justify-start text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.05)]"
           >
             <LogOut className="mr-2 h-5 w-5" />

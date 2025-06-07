@@ -52,81 +52,74 @@ export default withAuth(
       host: req.nextUrl.host
     });
 
-    // Allow public paths
-    if (publicPaths.some((path) => pathname.startsWith(path))) {
-      // Special handling for root path
-      if (pathname === "/" && token) {
-        // Check if user requires first-time setup
-        if (token.requiresFirstTimeSetup) {
-          await logger.debug(LogComponent.AUTH, "Root path redirect to first-time setup", {
-            destination: "first-time-setup",
-            userId: token.id,
-          });
-          return NextResponse.redirect(new URL("/first-time-setup", req.url));
-        }
-        
-        // Log the redirect decision for debugging
-        await logger.debug(LogComponent.AUTH, "Root path redirect decision", {
-          destination: "clients",
-          userId: token.id,
-          });
-          // If authenticated, redirect to clients page
-          return NextResponse.redirect(new URL("/clients", req.url));
-        }
-        return NextResponse.next();
-      }
-
-      // Log access attempt
-      await logger.debug(LogComponent.AUTH, "Route access attempt", {
+    // Check for expired or invalid session first
+    if (!token || token.error === "SessionExpired") {
+      await logger.warn(LogComponent.AUTH, "DIAGNOSIS: Invalid or expired session in middleware", {
         path: pathname,
+        error: token?.error || "NoToken",
         hasToken: !!token,
-        userRole: token?.role || "none",
-        requiresFirstTimeSetup: token?.requiresFirstTimeSetup,
+        tokenId: token?.id,
+        tokenName: token?.name,
+        tokenRole: token?.role,
+        tokenExpiry: token?.exp ? new Date(token.exp * 1000).toISOString() : undefined,
+        timestamp: new Date().toISOString(),
       });
 
-      // Check for expired or invalid session
-      if (!token || token.error === "SessionExpired") {
-        await logger.warn(LogComponent.AUTH, "DIAGNOSIS: Invalid or expired session in middleware", {
-          path: pathname,
-          error: token?.error || "NoToken",
-          hasToken: !!token,
-          tokenId: token?.id,
-          tokenName: token?.name,
-          tokenRole: token?.role,
-          tokenExpiry: token?.exp ? new Date(token.exp * 1000).toISOString() : undefined,
-          timestamp: new Date().toISOString(),
-        });
+      // For API routes, return 401
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
 
-        // For API routes, return 401
-        if (pathname.startsWith("/api/")) {
-          return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        // For non-API routes, redirect to unauthorized page
+      // For non-API routes, redirect to unauthorized page if not already on a public error page
+      if (!publicPaths.some((path) => pathname.startsWith(path))) {
         const url = new URL("/error/unauthorized", req.url);
         url.searchParams.set("callbackUrl", pathname);
         return NextResponse.redirect(url);
       }
+    }
 
-      // Enforce first-time setup for users who haven't completed it
-      if (token.requiresFirstTimeSetup && pathname !== "/first-time-setup") {
-        await logger.info(LogComponent.AUTH, "Redirecting user to first-time setup", {
-          path: pathname,
-          userId: token.id,
-          destination: "/first-time-setup",
-        });
-        
-        // For API routes, return 403 with specific message
-        if (pathname.startsWith("/api/")) {
-          return NextResponse.json({
-            error: "First-time setup required",
-            redirectTo: "/first-time-setup"
-          }, { status: 403 });
-        }
-        
-        // For non-API routes, redirect to first-time setup
-        return NextResponse.redirect(new URL("/first-time-setup", req.url));
+    // Enforce first-time setup for authenticated users who haven't completed it
+    if (token && token.requiresFirstTimeSetup && pathname !== "/first-time-setup") {
+      await logger.info(LogComponent.AUTH, "Redirecting user to first-time setup", {
+        path: pathname,
+        userId: token.id,
+        destination: "/first-time-setup",
+      });
+      
+      // For API routes, return 403 with specific message
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({
+          error: "First-time setup required",
+          redirectTo: "/first-time-setup"
+        }, { status: 403 });
       }
+      
+      // For non-API routes, redirect to first-time setup
+      return NextResponse.redirect(new URL("/first-time-setup", req.url));
+    }
+
+    // Allow public paths if no token or first-time setup is not required
+    if (publicPaths.some((path) => pathname.startsWith(path))) {
+      // Special handling for root path
+      if (pathname === "/") {
+        if (token) {
+          // If authenticated and not requiring setup, redirect to clients page
+          return NextResponse.redirect(new URL("/clients", req.url));
+        } else {
+          // If not authenticated, redirect to login
+          return NextResponse.redirect(new URL("/login", req.url));
+        }
+      }
+      return NextResponse.next();
+    }
+
+    // Log access attempt for protected routes
+    await logger.debug(LogComponent.AUTH, "Protected route access attempt", {
+      path: pathname,
+      hasToken: !!token,
+      userRole: token?.role || "none",
+      requiresFirstTimeSetup: token?.requiresFirstTimeSetup,
+    });
 
       // Check for admin-only routes
       if (adminPaths.some((path) => pathname.startsWith(path))) {

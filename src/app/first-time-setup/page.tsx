@@ -20,24 +20,17 @@ export default async function FirstTimeSetupPage() {
     redirect("/clients");
   }
 
-  // If we don't have a clear indication of first-time setup status, check the user config
-  const config = loadConfig();
-  const user = config.users[session.user.name];
-
-  if (!user || user.has_changed_password) {
-    redirect("/clients");
-  }
 
   return (
-    <PageLayout
-      title="Welcome to Wolf"
-      description="Let's get your account set up"
-    >
+    <div className="space-y-6 p-8 max-w-7xl mx-auto">
+      <h1 className="text-2xl font-bold text-white neon-text">
+        Account Setup
+      </h1>
       <ErrorBoundary>
         <Suspense fallback={<LoadingState />}>
           <FirstTimeWizard />
         </Suspense>
       </ErrorBoundary>
-    </PageLayout>
+    </div>
   );
 }

@@ -37,11 +37,6 @@ const steps = [
     title: "Change Password",
     description: "Please set a new password to continue",
   },
-  {
-    id: "steam",
-    title: "Steam Integration",
-    description: "Connect your Steam account (optional)",
-  },
 ] as const;
 
 const passwordSchema = z
@@ -54,18 +49,9 @@ const passwordSchema = z
     path: ["confirmPassword"],
   });
 
-const steamSchema = z.object({
-  steamId: z.string().optional(),
-  steamApiKey: z.string().optional(),
-});
-
 type PasswordForm = z.infer<typeof passwordSchema>;
-type SteamForm = z.infer<typeof steamSchema>;
 
 export function FirstTimeWizard() {
-  const [currentStep, setCurrentStep] = useState<"password" | "steam">(
-    "password"
-  );
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -77,140 +63,16 @@ export function FirstTimeWizard() {
     },
   });
 
-  const steamForm = useForm<SteamForm>({
-    resolver: zodResolver(steamSchema),
-    defaultValues: {
-      steamId: "",
-      steamApiKey: "",
-    },
-  });
-
-  const handlePasswordSubmit = async (data: z.infer<typeof passwordSchema>) => {
-    setIsLoading(true);
-    try {
-      const result = await updatePassword(data.newPassword);
-      
-      if (!result.success) {
-        throw new Error(result.error || "Failed to update password");
-      }
-      
-      showToast.success("Password updated successfully");
-      await clientLogger.info(
-        LogComponent.AUTH,
-        "Password updated successfully"
-      );
-
-      // Move to Steam step instead of signing out
-      setCurrentStep("steam");
-    } catch (error) {
-      await clientLogger.error(
-        LogComponent.AUTH,
-        "Failed to update password",
-        error instanceof Error ? error : new Error(String(error))
-      );
-      showToast.error(
-        "Password Update Failed",
-        error instanceof Error ? error : new Error("Failed to update password")
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSteamSubmit = async (data: z.infer<typeof steamSchema>) => {
-    setIsLoading(true);
-    try {
-      // Use the existing updateSteamSettings server action
-      const result = await updateSteamSettings({
-        steamId: data.steamId || "",
-        steamApiKey: data.steamApiKey || "",
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to save Steam settings");
-      }
-
-      showToast.success("Steam settings saved successfully");
-      await clientLogger.info(
-        LogComponent.AUTH,
-        "Steam settings saved successfully"
-      );
-
-      // Complete setup and redirect to clients
-      showToast.success("Setup completed successfully");
-      router.replace("/clients");
-    } catch (error) {
-      await clientLogger.error(
-        LogComponent.AUTH,
-        "Failed to save Steam settings",
-        error instanceof Error ? error : new Error(String(error))
-      );
-      showToast.error(
-        "Steam Settings Failed",
-        error instanceof Error
-          ? error
-          : new Error("Failed to save Steam settings")
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSkip = async () => {
-    setIsLoading(true);
-    try {
-      clientLogger.info(LogComponent.AUTH, "Skipping Steam setup");
-
-      // Complete setup without Steam settings
-      showToast.success("Setup completed successfully");
-      router.push("/clients");
-    } catch (error) {
-      await clientLogger.error(
-        LogComponent.AUTH,
-        "Failed to complete setup",
-        error instanceof Error ? error : new Error(String(error))
-      );
-      showToast.error(
-        "Setup Failed",
-        error instanceof Error ? error : new Error("Failed to complete setup")
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleNext = async () => {
-    await clientLogger.debug(
-      LogComponent.WOLF_UI,
-      "Moving to next step in first-time setup",
-      {
-        currentStep: currentStep,
-        nextStep: currentStep === "password" ? "steam" : "password",
-      }
-    );
-    setCurrentStep((prev) => (prev === "password" ? "steam" : "password"));
-  };
-
-  const handleBack = async () => {
-    await clientLogger.debug(
-      LogComponent.WOLF_UI,
-      "Moving to previous step in first-time setup",
-      {
-        currentStep: currentStep,
-        previousStep: currentStep === "password" ? "steam" : "password",
-      }
-    );
-    setCurrentStep((prev) => (prev === "password" ? "steam" : "password"));
-  };
-
   const handleFinish = async () => {
-    setIsLoading(true);
     try {
       await clientLogger.info(
         LogComponent.WOLF_UI,
         "Completing first-time setup"
       );
-      router.push("/clients");
+      // Small delay to ensure session is updated, then use smooth navigation
+      setTimeout(() => {
+        router.push("/clients");
+      }, 100);
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,
@@ -226,25 +88,53 @@ export function FirstTimeWizard() {
           description: "An error occurred while completing the setup",
         }
       );
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (data: z.infer<typeof passwordSchema>) => {
+    setIsLoading(true);
+    try {
+      const result = await updatePassword(data.newPassword);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update password");
+      }
+      showToast.success("Password updated successfully");
+      await clientLogger.info(
+        LogComponent.AUTH,
+        "Password updated successfully"
+      );
+      if (result.requiresRefresh) {
+        // Session will be automatically updated by JWT callback, navigate normally
+        await handleFinish();
+      } else {
+        await handleFinish();
+      }
+    } catch (error) {
+      await clientLogger.error(
+        LogComponent.AUTH,
+        "Failed to update password",
+        error instanceof Error ? error : new Error(String(error))
+      );
+      showToast.error(
+        "Password Update Failed",
+        error instanceof Error ? error : new Error("Failed to update password")
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card className="w-full max-w-lg mx-auto">
-      <CardHeader>
-        <CardTitle>
-          {currentStep === "password" ? steps[0].title : steps[1].title}
-        </CardTitle>
-        <CardDescription>
-          {currentStep === "password"
-            ? steps[0].description
-            : steps[1].description}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {currentStep === "password" && (
+    <div className="flex justify-center items-center">
+      <Card className="w-full max-w-lg glass-card border-none">
+        <CardHeader>
+          <CardTitle className="text-white">{steps[0].title}</CardTitle>
+          <CardDescription className="text-gray-300">
+            {steps[0].description}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
           <Form {...passwordForm}>
             <form
               onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)}
@@ -255,7 +145,7 @@ export function FirstTimeWizard() {
                 name="newPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>New Password</FormLabel>
+                    <FormLabel className="text-gray-300">New Password</FormLabel>
                     <FormControl>
                       <Input type="password" {...field} />
                     </FormControl>
@@ -268,7 +158,9 @@ export function FirstTimeWizard() {
                 name="confirmPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Confirm Password</FormLabel>
+                    <FormLabel className="text-gray-300">
+                      Confirm Password
+                    </FormLabel>
                     <FormControl>
                       <Input type="password" {...field} />
                     </FormControl>
@@ -276,74 +168,15 @@ export function FirstTimeWizard() {
                   </FormItem>
                 )}
               />
-              <CardFooter className="px-0">
+              <CardFooter className="px-0 pt-4">
                 <Button type="submit" className="ml-auto" disabled={isLoading}>
-                  {isLoading ? "Updating..." : "Next"}
+                  {isLoading ? "Updating..." : "Complete Setup"}
                 </Button>
               </CardFooter>
             </form>
           </Form>
-        )}
-
-        {currentStep === "steam" && (
-          <Form {...steamForm}>
-            <form
-              onSubmit={steamForm.handleSubmit(handleSteamSubmit)}
-              className="space-y-4"
-            >
-              <Alert>
-                <AlertDescription>
-                  Steam integration is optional. You can skip this step and set
-                  it up later in your account settings.
-                </AlertDescription>
-              </Alert>
-              <FormField
-                control={steamForm.control}
-                name="steamId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Steam ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter your Steam ID" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={steamForm.control}
-                name="steamApiKey"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Steam API Key</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="Enter your Steam API Key"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <CardFooter className="px-0 flex justify-between">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleSkip}
-                  disabled={isLoading}
-                >
-                  Skip
-                </Button>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? "Saving..." : "Complete Setup"}
-                </Button>
-              </CardFooter>
-            </form>
-          </Form>
-        )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

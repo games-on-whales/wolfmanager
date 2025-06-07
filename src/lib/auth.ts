@@ -133,6 +133,36 @@ export const authOptions: AuthOptions = {
           };
         }
 
+        // For existing tokens, periodically re-check the user's first-time setup status
+        // This ensures the token reflects current config state
+        if (token.id && token.name) {
+          try {
+            const { loadConfig } = await import("./config");
+            const config = loadConfig();
+            const currentUser = config.users[token.name];
+            
+            if (currentUser) {
+              const currentRequiresSetup = !currentUser.has_changed_password;
+              
+              // Only update if the status has changed
+              if (token.requiresFirstTimeSetup !== currentRequiresSetup) {
+                logger.debug(LogComponent.AUTH, "Updating first-time setup status in token", {
+                  userId: token.id,
+                  oldStatus: token.requiresFirstTimeSetup,
+                  newStatus: currentRequiresSetup,
+                });
+                
+                return {
+                  ...token,
+                  requiresFirstTimeSetup: currentRequiresSetup,
+                };
+              }
+            }
+          } catch (error) {
+            logger.error(LogComponent.AUTH, "Error checking user setup status", error);
+          }
+        }
+
         return token;
       } catch (error) {
         logger.error(LogComponent.AUTH, "JWT callback error", error);
