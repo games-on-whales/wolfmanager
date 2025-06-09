@@ -2,7 +2,9 @@ name: Docker Build
 
 on:
   push:
-    branches: [ stable ]
+    branches:
+      - stable
+      - 'release/**'
   workflow_dispatch:
     inputs:
       branch:
@@ -37,7 +39,10 @@ jobs:
       - name: Generate version tag
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_name }}" == "stable" ]]; then
+          BRANCH_NAME="${{ github.ref_name }}"
+          echo "Processing branch: ${BRANCH_NAME}"
+          
+          if [[ "${{ github.event_name }}" == "push" && "$BRANCH_NAME" == "stable" ]]; then
             # For stable branch, use YYYYMM.### format
             YEAR=$(date +%Y)
             MONTH=$(date +%m)
@@ -79,17 +84,55 @@ jobs:
             
             echo "tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
             echo "is_stable=true" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "push" && "$BRANCH_NAME" =~ ^release/[0-9]{6}\.[0-9]{3}$ ]]; then
+            # For release branches, extract version and create preview tag
+            echo "Processing release branch: ${BRANCH_NAME}"
+            
+            # Validate release branch format: release/YYYYMM.###
+            if [[ ! "$BRANCH_NAME" =~ ^release/([0-9]{6})\.([0-9]{3})$ ]]; then
+              echo "ERROR: Release branch must follow format 'release/YYYYMM.###'"
+              echo "Example: release/202506.001"
+              exit 1
+            fi
+            
+            # Extract version from branch name (remove 'release/' prefix)
+            VERSION_PART="${BRANCH_NAME#release/}"
+            PREVIEW_TAG="preview-${VERSION_PART}"
+            
+            echo "Extracted version: ${VERSION_PART}"
+            echo "Generated preview tag: ${PREVIEW_TAG}"
+            
+            # Ensure we have all remote tags
+            git fetch --tags origin
+            
+            # Check if preview tag already exists
+            if git tag -l | grep -q "^${PREVIEW_TAG}$"; then
+              echo "ERROR: Preview tag ${PREVIEW_TAG} already exists locally!"
+              exit 1
+            fi
+            
+            if git ls-remote --tags origin | grep -q "refs/tags/${PREVIEW_TAG}$"; then
+              echo "ERROR: Preview tag ${PREVIEW_TAG} already exists on remote!"
+              exit 1
+            fi
+            
+            echo "tag=${PREVIEW_TAG}" >> $GITHUB_OUTPUT
+            echo "version=${VERSION_PART}" >> $GITHUB_OUTPUT
+            echo "is_stable=false" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
           else
-            # For non-stable branches, use branch name as tag
-            BRANCH_NAME="${{ github.ref_name }}"
+            # For other branches, use branch name as tag
+            echo "Processing other branch: ${BRANCH_NAME}"
             # Replace invalid Docker tag characters
             SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
             echo "tag=${SAFE_BRANCH}" >> $GITHUB_OUTPUT
             echo "is_stable=false" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
           fi
       
       - name: Create and push version tag
-        if: steps.version.outputs.is_stable == 'true' && github.event_name == 'push'
+        if: (steps.version.outputs.is_stable == 'true' || steps.version.outputs.is_release == 'true') && github.event_name == 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -107,6 +150,13 @@ jobs:
           git tag "${TAG}"
           git push origin "${TAG}"
           echo "Successfully created and pushed tag: ${TAG}"
+          
+          # Additional logging for release builds
+          if [[ "${{ steps.version.outputs.is_release }}" == "true" ]]; then
+            echo "Created preview tag for release branch"
+            echo "Version: ${{ steps.version.outputs.version }}"
+            echo "Preview tag: ${TAG}"
+          fi
       
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -118,10 +168,13 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.title=WolfManager
-            org.opencontainers.image.description=Wolf Manager Production Docker Image
+            org.opencontainers.image.description=${{ steps.version.outputs.is_release == 'true' && 'Wolf Manager Preview Docker Image' || 'Wolf Manager Production Docker Image' }}
             org.opencontainers.image.version=${{ steps.version.outputs.tag }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            build.branch=${{ github.ref_name }}
+            build.type=${{ steps.version.outputs.is_stable == 'true' && 'production' || (steps.version.outputs.is_release == 'true' && 'preview' || 'development') }}
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
