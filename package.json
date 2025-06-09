@@ -67,7 +67,7 @@
     "sonner": "^2.0.1",
     "tailwind-merge": "^2.6.0",
     "toml": "^3.0.0",
-    "undici": "^7.3.0",
+    "undici": "^7.5.0",
     "zod": "^3.22.4"
   },
   "pnpm": {
