@@ -106,15 +106,14 @@ jobs:
             # Ensure we have all remote tags
             git fetch --tags origin
             
-            # Check if preview tag already exists
+            # For preview tags, we allow reuse of existing tags
+            # This enables rebuilding the same release branch multiple times
             if git tag -l | grep -q "^${PREVIEW_TAG}$"; then
-              echo "ERROR: Preview tag ${PREVIEW_TAG} already exists locally!"
-              exit 1
-            fi
-            
-            if git ls-remote --tags origin | grep -q "refs/tags/${PREVIEW_TAG}$"; then
-              echo "ERROR: Preview tag ${PREVIEW_TAG} already exists on remote!"
-              exit 1
+              echo "Preview tag ${PREVIEW_TAG} already exists locally - will reuse for Docker build"
+            elif git ls-remote --tags origin | grep -q "refs/tags/${PREVIEW_TAG}$"; then
+              echo "Preview tag ${PREVIEW_TAG} already exists on remote - will reuse for Docker build"
+            else
+              echo "Preview tag ${PREVIEW_TAG} does not exist - will create new tag"
             fi
             
             echo "tag=${PREVIEW_TAG}" >> $GITHUB_OUTPUT
@@ -138,24 +137,41 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           TAG="${{ steps.version.outputs.tag }}"
-          echo "Creating and pushing tag: ${TAG}"
+          IS_RELEASE="${{ steps.version.outputs.is_release }}"
           
-          # Final safety check before creating tag
-          if git tag -l | grep -q "^${TAG}$"; then
-            echo "ERROR: Tag ${TAG} already exists locally, cannot create!"
-            exit 1
-          fi
-          
-          # Create and push the tag
-          git tag "${TAG}"
-          git push origin "${TAG}"
-          echo "Successfully created and pushed tag: ${TAG}"
-          
-          # Additional logging for release builds
-          if [[ "${{ steps.version.outputs.is_release }}" == "true" ]]; then
-            echo "Created preview tag for release branch"
+          if [[ "${IS_RELEASE}" == "true" ]]; then
+            # For preview/release tags, allow reuse of existing tags
+            echo "Processing preview tag: ${TAG}"
+            
+            if git tag -l | grep -q "^${TAG}$"; then
+              echo "Preview tag ${TAG} already exists locally - skipping tag creation"
+            elif git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
+              echo "Preview tag ${TAG} exists on remote - fetching it locally"
+              git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}"
+            else
+              echo "Creating new preview tag: ${TAG}"
+              git tag "${TAG}"
+              git push origin "${TAG}"
+              echo "Successfully created and pushed preview tag: ${TAG}"
+            fi
+            
+            echo "Preview tag ready for Docker build"
             echo "Version: ${{ steps.version.outputs.version }}"
             echo "Preview tag: ${TAG}"
+          else
+            # For stable tags, enforce uniqueness
+            echo "Creating stable tag: ${TAG}"
+            
+            # Final safety check before creating tag
+            if git tag -l | grep -q "^${TAG}$"; then
+              echo "ERROR: Stable tag ${TAG} already exists locally, cannot create!"
+              exit 1
+            fi
+            
+            # Create and push the tag
+            git tag "${TAG}"
+            git push origin "${TAG}"
+            echo "Successfully created and pushed stable tag: ${TAG}"
           fi
       
       - name: Extract metadata (tags, labels) for Docker

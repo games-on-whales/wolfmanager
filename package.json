@@ -49,9 +49,9 @@
     "clsx": "^2.1.1",
     "cron-parser": "^5.1.1",
     "date-fns": "^3.0.0",
-    "dockerode": "^4.0.7",
+    "dockerode": "^4.0.5",
     "lucide-react": "^0.344.0",
-    "next": "14.2.26",
+    "next": "14.2.25",
     "next-auth": "^4.24.11",
     "next-themes": "^0.2.1",
     "node-cron": "^3.0.3",
@@ -67,16 +67,8 @@
     "sonner": "^2.0.1",
     "tailwind-merge": "^2.6.0",
     "toml": "^3.0.0",
-    "undici": "^7.5.0",
+    "undici": "^7.3.0",
     "zod": "^3.22.4"
-  },
-  "pnpm": {
-    "overrides": {
-      "tar-fs": ">=2.1.3",
-      "@babel/runtime": ">=7.26.10",
-      "prismjs": ">=1.30.0",
-      "cookie": ">=0.7.0"
-    }
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.33.1",
@@ -90,7 +82,7 @@
     "dotenv": "^16.4.7",
     "dotenv-cli": "^8.0.0",
     "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.26",
+    "eslint-config-next": "14.2.25",
     "globals": "^16.0.0",
     "node-loader": "^2.1.0",
     "postcss": "^8.5.2",
