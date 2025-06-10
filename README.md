@@ -83,7 +83,7 @@ The easiest way to deploy WolfManager is using Docker Compose. Create a `docker-
 ```yaml
 services:
   wolf-admin:
-    image: docker pull ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest
+    image: ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest
     ports:
       - "3000:3000"
     environment:
