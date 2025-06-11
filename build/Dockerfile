@@ -26,11 +26,14 @@ RUN pnpm run build
 # Production stage
 FROM node:20-slim AS runner
 
-# Install system dependencies for runtime
+# Install system dependencies for runtime and native module compilation
 RUN apt-get update && \
     apt-get install -y \
         gosu \
         ca-certificates \
+        python3 \
+        make \
+        g++ \
         && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
@@ -58,10 +61,15 @@ COPY --from=builder --chown=root:root /app/src ./src
 COPY --from=builder --chown=root:root /app/public ./public
 COPY --from=builder --chown=root:root /app/.next ./.next
 
-# Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile && \
+# Install all dependencies first (needed for native module compilation)
+RUN pnpm install --frozen-lockfile && \
+    npm rebuild better-sqlite3 && \
+    pnpm prune --prod && \
     pnpm cache clean && \
-    npm cache clean --force
+    npm cache clean --force && \
+    apt-get remove -y python3 make g++ && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy initialization scripts
 COPY build/scripts/ /opt/wolf/scripts/

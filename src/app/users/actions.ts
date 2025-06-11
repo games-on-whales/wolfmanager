@@ -1,7 +1,9 @@
 "use server";
 
 import { authOptions } from "@/lib/auth";
-import { addUser, loadConfig, removeUser } from "@/lib/config";
+import { addUserAsync } from "@/lib/config";
+import { deleteUser as deleteUserFromDb, getAllUsers, updateUser as updateUserInDb } from "@/lib/db/helpers/users";
+import bcrypt from "bcryptjs";
 import { LogComponent, logger } from "@/lib/logger";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
@@ -36,7 +38,7 @@ export async function createUser(data: {
       isAdmin: data.isAdmin,
     });
 
-    const newUser = addUser(data.username, data.password, data.isAdmin);
+    const newUser = await addUserAsync(data.username, data.password, data.isAdmin);
     const user: User = {
       id: newUser.id,
       username: newUser.username,
@@ -80,33 +82,38 @@ export async function updateUserAction(
 
     logger.debug(LogComponent.WOLF_UI, "Updating user", {
       userId,
-      ...data,
+      username: data.username,
+      isAdmin: data.isAdmin,
     });
 
-    const config = loadConfig();
-    const existingUser = config.users[userId];
-    if (!existingUser) {
-      throw new Error("User not found");
+    // Prepare update data
+    const updateData: any = {};
+    
+    if (data.username !== undefined) {
+      updateData.username = data.username;
+    }
+    
+    if (data.password !== undefined) {
+      const salt = bcrypt.genSaltSync(10);
+      updateData.passwordHash = bcrypt.hashSync(data.password, salt);
+    }
+    
+    if (data.isAdmin !== undefined) {
+      updateData.isAdmin = data.isAdmin;
     }
 
-    // Update user in config
-    if (data.username) existingUser.username = data.username;
-    if (data.password) existingUser.password_hash = data.password; // Note: This should be hashed in production
-    if (data.isAdmin !== undefined) existingUser.is_admin = data.isAdmin;
-    existingUser.updated_at = new Date().toISOString();
-
-    // Save config
-    // Note: In a real app, you'd use a proper database update here
+    const updatedUser = await updateUserInDb(userId, updateData);
+    
     const user: User = {
-      id: existingUser.id,
-      username: existingUser.username,
-      isAdmin: existingUser.is_admin,
-      createdAt: existingUser.created_at,
-      updatedAt: existingUser.updated_at,
+      id: updatedUser.id,
+      username: updatedUser.username,
+      isAdmin: updatedUser.isAdmin,
+      createdAt: updatedUser.createdAt,
+      updatedAt: updatedUser.updatedAt,
     };
 
     logger.info(LogComponent.WOLF_UI, "User updated successfully", {
-      userId,
+      userId: user.id,
     });
 
     revalidatePath("/users");
@@ -127,20 +134,118 @@ export async function updateUserAction(
 export async function deleteUser(
   userId: string
 ): Promise<ActionResponse<void>> {
+  logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser action called", {
+    userId,
+    timestamp: new Date().toISOString()
+  });
+
   try {
+    // 1. Ensure database is initialized first
+    logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser ensuring database initialization", {
+      userId,
+      timestamp: new Date().toISOString()
+    });
+
+    const { initializeDatabaseWithMigration } = await import("@/lib/db/initializer");
+    try {
+      await initializeDatabaseWithMigration();
+      logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser database initialization completed", {
+        userId,
+        timestamp: new Date().toISOString()
+      });
+    } catch (initError) {
+      logger.error(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser database initialization failed", initError as Error, {
+        userId,
+        timestamp: new Date().toISOString()
+      });
+      // Continue anyway, the database might already be initialized
+    }
+
     const session = await getServerSession(authOptions);
+    logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser session check", {
+      userId,
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userRole: session?.user?.role,
+      isAdmin: session?.user?.role === "admin",
+      timestamp: new Date().toISOString()
+    });
+
     if (!session?.user || session.user.role !== "admin") {
+      logger.error(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser unauthorized", {
+        userId,
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        userRole: session?.user?.role,
+        timestamp: new Date().toISOString()
+      });
       throw new Error("Unauthorized");
     }
 
-    logger.debug(LogComponent.WOLF_UI, "Deleting user", {
+    logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser calling database helper", {
       userId,
+      functionName: "deleteUserFromDb",
+      timestamp: new Date().toISOString()
     });
 
-    removeUser(userId);
-
-    logger.info(LogComponent.WOLF_UI, "User deleted successfully", {
+    // Check if user exists first
+    const { getUserById } = await import("@/lib/db/helpers/users");
+    const existingUser = await getUserById(userId);
+    
+    logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser user existence check", {
       userId,
+      userExists: !!existingUser,
+      userDetails: existingUser ? {
+        id: existingUser.id,
+        username: existingUser.username,
+        isAdmin: existingUser.isAdmin
+      } : null,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!existingUser) {
+      logger.error(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser - user not found", {
+        userId,
+        timestamp: new Date().toISOString()
+      });
+      throw new Error("User not found");
+    }
+
+    // Check for related client devices
+    const { getClientDevicesByUserId } = await import("@/lib/db/helpers/clients");
+    const userClients = await getClientDevicesByUserId(userId);
+    
+    logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser client devices check", {
+      userId,
+      clientCount: userClients.length,
+      clientIds: userClients.map(c => c.id),
+      timestamp: new Date().toISOString()
+    });
+
+    // Delete user's client devices first to avoid foreign key constraints
+    if (userClients.length > 0) {
+      logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser removing client devices first", {
+        userId,
+        clientCount: userClients.length,
+        timestamp: new Date().toISOString()
+      });
+
+      const { deleteClientDevice } = await import("@/lib/db/helpers/clients");
+      for (const client of userClients) {
+        await deleteClientDevice(client.id);
+        logger.debug(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser removed client device", {
+          userId,
+          clientId: client.id,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    await deleteUserFromDb(userId);
+
+    logger.info(LogComponent.WOLF_UI, "DIAGNOSIS: deleteUser completed successfully", {
+      userId,
+      timestamp: new Date().toISOString()
     });
 
     revalidatePath("/users");
@@ -148,8 +253,14 @@ export async function deleteUser(
   } catch (error) {
     logger.error(
       LogComponent.WOLF_UI,
-      "Failed to delete user",
-      error instanceof Error ? error : new Error(String(error))
+      "DIAGNOSIS: deleteUser failed",
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        userId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString()
+      }
     );
     return {
       success: false,
@@ -165,13 +276,13 @@ export async function getUsers(): Promise<ActionResponse<User[]>> {
       throw new Error("Unauthorized");
     }
 
-    const config = loadConfig();
-    const users = Object.values(config.users).map((user) => ({
+    const dbUsers = await getAllUsers();
+    const users = dbUsers.map((user) => ({
       id: user.id,
       username: user.username,
-      isAdmin: user.is_admin,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at,
+      isAdmin: user.isAdmin,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     }));
 
     logger.info(LogComponent.WOLF_UI, "User list fetched", {

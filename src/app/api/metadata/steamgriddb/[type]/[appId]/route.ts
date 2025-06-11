@@ -1,5 +1,7 @@
 import { authOptions } from "@/lib/auth";
-import { loadConfig } from "@/lib/config";
+import { getMetadataProviderByName } from "@/lib/db/helpers/system";
+import { METADATA_PROVIDER_NAMES } from "@/lib/db/schema/system";
+import { decrypt } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
 import { LogComponent } from "@/lib/logger/types";
 import { getServerSession } from "next-auth/next";
@@ -50,16 +52,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    // Load config to get API key
-    const config = loadConfig(true); // Decrypt needed for API key
-    const apiKey = config.metadataProviders?.steamgridDb?.apiKey;
+    // Get SteamGridDB provider from database
+    const provider = await getMetadataProviderByName(METADATA_PROVIDER_NAMES.STEAMGRID_DB);
+    
+    if (!provider || !provider.enabled) {
+      return NextResponse.json(
+        { error: "SteamGridDB provider not configured or disabled" },
+        { status: 400 }
+      );
+    }
 
-    if (!apiKey) {
+    if (!provider.apiKey) {
       return NextResponse.json(
         { error: "SteamGridDB API key not configured" },
         { status: 400 }
       );
     }
+
+    // Decrypt the API key
+    const apiKey = decrypt(provider.apiKey);
 
     // Get query parameters
     const styles = request.nextUrl.searchParams.get("styles") || "official";

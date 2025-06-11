@@ -77,6 +77,113 @@ export async function GET(
       );
     }
 
+    // Special handling for /clients endpoint - validate and deduplicate response
+    if (path === "/clients" && response.data) {
+      await logger.debug(LogComponent.API, "Processing /clients endpoint response", {
+        path,
+        userId: session.user.id,
+        responseType: typeof response.data,
+        hasClients: !!(response.data as any)?.clients,
+        clientsCount: Array.isArray((response.data as any)?.clients) ? (response.data as any).clients.length : 0
+      });
+
+      // Validate and log Wolf API clients response structure
+      if (typeof response.data === "object" && response.data !== null) {
+        const data = response.data as any;
+        
+        if (data.success === true && Array.isArray(data.clients)) {
+          const clients = data.clients;
+          
+          // Detect duplicates in Wolf API response
+          const clientIds = new Set<string>();
+          const pairSecrets = new Set<string>();
+          const duplicateStats = {
+            byId: 0,
+            byPairSecret: 0,
+            withoutId: 0
+          };
+          
+          for (const client of clients) {
+            const clientId = client.client_id || client.id;
+            const pairSecret = client.pair_secret;
+            
+            if (!clientId) {
+              duplicateStats.withoutId++;
+              continue;
+            }
+            
+            if (clientIds.has(clientId)) {
+              duplicateStats.byId++;
+            } else {
+              clientIds.add(clientId);
+            }
+            
+            if (pairSecret) {
+              if (pairSecrets.has(pairSecret)) {
+                duplicateStats.byPairSecret++;
+              } else {
+                pairSecrets.add(pairSecret);
+              }
+            }
+          }
+          
+          // Log duplicate detection results
+          if (duplicateStats.byId > 0 || duplicateStats.byPairSecret > 0 || duplicateStats.withoutId > 0) {
+            await logger.warn(LogComponent.API, "Wolf API /clients endpoint returned duplicate entries", {
+              path,
+              userId: session.user.id,
+              totalClients: clients.length,
+              uniqueClientIds: clientIds.size,
+              duplicatesById: duplicateStats.byId,
+              duplicatesByPairSecret: duplicateStats.byPairSecret,
+              clientsWithoutId: duplicateStats.withoutId
+            });
+            
+            // Apply deduplication before returning response
+            const deduplicatedClients = Array.from(
+              clients.reduce((map: Map<string, any>, client: any) => {
+                const clientId = client.client_id || client.id;
+                if (clientId) {
+                  map.set(clientId, client);
+                }
+                return map;
+              }, new Map<string, any>()).values()
+            );
+            
+            await logger.info(LogComponent.WOLF_UI, "Wolf API client deduplication completed", {
+              originalCount: clients.length,
+              deduplicatedCount: deduplicatedClients.length,
+              duplicatesById: duplicateStats.byId,
+              duplicatesByPairSecret: duplicateStats.byPairSecret,
+              totalDuplicatesRemoved: clients.length - deduplicatedClients.length
+            });
+            
+            // Return deduplicated response
+            return NextResponse.json({
+              ...data,
+              clients: deduplicatedClients
+            });
+          } else {
+            await logger.debug(LogComponent.API, "Wolf API /clients response validation passed - no duplicates found", {
+              path,
+              userId: session.user.id,
+              clientsCount: clients.length
+            });
+          }
+        } else {
+          await logger.warn(LogComponent.API, "Wolf API /clients response has unexpected structure", {
+            path,
+            userId: session.user.id,
+            hasSuccess: 'success' in data,
+            successValue: data.success,
+            hasClients: 'clients' in data,
+            clientsType: typeof data.clients,
+            isClientsArray: Array.isArray(data.clients)
+          });
+        }
+      }
+    }
+
     await logger.debug(LogComponent.API, "Wolf API call successful", {
       path,
       method: "GET",

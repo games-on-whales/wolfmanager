@@ -147,3 +147,213 @@ Feature Merge → Release Branch → Preview Docker → Testing → Stable Branc
 - **Visual Clarity**: Enabled branch visibility and commit labels for better readability
 - **Documentation Context**: Added comprehensive explanation of the workflow
 - **Realistic Scenarios**: Includes common development scenarios like hotfixes and feature integration
+
+## Database Development
+
+WolfManager uses Drizzle ORM with support for multiple database backends. This section covers database development workflows, schema management, and testing.
+
+### Database Setup for Development
+
+#### Prerequisites
+
+1. **Install dependencies** (if not already done):
+   ```bash
+   npm install
+   ```
+
+2. **Compile better-sqlite3** (for SQLite support):
+   ```bash
+   npm rebuild better-sqlite3
+   ```
+
+3. **Configure environment variables**:
+   ```bash
+   cp .env.example .env
+   # Edit .env to configure DATABASE_TYPE (default: sqlite)
+   ```
+
+#### Database Initialization
+
+The database will be automatically initialized on first application run. For manual initialization:
+
+```bash
+# Apply migrations
+npm run db:migrate
+
+# Or push schema changes (development only)
+npm run db:push
+```
+
+### Schema Development Workflow
+
+When making changes to the database schema:
+
+1. **Modify schema files** in [`src/lib/db/schema/`](../src/lib/db/schema/)
+2. **Generate migration**: `npm run db:generate`
+3. **Review generated migration** in [`src/lib/db/migrations/`](../src/lib/db/migrations/)
+4. **Apply migration**: `npm run db:migrate`
+5. **Test your changes** thoroughly
+
+#### Schema Files Structure
+
+- [`users.ts`](../src/lib/db/schema/users.ts) - User accounts and authentication
+- [`clients.ts`](../src/lib/db/schema/clients.ts) - Client device management
+- [`games.ts`](../src/lib/db/schema/games.ts) - Games, platforms, and user libraries
+- [`tasks.ts`](../src/lib/db/schema/tasks.ts) - Background task management
+- [`system.ts`](../src/lib/db/schema/system.ts) - System configuration and metadata providers
+
+### Helper Functions
+
+WolfManager provides type-safe helper functions for all database operations:
+
+```typescript
+import {
+  getUserById,
+  addUser,
+  getAllGames,
+  getSystemConfig,
+  setSystemConfig
+} from '@/lib/db/helpers';
+
+// User operations
+const user = await getUserById('user-id');
+const newUser = await addUser({
+  username: 'newuser',
+  passwordHash: hashedPassword,
+  isAdmin: false,
+});
+
+// Game operations
+const games = await getAllGames();
+
+// System configuration
+const configValue = await getSystemConfig('some.config.key');
+await setSystemConfig('some.config.key', 'new value');
+```
+
+#### Helper Functions by Domain
+
+- **Users**: [`getUserById()`](../src/lib/db/helpers/users.ts), [`addUser()`](../src/lib/db/helpers/users.ts), [`updateUser()`](../src/lib/db/helpers/users.ts), etc.
+- **Games**: [`getGameById()`](../src/lib/db/helpers/games.ts), [`addGame()`](../src/lib/db/helpers/games.ts), [`searchGames()`](../src/lib/db/helpers/games.ts), etc.
+- **Tasks**: [`getTaskById()`](../src/lib/db/helpers/tasks.ts), [`addTask()`](../src/lib/db/helpers/tasks.ts), [`updateTaskStatus()`](../src/lib/db/helpers/tasks.ts), etc.
+- **System**: [`getSystemConfig()`](../src/lib/db/helpers/system.ts), [`setSystemConfig()`](../src/lib/db/helpers/system.ts), etc.
+
+### Testing with Different Database Backends
+
+#### SQLite (Default)
+```bash
+# Default development setup
+npm run dev
+```
+
+#### PostgreSQL
+```bash
+# Start PostgreSQL (using Docker)
+docker run --name postgres-dev -e POSTGRES_PASSWORD=password -e POSTGRES_DB=wolfmanager -p 5432:5432 -d postgres:15
+
+# Configure environment
+DATABASE_TYPE=postgresql DATABASE_URL=postgresql://postgres:password@localhost:5432/wolfmanager npm run dev
+```
+
+#### MySQL
+```bash
+# Start MySQL (using Docker)
+docker run --name mysql-dev -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=wolfmanager -p 3306:3306 -d mysql:8
+
+# Configure environment
+DATABASE_TYPE=mysql DATABASE_URL=mysql://root:password@localhost:3306/wolfmanager npm run dev
+```
+
+### Database Operations Reference
+
+#### Schema Management
+```bash
+npm run db:generate    # Generate new migration after schema changes
+npm run db:migrate     # Apply pending migrations
+npm run db:push        # Push schema changes (development only)
+npm run db:studio      # Open Drizzle Studio database browser
+```
+
+#### TOML Migration
+```bash
+npm run migrate-toml:check     # Preview TOML migration
+npm run migrate-toml:dry-run   # Dry run migration
+npm run migrate-toml           # Execute TOML migration
+npm run migrate-toml:test      # Test migration components
+```
+
+### Database Browser
+
+Use Drizzle Studio to browse and manage your database:
+
+```bash
+npm run db:studio
+```
+
+This opens a web interface at `http://localhost:3000/studio` where you can:
+- Browse all tables and data
+- Execute queries
+- Manage relationships
+- View schema information
+
+### Performance Considerations
+
+#### Indexes
+The schema includes optimized indexes for:
+- User lookups by username and Steam ID
+- Game searches and filtering
+- Task status and execution queries
+- Client device pairing operations
+
+#### Connection Pooling
+- **SQLite**: Uses WAL mode for better concurrency
+- **PostgreSQL**: Automatic connection pooling
+- **MySQL**: Connection pooling with optimized settings
+
+### Debugging Database Issues
+
+#### Enable Debug Logging
+```bash
+# Add to .env file
+LOG_LEVEL=debug
+```
+
+#### Check Database Health
+```typescript
+import { checkDatabaseHealth } from '@/lib/db';
+
+const isHealthy = await checkDatabaseHealth();
+console.log('Database healthy:', isHealthy);
+```
+
+#### Common Issues
+
+1. **better-sqlite3 compilation errors**:
+   ```bash
+   npm rebuild better-sqlite3
+   # OR
+   npm install --build-from-source better-sqlite3
+   ```
+
+2. **PostgreSQL connection errors**:
+   - Verify PostgreSQL is running
+   - Check connection string format
+   - Ensure database exists
+
+3. **MySQL connection errors**:
+   - Verify MySQL is running
+   - Check connection string format
+   - Ensure database exists
+
+### Contributing Database Changes
+
+When contributing database-related changes:
+
+1. **Update schemas** in [`src/lib/db/schema/`](../src/lib/db/schema/)
+2. **Generate migrations** with `npm run db:generate`
+3. **Add helper functions** in [`src/lib/db/helpers/`](../src/lib/db/helpers/)
+4. **Update exports** in index files
+5. **Add tests** for new functionality
+6. **Update documentation** if needed
+
+See the [Database Layer README](../src/lib/db/README.md) for complete API documentation.

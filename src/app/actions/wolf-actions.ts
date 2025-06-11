@@ -12,6 +12,8 @@ import {
   type ApiResponse,
 } from "@/lib/api-utils";
 import type { ClientDevice } from "@/types/client";
+import { getClientDevicesByUserId } from "@/lib/db/helpers/clients";
+import type { ClientDevice as DbClientDevice } from "@/lib/db/schema/clients";
 
 // Extended client type for Wolf API responses
 type WolfClientWithMetadata = ClientDevice & {
@@ -107,30 +109,335 @@ async function getAuthenticatedSession() {
  */
 function deduplicateWolfClients(clients: any[]): any[] {
   const clientMap = new Map<string, any>();
+  const pairSecretMap = new Map<string, any>();
+  const duplicateStats = {
+    byId: 0,
+    byPairSecret: 0,
+    total: clients.length
+  };
   
   for (const client of clients) {
     const clientId = client.client_id || client.id;
+    const pairSecret = client.pair_secret;
+    
     if (clientId) {
+      // Check for ID duplicates
+      if (clientMap.has(clientId)) {
+        duplicateStats.byId++;
+        logger.debug(LogComponent.WOLF_UI, "Duplicate client ID detected in Wolf API response", {
+          clientId,
+          existingClient: clientMap.get(clientId),
+          duplicateClient: client
+        });
+      }
+      
+      // Check for pair secret duplicates
+      if (pairSecret && pairSecretMap.has(pairSecret)) {
+        duplicateStats.byPairSecret++;
+        logger.debug(LogComponent.WOLF_UI, "Duplicate pair secret detected in Wolf API response", {
+          pairSecret,
+          clientId,
+          existingClientId: pairSecretMap.get(pairSecret).client_id || pairSecretMap.get(pairSecret).id
+        });
+      }
+      
       // Always take the latest entry (overwrites previous)
       clientMap.set(clientId, client);
+      if (pairSecret) {
+        pairSecretMap.set(pairSecret, client);
+      }
+    } else {
+      logger.warn(LogComponent.WOLF_UI, "Client without ID detected in Wolf API response", { client });
     }
   }
   
-  return Array.from(clientMap.values());
+  const deduplicatedClients = Array.from(clientMap.values());
+  
+  if (duplicateStats.byId > 0 || duplicateStats.byPairSecret > 0) {
+    logger.info(LogComponent.WOLF_UI, "Wolf API client deduplication completed", {
+      originalCount: duplicateStats.total,
+      deduplicatedCount: deduplicatedClients.length,
+      duplicatesById: duplicateStats.byId,
+      duplicatesByPairSecret: duplicateStats.byPairSecret,
+      totalDuplicatesRemoved: duplicateStats.total - deduplicatedClients.length
+    });
+  }
+  
+  return deduplicatedClients;
+}
+
+/**
+ * Detect and cleanup duplicate clients from Wolf API by unpairing them
+ * This function identifies duplicates by client_id and unpairs ALL duplicates from Wolf
+ */
+export async function detectAndCleanupWolfDuplicatesAction(): Promise<ApiResponse<{
+  duplicatesFound: boolean;
+  duplicatesRemoved: number;
+  cleanedClientIds: string[];
+  message: string;
+}>> {
+  try {
+    const session = await getAuthenticatedSession();
+    if (!session) {
+      return createErrorResponse(
+        API_ERROR_CODES.UNAUTHORIZED,
+        "Authentication required"
+      );
+    }
+
+    await logger.info(LogComponent.WOLF_UI, "Starting Wolf API duplicate detection and cleanup", {
+      userId: session.user.id
+    });
+
+    // Get all clients from Wolf API
+    const socketService = SocketService.getInstance();
+    const response = await socketService.callWolfApi(session, "/clients", {
+      method: "GET",
+    });
+
+    if (!response.success) {
+      await logger.error(LogComponent.WOLF_UI, "Failed to fetch clients from Wolf API for duplicate cleanup", new Error(response.error || "Unknown error"), {
+        userId: session.user.id,
+        statusCode: response.statusCode,
+      });
+      return createErrorResponse(
+        API_ERROR_CODES.INTERNAL_ERROR,
+        response.error || "Failed to fetch clients from Wolf API"
+      );
+    }
+
+    const wolfClients = (response.data as any)?.clients || [];
+    
+    // Group clients by client_id to find duplicates
+    const clientGroups: { [key: string]: any[] } = {};
+    
+    wolfClients.forEach((client: any) => {
+      const clientId = client.client_id || client.id;
+      if (clientId) {
+        if (!clientGroups[clientId]) {
+          clientGroups[clientId] = [];
+        }
+        clientGroups[clientId].push(client);
+      }
+    });
+
+    // Find duplicate groups (more than 1 client with same ID)
+    const duplicateGroups = Object.entries(clientGroups).filter(([_, clients]) => clients.length > 1);
+    
+    if (duplicateGroups.length === 0) {
+      await logger.info(LogComponent.WOLF_UI, "No duplicate clients found in Wolf API", {
+        userId: session.user.id,
+        totalClients: wolfClients.length
+      });
+      return createSuccessResponse({
+        duplicatesFound: false,
+        duplicatesRemoved: 0,
+        cleanedClientIds: [],
+        message: "No duplicate clients found"
+      });
+    }
+
+    await logger.warn(LogComponent.WOLF_UI, "Duplicate clients detected in Wolf API", {
+      userId: session.user.id,
+      duplicateGroups: duplicateGroups.length,
+      duplicateClientIds: duplicateGroups.map(([clientId, clients]) => ({ clientId, count: clients.length }))
+    });
+
+    // Unpair all duplicates from Wolf
+    const cleanedClientIds: string[] = [];
+    let duplicatesRemoved = 0;
+
+    for (const [clientId, clients] of duplicateGroups) {
+      await logger.info(LogComponent.WOLF_UI, `Unpairing duplicate client from Wolf: ${clientId}`, {
+        userId: session.user.id,
+        clientId,
+        duplicateCount: clients.length
+      });
+
+      // Unpair all instances of this duplicate client ID
+      for (const client of clients) {
+        try {
+          const unpairResponse = await socketService.callWolfApi(session, "/unpair/client", {
+            method: "POST",
+            body: {
+              client_id: clientId,
+            },
+          });
+
+          if (unpairResponse.success) {
+            duplicatesRemoved++;
+            if (!cleanedClientIds.includes(clientId)) {
+              cleanedClientIds.push(clientId);
+            }
+            await logger.info(LogComponent.WOLF_UI, `Successfully unpaired duplicate client from Wolf`, {
+              userId: session.user.id,
+              clientId
+            });
+          } else {
+            await logger.error(LogComponent.WOLF_UI, `Failed to unpair duplicate client from Wolf`, new Error(unpairResponse.error || "Unpair failed"), {
+              userId: session.user.id,
+              clientId,
+              error: unpairResponse.error
+            });
+          }
+        } catch (error) {
+          await logger.error(LogComponent.WOLF_UI, `Error unpairing duplicate client from Wolf`, error, {
+            userId: session.user.id,
+            clientId
+          });
+        }
+      }
+    }
+
+    const message = duplicatesRemoved > 0
+      ? `Successfully removed ${duplicatesRemoved} duplicate client(s) from Wolf. Please retry your pairing process.`
+      : "Duplicate clients detected but none could be removed. Please check Wolf API connectivity.";
+
+    await logger.info(LogComponent.WOLF_UI, "Wolf duplicate cleanup completed", {
+      userId: session.user.id,
+      duplicateGroupsFound: duplicateGroups.length,
+      duplicatesRemoved,
+      cleanedClientIds
+    });
+
+    return createSuccessResponse({
+      duplicatesFound: true,
+      duplicatesRemoved,
+      cleanedClientIds,
+      message
+    });
+
+  } catch (error) {
+    await logger.error(LogComponent.WOLF_UI, "Error during Wolf duplicate detection and cleanup", error);
+    return createErrorResponse(
+      API_ERROR_CODES.INTERNAL_ERROR,
+      "Failed to detect and cleanup Wolf duplicates"
+    );
+  }
+}
+
+/**
+ * Comprehensive client synchronization function that merges database and Wolf API data
+ * Removes inconsistencies and duplicates, returns clean deduplicated client list
+ */
+export async function synchronizeAndCleanupClientsAction(userId?: string): Promise<ApiResponse<{
+  clients: any[],
+  synchronizationStats: {
+    databaseClientsCount: number,
+    wolfApiClientsCount: number,
+    duplicatesRemoved: number,
+    inconsistenciesFound: number,
+    finalClientCount: number,
+    cleanupPerformed: boolean
+  }
+}>> {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      await logger.warn(LogComponent.WOLF_UI, "Client synchronization attempted without authentication");
+      return createErrorResponse(
+        API_ERROR_CODES.UNAUTHORIZED,
+        "Authentication required"
+      );
+    }
+
+    const targetUserId = userId || session.user.id;
+    
+    await logger.info(LogComponent.WOLF_UI, "Starting comprehensive client synchronization", {
+      userId: targetUserId,
+      requestingUserId: session.user.id
+    });
+
+    // Get Wolf API clients first
+    const socketService = SocketService.getInstance();
+    const wolfResponse = await socketService.callWolfApi(session, "/clients", {
+      method: "GET",
+    });
+
+    if (!wolfResponse.success) {
+      await logger.error(LogComponent.WOLF_UI, "Failed to get Wolf clients during synchronization", new Error(wolfResponse.error || "Unknown error"), {
+        userId: targetUserId,
+      });
+      return createErrorResponse(
+        API_ERROR_CODES.INTERNAL_ERROR,
+        wolfResponse.error || "Failed to retrieve Wolf clients"
+      );
+    }
+
+    const wolfData = wolfResponse.data as any;
+    let wolfClients: any[] = [];
+    
+    if (wolfData && typeof wolfData === "object" && wolfData.success === true && Array.isArray(wolfData.clients)) {
+      // Apply enhanced deduplication to Wolf API clients
+      wolfClients = deduplicateWolfClients(wolfData.clients);
+    }
+
+    // Get database clients using the helper function
+    const { cleanupDuplicateClientsForUser, getClientDevicesByUserId } = await import('@/lib/db/helpers/clients');
+    const cleanupResult = await cleanupDuplicateClientsForUser(targetUserId);
+    
+    // Get final database clients after cleanup
+    const databaseClients = await getClientDevicesByUserId(targetUserId);
+
+    // Analyze inconsistencies between Wolf API and database
+    const wolfClientIds = new Set(wolfClients.map(c => c.client_id || c.id).filter(Boolean));
+    const databasePairSecrets = new Set(databaseClients.map(c => c.pairSecret));
+    const wolfPairSecrets = new Set(wolfClients.map(c => c.pair_secret).filter(Boolean));
+    
+    // Find inconsistencies
+    const orphanedInDatabase = databaseClients.filter(dbClient =>
+      !wolfPairSecrets.has(dbClient.pairSecret)
+    );
+    const unknownInWolf = wolfClients.filter(wolfClient =>
+      wolfClient.pair_secret && !databasePairSecrets.has(wolfClient.pair_secret)
+    );
+
+    const inconsistenciesFound = orphanedInDatabase.length + unknownInWolf.length;
+
+    if (inconsistenciesFound > 0) {
+      await logger.warn(LogComponent.WOLF_UI, "Client synchronization found inconsistencies", {
+        userId: targetUserId,
+        orphanedInDatabase: orphanedInDatabase.length,
+        unknownInWolf: unknownInWolf.length,
+        orphanedClients: orphanedInDatabase.map(c => ({ id: c.id, friendlyName: c.friendlyName, pairSecret: c.pairSecret })),
+        unknownClients: unknownInWolf.map(c => ({ id: c.client_id || c.id, pair_secret: c.pair_secret }))
+      });
+    }
+
+    // Merge and create final client list (Wolf API clients take precedence)
+    const finalClients = wolfClients;
+
+    const synchronizationStats = {
+      databaseClientsCount: cleanupResult.summary.initialDatabaseCount,
+      wolfApiClientsCount: wolfClients.length,
+      duplicatesRemoved: cleanupResult.databaseCleanup.removedByIdCount + cleanupResult.databaseCleanup.removedByPairSecretCount,
+      inconsistenciesFound,
+      finalClientCount: finalClients.length,
+      cleanupPerformed: cleanupResult.summary.cleanupPerformed
+    };
+
+    await logger.info(LogComponent.WOLF_UI, "Client synchronization completed successfully", {
+      userId: targetUserId,
+      ...synchronizationStats
+    });
+
+    return createSuccessResponse({
+      clients: finalClients,
+      synchronizationStats
+    });
+
+  } catch (error) {
+    await logger.error(LogComponent.WOLF_UI, "Error during client synchronization", error);
+    return createErrorResponse(
+      API_ERROR_CODES.INTERNAL_ERROR,
+      "Failed to synchronize clients"
+    );
+  }
 }
 
 /**
  * Helper function to extract unique client IDs from Wolf clients
  */
-function extractUniqueClientIds(clients: any[]): Set<string> {
-  const deduplicatedClients = deduplicateWolfClients(clients);
-  return new Set(
-    deduplicatedClients
-      .map(c => c.client_id || c.id)
-      .filter(Boolean)
-  );
-}
-
 /**
  * Get client data from Wolf API with config integration
  * Used by the Clients page to display paired clients for the authenticated user
@@ -193,23 +500,32 @@ export async function getWolfClientsAction(): Promise<ApiResponse<{ clients: Wol
       return createSuccessResponse({ clients: [] });
     }
 
-    // 2. Load configuration to get user-specific client mappings
-    let config: Config;
+    // 2. Get user's clients from database
+    let userDbClients: DbClientDevice[] = [];
     try {
-      config = (await loadConfig(true)) as Config;
+      userDbClients = await getClientDevicesByUserId(session.user.id);
+      await logger.debug(LogComponent.WOLF_UI, "Retrieved user clients from database", {
+        userId: session.user.id,
+        username,
+        clientCount: userDbClients.length,
+        clientIds: userDbClients.map(c => c.id),
+      });
     } catch (error) {
-      await logger.error(LogComponent.WOLF_UI, "Failed to load config for client filtering", error);
+      await logger.error(LogComponent.WOLF_UI, "Failed to get user clients from database", error, {
+        userId: session.user.id,
+        username,
+      });
       return createErrorResponse(
-        API_ERROR_CODES.CONFIG_LOAD_FAILED,
-        "Failed to load configuration"
+        API_ERROR_CODES.INTERNAL_ERROR,
+        "Failed to retrieve user's client devices"
       );
     }
 
-    // 3. Get user's clients from config
-    const userConfig = config.users?.[username];
-    const userClientIds = new Set(userConfig?.clients?.map((c) => c.id) || []);
+    // Create a map of client IDs to database client data for quick lookup
+    const userClientMap = new Map(userDbClients.map(client => [client.id, client]));
+    const userClientIds = new Set(userDbClients.map(c => c.id));
 
-    // 4. Deduplicate Wolf clients and filter to only include user's clients
+    // 3. Deduplicate Wolf clients and filter to only include user's clients
     const deduplicatedClients = deduplicateWolfClients(data.clients);
     const userClients: WolfClientWithMetadata[] = [];
 
@@ -219,6 +535,7 @@ export async function getWolfClientsAction(): Promise<ApiResponse<{ clients: Wol
       totalWolfClients: data.clients.length,
       deduplicatedWolfClients: deduplicatedClients.length,
       duplicatesRemoved: data.clients.length - deduplicatedClients.length,
+      userDbClientCount: userDbClients.length,
     });
 
     for (const wolfClient of deduplicatedClients) {
@@ -227,13 +544,13 @@ export async function getWolfClientsAction(): Promise<ApiResponse<{ clients: Wol
         continue; // Skip clients not owned by this user
       }
 
-      // Find the client in user's config to get friendly name and pair secret
-      const configClient = userConfig?.clients?.find((c) => c.id === clientId);
+      // Find the client in database to get friendly name and pair secret
+      const dbClient = userClientMap.get(clientId);
       
       const clientData: WolfClientWithMetadata = {
         id: clientId,
-        friendly_name: configClient?.friendly_name || (wolfClient as any).friendly_name || (wolfClient as any).hostname || `Client ${clientId}`,
-        pair_secret: configClient?.pair_secret || (wolfClient as any).pair_secret || undefined,
+        friendly_name: (dbClient as any)?.friendlyName || (wolfClient as any).friendly_name || (wolfClient as any).hostname || `Client ${clientId}`,
+        pair_secret: (dbClient as any)?.pairSecret || (wolfClient as any).pair_secret || undefined,
         device_type: (wolfClient as any).device_type || 'Unknown',
         last_seen: (wolfClient as any).last_seen || undefined,
         status: (wolfClient as any).status || 'Unknown',
@@ -448,285 +765,6 @@ export async function getPendingPairRequestsAction(): Promise<ApiResponse<{ requ
     return createErrorResponse(
       API_ERROR_CODES.INTERNAL_ERROR,
       "Failed to retrieve pending requests"
-    );
-  }
-}
-
-/**
- * Pair a new client with Wolf
- */
-export async function pairWolfClientAction(
-  pin: string,
-  pairSecret: string,
-  friendlyName?: string
-): Promise<ApiResponse<{ success: boolean; clientId?: string }>> {
-  try {
-    const session = await getAuthenticatedSession();
-    if (!session) {
-      return createErrorResponse(
-        API_ERROR_CODES.UNAUTHORIZED,
-        "Authentication required"
-      );
-    }
-
-    const username = session.user.name;
-    if (!username) {
-      return createErrorResponse(
-        API_ERROR_CODES.UNAUTHORIZED,
-        "Username required"
-      );
-    }
-
-    if (!pin || !pairSecret) {
-      return createErrorResponse(
-        API_ERROR_CODES.VALIDATION_ERROR,
-        "PIN and pair secret are required"
-      );
-    }
-
-    await logger.debug(LogComponent.WOLF_UI, "Attempting client pairing", {
-      userId: session.user.id,
-      username,
-      pinLength: pin.length,
-      hasPairSecret: !!pairSecret,
-    });
-
-    // Step 1: Get initial client list before pairing
-    const socketService = SocketService.getInstance();
-    const initialClientsResponse = await socketService.callWolfApi(session, "/clients", {
-      method: "GET",
-    });
-
-    if (!initialClientsResponse.success) {
-      await logger.error(LogComponent.WOLF_UI, "Failed to get initial client list for pairing", {
-        userId: session.user.id,
-        error: initialClientsResponse.error,
-      });
-      return createErrorResponse(
-        API_ERROR_CODES.INTERNAL_ERROR,
-        "Failed to prepare for pairing"
-      );
-    }
-
-    const initialClientsData = initialClientsResponse.data as any;
-    const initialClients = initialClientsData.clients || [];
-    const initialClientIds = extractUniqueClientIds(initialClients);
-
-    await logger.debug(LogComponent.WOLF_UI, "Initial client list retrieved for pairing", {
-      userId: session.user.id,
-      totalInitialClients: initialClients.length,
-      uniqueInitialClientIds: initialClientIds.size,
-      duplicatesDetected: initialClients.length > initialClientIds.size,
-    });
-
-    // Step 2: Perform pairing
-    const response = await socketService.callWolfApi(session, "/pair/client", {
-      method: "POST",
-      body: {
-        pin,
-        pair_secret: pairSecret,
-      },
-    });
-
-    if (!response.success) {
-      await logger.warn(LogComponent.WOLF_UI, "Client pairing failed", {
-        userId: session.user.id,
-        error: response.error,
-        statusCode: response.statusCode,
-      });
-      return createErrorResponse(
-        API_ERROR_CODES.PAIRING_FAILED,
-        response.error || "Pairing failed"
-      );
-    }
-
-    await logger.debug(LogComponent.WOLF_UI, "Wolf pairing API call successful", {
-      userId: session.user.id,
-      responseData: response.data,
-    });
-
-    // Step 3: Find the new client by comparing before/after client lists
-    let newClientId: string | null = null;
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 500; // ms
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      if (attempt > 1) {
-        await logger.debug(LogComponent.WOLF_UI, `Retrying client detection (attempt ${attempt}/${MAX_RETRIES})`, {
-          userId: session.user.id,
-        });
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-      }
-
-      const currentClientsResponse = await socketService.callWolfApi(session, "/clients", {
-        method: "GET",
-      });
-
-      if (!currentClientsResponse.success) {
-        await logger.warn(LogComponent.WOLF_UI, `Failed to get client list on attempt ${attempt}`, {
-          userId: session.user.id,
-          error: currentClientsResponse.error,
-        });
-        continue;
-      }
-
-      const currentClientsData = currentClientsResponse.data as any;
-      const currentClients = currentClientsData.clients || [];
-      const currentClientIds = extractUniqueClientIds(currentClients);
-
-      await logger.debug(LogComponent.WOLF_UI, `Client detection attempt ${attempt}`, {
-        userId: session.user.id,
-        totalCurrentClients: currentClients.length,
-        uniqueCurrentClientIds: currentClientIds.size,
-        duplicatesDetected: currentClients.length > currentClientIds.size,
-        initialClientIds: Array.from(initialClientIds),
-        currentClientIds: Array.from(currentClientIds),
-      });
-
-      // Find new client ID by comparing unique sets
-      for (const clientId of Array.from(currentClientIds)) {
-        if (!initialClientIds.has(clientId)) {
-          newClientId = clientId;
-          await logger.debug(LogComponent.WOLF_UI, "New client detected after pairing", {
-            userId: session.user.id,
-            newClientId,
-            attempt,
-            totalClientsBeforePairing: initialClientIds.size,
-            totalClientsAfterPairing: currentClientIds.size,
-          });
-          break;
-        }
-      }
-
-      if (newClientId) break;
-    }
-
-    if (!newClientId) {
-      await logger.warn(LogComponent.WOLF_UI, "Could not detect new client after pairing", {
-        userId: session.user.id,
-        pairSecret,
-        maxRetries: MAX_RETRIES,
-      });
-      return createErrorResponse(
-        API_ERROR_CODES.PAIRING_FAILED,
-        "Pairing may have succeeded but could not detect new client"
-      );
-    }
-
-    const clientId = newClientId;
-
-    // Save client to user's config
-    let config: Config;
-    try {
-      await logger.debug(LogComponent.WOLF_UI, "Loading config for pairing save", {
-        userId: session.user.id,
-        username,
-        clientId,
-      });
-      config = (await loadConfig(true)) as Config;
-      await logger.debug(LogComponent.WOLF_UI, "Config loaded successfully for pairing", {
-        userId: session.user.id,
-        hasUsers: !!config.users,
-        userExists: !!config.users?.[username],
-      });
-    } catch (error) {
-      await logger.error(LogComponent.WOLF_UI, "Failed to load config after pairing", error);
-      // Return success since Wolf pairing worked, just warn about config
-      await logger.warn(LogComponent.WOLF_UI, "Returning success despite config load failure", {
-        userId: session.user.id,
-        clientId,
-      });
-      return createSuccessResponse({
-        success: true,
-        clientId: clientId,
-      });
-    }
-
-    try {
-      // Initialize user config if needed
-      if (!config.users) {
-        await logger.debug(LogComponent.WOLF_UI, "Initializing users object in config", { userId: session.user.id });
-        config.users = {};
-      }
-      
-      if (!config.users[username]) {
-        await logger.debug(LogComponent.WOLF_UI, "Creating new user config entry", {
-          userId: session.user.id,
-          username
-        });
-        config.users[username] = {
-          id: username,
-          username: username,
-          password_hash: "", // Will be set elsewhere
-          is_admin: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          has_changed_password: false,
-          clients: [],
-        };
-      }
-      
-      if (!config.users[username].clients) {
-        await logger.debug(LogComponent.WOLF_UI, "Initializing clients array for user", {
-          userId: session.user.id,
-          username
-        });
-        config.users[username].clients = [];
-      }
-
-      // Add the new client to user's config
-      const newClient: ClientDevice = {
-        id: clientId,
-        friendly_name: friendlyName || `Client ${clientId}`, // Use provided friendly name or default
-        pair_secret: pairSecret,
-      };
-
-      await logger.debug(LogComponent.WOLF_UI, "Adding client to user config", {
-        userId: session.user.id,
-        username,
-        newClient,
-        existingClientsCount: config.users[username].clients.length,
-      });
-
-      config.users[username].clients.push(newClient);
-
-      // Save updated config
-      await logger.debug(LogComponent.WOLF_UI, "Attempting to save config after pairing", {
-        userId: session.user.id,
-        username,
-        totalClientsForUser: config.users[username].clients.length,
-      });
-      
-      await saveConfig(config);
-      
-      await logger.info(LogComponent.WOLF_UI, "Client pairing and config save successful", {
-        userId: session.user.id,
-        username,
-        clientId,
-        savedToConfig: true,
-      });
-    } catch (error) {
-      await logger.error(LogComponent.WOLF_UI, "Failed to save config after pairing", error);
-      // Return success since Wolf pairing worked, just warn about config
-      await logger.warn(LogComponent.WOLF_UI, "Returning success despite config save failure", {
-        userId: session.user.id,
-        clientId,
-      });
-      return createSuccessResponse({
-        success: true,
-        clientId: clientId,
-      });
-    }
-
-    return createSuccessResponse({
-      success: true,
-      clientId: clientId,
-    });
-  } catch (error) {
-    await logger.error(LogComponent.WOLF_UI, "Error during client pairing", error);
-    return createErrorResponse(
-      API_ERROR_CODES.INTERNAL_ERROR,
-      "Pairing operation failed"
     );
   }
 }

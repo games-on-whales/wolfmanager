@@ -113,6 +113,91 @@ WolfManager will be available at `http://localhost:3000`
 4. **Add Users**: Create user accounts for people who will be streaming games
 5. **Pair Devices**: Help users pair their devices (phones, tablets, PCs) for game streaming
 
+## Database Configuration
+
+WolfManager uses Drizzle ORM with support for multiple database backends, providing flexibility for different deployment scenarios:
+
+- **SQLite** (default) - Stores data in `./data/wolfmanager.db`, perfect for development and single-user deployments
+- **PostgreSQL** - Production-ready database for larger deployments
+- **MySQL** - Alternative production database option
+
+### Environment Variables
+
+Configure your database using these environment variables:
+
+- `DATABASE_TYPE` - Database type: `sqlite`, `postgresql`, or `mysql` (default: `sqlite`)
+- `DATABASE_URL` - Connection string for PostgreSQL/MySQL (optional for SQLite)
+
+### Database Setup Examples
+
+#### SQLite (Default)
+```bash
+# .env file
+DATABASE_TYPE=sqlite
+# DATABASE_URL is optional for SQLite, defaults to ./data/wolfmanager.db
+```
+
+#### PostgreSQL
+```bash
+# .env file
+DATABASE_TYPE=postgresql
+DATABASE_URL=postgresql://username:password@localhost:5432/wolfmanager
+```
+
+#### MySQL
+```bash
+# .env file
+DATABASE_TYPE=mysql
+DATABASE_URL=mysql://username:password@localhost:3306/wolfmanager
+```
+
+### Migration from TOML
+
+If you have existing TOML configuration files, WolfManager includes a migration tool to transfer your data to the database:
+
+```bash
+# Preview what will be migrated (safe to run)
+npm run migrate-toml:check
+
+# Perform the migration with backup
+npm run migrate-toml -- migrate --backup --verbose
+```
+
+For detailed migration instructions, see the [Migration Guide](docs/migration-guide.md).
+
+### Database Operations
+
+WolfManager includes several npm scripts for database management:
+
+```bash
+# Database schema and migrations
+npm run db:generate    # Generate new migrations after schema changes
+npm run db:migrate     # Apply pending migrations to database
+npm run db:push        # Push schema changes directly (development only)
+npm run db:studio      # Open Drizzle Studio database browser
+
+# TOML migration tools
+npm run migrate-toml:check     # Preview TOML migration
+npm run migrate-toml           # Execute TOML migration
+npm run migrate-toml:dry-run   # Dry run migration preview
+```
+
+### Docker Configuration
+
+When using Docker, mount a volume for database persistence:
+
+```yaml
+services:
+  wolf-admin:
+    image: ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest
+    environment:
+      - DATABASE_TYPE=sqlite  # or postgresql/mysql
+      - DATABASE_URL=postgresql://... # if using PostgreSQL/MySQL
+    volumes:
+      - ./data:/app/data      # Persist SQLite database
+      - ./config:/app/config  # Persist config directory
+```
+
 ## Key Features
 
 ### ✅ Currently Available
@@ -159,10 +244,10 @@ WolfManager is built with modern web technologies for optimal performance and ma
 - **Frontend**: Next.js 14 with App Router, React Server Components
 - **UI Components**: Shadcn UI, Radix UI Primitives, Tailwind CSS
 - **Backend**: Node.js with Next.js API Routes
+- **Database**: Drizzle ORM with SQLite/PostgreSQL/MySQL support
 - **Authentication**: NextAuth.js with secure session management
 - **Type Safety**: TypeScript with Zod schema validation
 - **Containerization**: Docker with optimized production builds
-- **TOML**: Configuration storage
 
 ## Development
 
@@ -196,7 +281,22 @@ If you prefer local development:
 ```bash
 # Prerequisites: Node.js 18+, access to Wolf socket
 npm install
+
+# Initialize database (first time setup)
+npm run db:migrate
+
+# Start development server
 npm run dev
+```
+
+The database will be automatically initialized on first run. For development with different database backends:
+
+```bash
+# Development with PostgreSQL
+DATABASE_TYPE=postgresql DATABASE_URL=postgresql://... npm run dev
+
+# Development with MySQL
+DATABASE_TYPE=mysql DATABASE_URL=mysql://... npm run dev
 ```
 
 ## Contributing

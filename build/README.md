@@ -60,6 +60,13 @@ Additional devices can be configured using the `WOLF_REQUIRED_DEVICES_OVERRIDE` 
 - `PORT=3000` - Application port
 - `HOSTNAME=0.0.0.0` - Bind hostname
 
+### Database Configuration
+- `DATABASE_TYPE=sqlite` - Database backend: `sqlite`, `postgresql`, or `mysql`
+- `DATABASE_URL` - Database connection string (optional for SQLite)
+  - SQLite: `file:./data/wolfmanager.db` (default)
+  - PostgreSQL: `postgresql://username:password@host:5432/database`
+  - MySQL: `mysql://username:password@host:3306/database`
+
 ## Building the Image
 
 ### Development Build
@@ -90,13 +97,14 @@ docker run -d \
   wolfmanager:latest
 ```
 
-### With Socket Access
+### With Socket Access and Database Persistence
 ```bash
 docker run -d \
   --name wolfmanager \
   -p 3000:3000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/run/wolf:/var/run/wolf \
+  -v wolfmanager_data:/app/data \
   wolfmanager:latest
 ```
 
@@ -132,6 +140,53 @@ docker-compose -f build/docker-compose.yml up -d
 ### Production
 ```bash
 docker-compose -f build/docker-compose.production.yml up -d
+```
+
+### With External Database
+For production deployments with PostgreSQL or MySQL:
+
+```bash
+# PostgreSQL example
+docker run -d \
+  --name wolfmanager \
+  -p 3000:3000 \
+  -e DATABASE_TYPE=postgresql \
+  -e DATABASE_URL=postgresql://user:pass@postgres:5432/wolfmanager \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /var/run/wolf:/var/run/wolf \
+  wolfmanager:latest
+
+# MySQL example
+docker run -d \
+  --name wolfmanager \
+  -p 3000:3000 \
+  -e DATABASE_TYPE=mysql \
+  -e DATABASE_URL=mysql://user:pass@mysql:3306/wolfmanager \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /var/run/wolf:/var/run/wolf \
+  wolfmanager:latest
+```
+
+## Database Persistence
+
+### SQLite (Default)
+SQLite database files are stored in `/app/data` inside the container. Mount a volume to persist data:
+
+```bash
+-v wolfmanager_data:/app/data
+```
+
+### PostgreSQL/MySQL
+When using external databases, ensure:
+1. Database server is accessible from the container
+2. Database and user are created beforehand
+3. Connection string includes proper credentials and SSL settings if needed
+
+### TOML Migration
+If migrating from a TOML-based configuration, the container can run the migration automatically:
+
+```bash
+docker exec wolfmanager npm run migrate-toml -- migrate --backup --verbose
 ```
 
 ## Troubleshooting

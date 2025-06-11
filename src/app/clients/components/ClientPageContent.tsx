@@ -1,11 +1,10 @@
 "use client";
 
 import {
-  getWolfClientsAction,
   getPendingPairRequestsAction,
-  pairWolfClientAction,
   unpairWolfClientAction,
-} from "@/app/actions/wolf-actions"; // Import new Server Actions
+} from "@/app/actions/wolf-actions"; // Import Wolf API Server Actions
+import { getClientsAction, pairAndAddClientAction } from "@/app/clients/actions"; // Import database-backed clients action
 import { Button } from "@/components/ui/button"; // Import Button
 import { useToast } from "@/components/ui/use-toast";
 import { type PendingPairRequest } from "@/lib/api/wolf-pair";
@@ -81,59 +80,105 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
   }, [status, session, router]);
 
   // --- Logic for fetching and refreshing data ---
-  const fetchRequests = async () => {
+  const fetchRequests = async (isBackgroundRefresh = false) => {
     try {
       setIsRefreshingRequests(true);
-      setErrorRequests(null);
-      setErrorPairedClients(null);
+      
+      // Only clear errors on initial load, not on background refresh
+      if (!isBackgroundRefresh) {
+        setErrorRequests(null);
+        setErrorPairedClients(null);
+      }
 
       // Call the new Server Action to get pending requests
       const pendingResult = await getPendingPairRequestsAction();
-
-      if (!pendingResult.success) {
-        throw new Error(
-          typeof pendingResult.error === 'string'
-            ? pendingResult.error
-            : pendingResult.error?.message || "Failed to fetch pending requests"
+      let mappedRequests = requests; // Preserve existing requests on failure
+      
+      if (pendingResult.success) {
+        const wolfPendingRequests = pendingResult.data?.requests || [];
+        // Map Wolf API pending requests to match expected interface
+        mappedRequests = wolfPendingRequests.map((request: any) => ({
+          id: request.pair_secret, // Use pair_secret as the unique ID
+          deviceType: `Device at ${request.client_ip}`, // Show client IP as device type
+          timestamp: Date.now(), // Wolf API doesn't provide timestamp, use current time
+          pair_secret: request.pair_secret,
+        }));
+      } else {
+        // Log error but don't throw - preserve existing data
+        const errorMessage = typeof pendingResult.error === 'string'
+          ? pendingResult.error
+          : pendingResult.error?.message || "Failed to fetch pending requests";
+        clientLogger.warn(
+          LogComponent.PAIRING,
+          "Failed to fetch pending requests during background refresh",
+          { error: errorMessage }
         );
+        
+        // Only set error state on initial load, not background refresh
+        if (!isBackgroundRefresh) {
+          setErrorRequests("Failed to load pending requests");
+        }
       }
-      const wolfPendingRequests = pendingResult.data?.requests || [];
 
-      // Map Wolf API pending requests to match expected interface
-      const mappedRequests = wolfPendingRequests.map((request: any) => ({
-        id: request.pair_secret, // Use pair_secret as the unique ID
-        deviceType: `Device at ${request.client_ip}`, // Show client IP as device type
-        timestamp: Date.now(), // Wolf API doesn't provide timestamp, use current time
-        pair_secret: request.pair_secret,
-      }));
+      // Get paired clients using database-backed server action
+      const pairedClientsResponse = await getClientsAction();
+      let pairedClientsData = pairedClients; // Preserve existing clients on failure
+      
+      if (pairedClientsResponse.success) {
+        pairedClientsData = (pairedClientsResponse.data?.clients || []).map((client: any) => ({
+          id: client.id || client.client_id,
+          friendly_name: client.hostname || client.friendly_name || `Client ${client.id}`,
+          device_type: client.device_type || 'Unknown',
+          last_seen: client.last_seen,
+          status: client.status || 'Unknown',
+          owner: 'Current User', // Since we're getting user-specific clients
+          pair_secret: client.pair_secret,
+        }));
+      } else {
+        // Log error but don't throw - preserve existing data
+        const errorMessage = typeof pairedClientsResponse.error === 'string'
+          ? pairedClientsResponse.error
+          : pairedClientsResponse.error?.message || "Failed to fetch paired clients";
+        clientLogger.warn(
+          LogComponent.PAIRING,
+          "Failed to fetch paired clients during background refresh",
+          { error: errorMessage }
+        );
+        
+        // Only set error state on initial load, not background refresh
+        if (!isBackgroundRefresh) {
+          setErrorPairedClients("Failed to load paired clients");
+        }
+      }
 
-      // Get paired clients using new server action
-      const pairedClientsResponse = await getWolfClientsAction();
-      const pairedClientsData: ClientWithOwner[] = pairedClientsResponse.success
-        ? (pairedClientsResponse.data?.clients || []).map((client: any) => ({
-            id: client.id || client.client_id,
-            friendly_name: client.hostname || client.friendly_name || `Client ${client.id}`,
-            device_type: client.device_type || 'Unknown',
-            last_seen: client.last_seen,
-            status: client.status || 'Unknown',
-            owner: 'Current User', // Since we're getting user-specific clients
-            pair_secret: client.pair_secret,
-          }))
-        : [];
-
+      // Update state with either new data or preserved existing data
       setRequests(mappedRequests);
       setPairedClients(pairedClientsData);
+      
     } catch (error) {
-      setErrorRequests("Failed to load pending requests");
-      setErrorPairedClients("Failed to load paired clients"); // Keep setting both errors if fetch fails
-      sonnerToast.error("Failed to load data", {
-        description: "Please try refreshing the page.",
-      });
+      // Log the error
       clientLogger.error(
         LogComponent.PAIRING,
-        "Error fetching pending requests or paired clients",
+        isBackgroundRefresh
+          ? "Error during background refresh - preserving existing data"
+          : "Error fetching pending requests or paired clients",
         error instanceof Error ? error : new Error(String(error))
       );
+      
+      // Only show error UI and clear data on initial load failures
+      if (!isBackgroundRefresh) {
+        setErrorRequests("Failed to load pending requests");
+        setErrorPairedClients("Failed to load paired clients");
+        sonnerToast.error("Failed to load data", {
+          description: "Please try refreshing the page.",
+        });
+      } else {
+        // For background refresh failures, just log silently and preserve existing data
+        clientLogger.warn(
+          LogComponent.PAIRING,
+          "Background refresh failed, preserving existing client data"
+        );
+      }
     } finally {
       setIsRefreshingRequests(false);
     }
@@ -141,7 +186,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
 
   useEffect(() => {
     // Poll every 10 seconds after initial load
-    const pollInterval = setInterval(fetchRequests, 10000);
+    const pollInterval = setInterval(() => fetchRequests(true), 10000);
 
     return () => {
       clearInterval(pollInterval);
@@ -197,22 +242,42 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           }
         );
 
-        const pairResult = await pairWolfClientAction(
+        const pairResult = await pairAndAddClientAction(
           pin,
-          pairSecret,
-          friendlyName
+          friendlyName,
+          pairSecret
         );
 
         if (!pairResult.success) {
           const errorMessage = typeof pairResult.error === 'string'
             ? pairResult.error
             : pairResult.error?.message || "Failed to pair device";
+          const errorCode = pairResult.error?.code;
           const errorToLog = new Error(errorMessage);
+
+          // Handle duplicate cleanup as a warning, not an error
+          if (errorCode === "CONFLICT" && errorMessage.includes("Duplicate clients were detected and removed")) {
+            clientLogger.warn(
+              LogComponent.PAIRING,
+              "[ClientPageContent] Duplicate cleanup completed",
+              { errorMessage }
+            );
+            
+            sonnerToast.warning("Duplicate clients found and cleared", {
+              description: "Duplicate pairing entries were automatically removed. Please try the pairing process again.",
+            });
+            
+            // Reset form and close dialog for retry
+            handleCancelPairing();
+            fetchRequests(false); // Refresh lists after cleanup
+            return;
+          }
 
           clientLogger.error(
             LogComponent.PAIRING,
             "[ClientPageContent] Pairing failed",
-            errorToLog
+            errorToLog,
+            { errorCode }
           );
 
           throw new Error(errorMessage);
@@ -222,14 +287,14 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           LogComponent.PAIRING,
           "[ClientPageContent] Pairing successful",
           {
-            clientId: pairResult.data?.clientId,
+            clientId: pairResult.data?.client?.id,
           }
         );
         sonnerToast.success("Device paired successfully");
 
         // Reset form and close dialog
         handleCancelPairing();
-        fetchRequests(); // Refresh lists after pairing
+        fetchRequests(false); // Refresh lists after pairing
       } catch (error) {
         clientLogger.error(
           LogComponent.PAIRING,
@@ -320,7 +385,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
         <div className="glass-card border-none p-6">
           <h2 className="text-white text-xl">Error Loading Clients</h2>
           <p className="text-gray-400">{errorRequests || errorPairedClients}</p>
-          <Button onClick={fetchRequests} className="mt-4">
+          <Button onClick={() => fetchRequests(false)} className="mt-4">
             Retry
           </Button>
         </div>
@@ -340,7 +405,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           requests={requests}
           isLoading={isLoadingRequests}
           isRefreshing={isRefreshingRequests}
-          onRefresh={fetchRequests}
+          onRefresh={() => fetchRequests(false)}
           onSelectRequest={handleSelectRequest}
         />
 

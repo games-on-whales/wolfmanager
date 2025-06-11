@@ -15,11 +15,14 @@ docs/
 ├── technical/            # Technical documentation
 │   ├── authentication-architecture.md     # Authentication & session management
 │   ├── authentication-quick-reference.md  # Authentication quick reference
+│   ├── database-architecture.md           # Database design and multi-backend support
+│   ├── database-quick-reference.md        # Database operations quick reference
 │   ├── logging/
 │   │   ├── index.md     # Overview of logging system
 │   │   ├── setup.md     # Logger setup and configuration
 │   │   └── standards.md # Logging standards and best practices
 │   └── architecture.md
+├── migration-guide.md   # TOML to database migration guide
 └── guides/              # Developer and user guides
     ├── development.md
     └── deployment.md
@@ -42,6 +45,8 @@ Technical documentation covering system architecture, internal components, and d
 
 - **Authentication Architecture** - Comprehensive guide to NextAuth.js implementation, session management, middleware protection, and cross-host cookie configuration
 - **Authentication Quick Reference** - Quick reference for common authentication patterns, troubleshooting, and configuration
+- **Database Architecture** - Database design, multi-backend support, schema relationships, and migration system
+- **Database Quick Reference** - Practical examples for database operations, helper functions, and troubleshooting
 - Architecture overview
 - Component documentation
 - Standards and best practices

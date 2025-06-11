@@ -29,6 +29,8 @@ services:
       - NODE_ENV=production
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-generated-secret-here}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-32-character-encryption-key}
+      - DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
+      - DATABASE_URL=${DATABASE_URL:-}
     volumes:
       - wolf_socket:/var/run/wolf:ro
       - wolf_admin_data:/app/data
