@@ -1240,6 +1240,13 @@ export async function removeClientAction(
   }
 
   try {
+    // Add diagnostic logging
+    logger.info(
+      LogComponent.WOLF_UI,
+      "[Action] DIAGNOSIS: removeClientAction called with deviceId",
+      { username, deviceId, deviceIdType: typeof deviceId }
+    );
+
     // 1. Get user from database
     const user = await getUserByUsername(username);
     if (!user) {
@@ -1252,25 +1259,52 @@ export async function removeClientAction(
       return createErrorResponse("User not found", API_ERROR_CODES.NOT_FOUND);
     }
 
-    // 2. Check if client exists in database and is owned by the user
-    const clientDevice = await getClientDeviceById(deviceId);
+    // 2. Try to find client by database ID first
+    let clientDevice = await getClientDeviceById(deviceId);
+    let wolfClientId = deviceId; // Assume it's a wolf client ID initially
+    
     if (!clientDevice) {
-      logger.warn(
+      // If not found by database ID, try to find by Wolf client ID
+      logger.info(
         LogComponent.WOLF_UI,
-        "[Action] Client not found in database",
+        "[Action] DIAGNOSIS: Client not found by database ID, trying Wolf client ID",
         { username, userId: user.id, deviceId }
       );
-      // Try to unpair from Wolf anyway in case it exists there
-      const wolfClient = await getWolfClient(deviceId);
-      if (wolfClient) {
-        await unpairClientWithWolf(deviceId);
+      
+      clientDevice = await getClientDeviceByWolfClientId(deviceId);
+      if (clientDevice) {
         logger.info(
           LogComponent.WOLF_UI,
-          "[Action] Unpaired orphaned client from Wolf",
-          { deviceId }
+          "[Action] DIAGNOSIS: Found client by Wolf client ID",
+          { username, userId: user.id, deviceId, databaseId: clientDevice.id, wolfClientId: clientDevice.wolfClientId }
         );
+        wolfClientId = clientDevice.wolfClientId; // Use the Wolf client ID from database
+      } else {
+        logger.warn(
+          LogComponent.WOLF_UI,
+          "[Action] DIAGNOSIS: Client not found by database ID or Wolf client ID",
+          { username, userId: user.id, deviceId }
+        );
+        // Try to unpair from Wolf anyway in case it exists there
+        const wolfClient = await getWolfClient(deviceId);
+        if (wolfClient) {
+          await unpairClientWithWolf(deviceId);
+          logger.info(
+            LogComponent.WOLF_UI,
+            "[Action] Unpaired orphaned client from Wolf",
+            { deviceId }
+          );
+        }
+        return createSuccessResponse({}); // Consider it a success as the end state is what we want
       }
-      return createSuccessResponse({}); // Consider it a success as the end state is what we want
+    } else {
+      // Found by database ID, use the Wolf client ID from the record
+      wolfClientId = clientDevice.wolfClientId;
+      logger.info(
+        LogComponent.WOLF_UI,
+        "[Action] DIAGNOSIS: Found client by database ID",
+        { username, userId: user.id, databaseId: deviceId, wolfClientId: clientDevice.wolfClientId }
+      );
     }
 
     // CRITICAL SECURITY CHECK: Verify that the requesting user owns this client
@@ -1293,40 +1327,68 @@ export async function removeClientAction(
     }
 
     // 3. Check if client exists in Wolf API and unpair if it does
-    const wolfClient = await getWolfClient(deviceId);
+    logger.info(
+      LogComponent.WOLF_UI,
+      "[Action] DIAGNOSIS: Checking Wolf API with wolfClientId",
+      { username, userId: user.id, databaseId: clientDevice.id, wolfClientId }
+    );
+    
+    const wolfClient = await getWolfClient(wolfClientId);
     if (wolfClient) {
-      const unpairSuccess = await unpairClientWithWolf(deviceId);
+      logger.info(
+        LogComponent.WOLF_UI,
+        "[Action] DIAGNOSIS: Wolf client found, attempting unpair",
+        { username, userId: user.id, databaseId: clientDevice.id, wolfClientId, wolfClientData: wolfClient }
+      );
+      
+      const unpairSuccess = await unpairClientWithWolf(wolfClientId);
       if (!unpairSuccess) {
         logger.error(
           LogComponent.WOLF_UI,
-          "[Action] Failed to unpair client with Wolf API",
+          "[Action] DIAGNOSIS: Failed to unpair client with Wolf API",
           undefined,
-          { username, userId: user.id, deviceId }
+          { username, userId: user.id, databaseId: clientDevice.id, wolfClientId, wolfClientData: wolfClient }
         );
         return createErrorResponse(
           "Failed to unpair client with Wolf API",
           API_ERROR_CODES.INTERNAL_ERROR
         );
       }
-      logger.debug(
+      logger.info(
         LogComponent.WOLF_UI,
-        "[Action] Successfully unpaired client from Wolf",
-        { username, userId: user.id, deviceId }
+        "[Action] DIAGNOSIS: Successfully unpaired client from Wolf",
+        { username, userId: user.id, databaseId: clientDevice.id, wolfClientId, wolfClientData: wolfClient }
       );
     } else {
-      logger.debug(
+      logger.warn(
         LogComponent.WOLF_UI,
-        "[Action] Client not found in Wolf API, proceeding with database cleanup",
-        { username, userId: user.id, deviceId }
+        "[Action] DIAGNOSIS: Wolf client NOT FOUND with wolfClientId - this may be why unpair is not working",
+        { username, userId: user.id, databaseId: clientDevice.id, wolfClientId }
       );
+      
+      // Let's also try to check if client exists with database ID for comparison
+      const wolfClientByDbId = await getWolfClient(clientDevice.id);
+      if (wolfClientByDbId) {
+        logger.warn(
+          LogComponent.WOLF_UI,
+          "[Action] DIAGNOSIS: Wolf client FOUND with database ID instead of Wolf client ID",
+          { username, userId: user.id, databaseId: clientDevice.id, wolfClientId, wolfClientByDbId }
+        );
+      } else {
+        logger.debug(
+          LogComponent.WOLF_UI,
+          "[Action] DIAGNOSIS: Wolf client not found with either Wolf client ID or database ID",
+          { username, userId: user.id, databaseId: clientDevice.id, wolfClientId }
+        );
+      }
     }
 
     // 4. Remove client from database
-    await deleteClientDevice(deviceId);
+    await deleteClientDevice(clientDevice.id);
     logger.info(
       LogComponent.WOLF_UI,
-      "[Action] Successfully removed client from database",
-      { username, userId: user.id, deviceId }
+      "[Action] DIAGNOSIS: Successfully removed client from database",
+      { username, userId: user.id, databaseId: clientDevice.id, wolfClientId }
     );
 
     return createSuccessResponse({});
@@ -1505,6 +1567,7 @@ export async function getClientsAction(): Promise<
     const userClients: ClientDevice[] = updatedUserClientDevices.map(
       (device) => ({
         id: device.id,
+        wolf_client_id: device.wolfClientId,
         friendly_name: device.friendlyName,
         pair_secret: device.pairSecret,
       })

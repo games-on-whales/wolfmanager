@@ -4,7 +4,7 @@ import {
   getPendingPairRequestsAction,
   unpairWolfClientAction,
 } from "@/app/actions/wolf-actions"; // Import Wolf API Server Actions
-import { getClientsAction, pairAndAddClientAction } from "@/app/clients/actions"; // Import database-backed clients action
+import { getClientsAction, pairAndAddClientAction, removeClientAction } from "@/app/clients/actions"; // Import database-backed clients action
 import { Button } from "@/components/ui/button"; // Import Button
 import { useToast } from "@/components/ui/use-toast";
 import { type PendingPairRequest } from "@/lib/api/wolf-pair";
@@ -127,6 +127,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
       if (pairedClientsResponse.success) {
         pairedClientsData = (pairedClientsResponse.data?.clients || []).map((client: any) => ({
           id: client.id || client.client_id,
+          wolf_client_id: client.wolf_client_id,
           friendly_name: client.hostname || client.friendly_name || `Client ${client.id}`,
           device_type: client.device_type || 'Unknown',
           last_seen: client.last_seen,
@@ -327,11 +328,15 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
 
     try {
       setUnpairingId(deviceId);
-      const response = await unpairWolfClientAction(deviceId);
+      // Use removeClientAction which now handles Wolf client ID properly
+      const response = await removeClientAction(deviceId);
 
       if (response.success) {
+        // Filter by Wolf client ID OR database ID since we might be receiving either
         setPairedClients((prev: ClientWithOwner[]) =>
-          prev.filter((client) => client.id !== deviceId)
+          prev.filter((client) =>
+            client.wolf_client_id !== deviceId && client.id !== deviceId
+          )
         );
         clientLogger.info(
           LogComponent.PAIRING,
