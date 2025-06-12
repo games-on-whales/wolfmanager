@@ -3,7 +3,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { LoadingState } from "@/components/loading-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
-import { loadConfig } from "@/lib/config";
+import { getUserByUsername } from "@/lib/db/helpers/users";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -47,14 +47,13 @@ export default async function AccountSettingsPage() {
     redirect("/auth/signin");
   }
 
-  // Get Steam settings directly from TOML config
-  const config = loadConfig(true); // Load with decryption
-  const user = config.users[session.user.name || ""];
+  // Get Steam settings from database
+  const user = await getUserByUsername(session.user.name || "");
 
   const steamSettings = {
-    maskedSteamId: user?.steam_id ? maskString(user.steam_id) : null,
-    maskedSteamApiKey: user?.steam_api_key
-      ? maskString(user.steam_api_key)
+    maskedSteamId: user?.steamId ? maskString(user.steamId) : null,
+    maskedSteamApiKey: user?.steamApiKey
+      ? maskString(user.steamApiKey)
       : null,
   };
 

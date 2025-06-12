@@ -3,9 +3,10 @@
 import { authOptions } from "@/lib/auth";
 import {
   changeUserPassword,
-  loadConfig,
+  getConfig,
   updateUserSteamInfo,
 } from "@/lib/config";
+import { verifyUserPassword } from "@/lib/db/helpers";
 import { LogComponent, logger } from "@/lib/logger";
 import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
@@ -30,7 +31,7 @@ export async function updateSteamSettings(data: UpdateSteamSettingsData) {
     });
 
     // Update the user's Steam information
-    updateUserSteamInfo(session.user.name, data.steamId, data.steamApiKey);
+    await updateUserSteamInfo(session.user.name, data.steamId, data.steamApiKey);
 
     logger.info(
       LogComponent.STEAM,
@@ -74,25 +75,14 @@ export async function updateUserPassword(data: UpdatePasswordData) {
       userId: session.user.name,
     });
 
-    // Load config and validate current password
-    const config = loadConfig();
-    const user = config.users[session.user.name];
-
+    // Verify current password using database
+    const user = await verifyUserPassword(session.user.name, data.currentPassword);
     if (!user) {
-      throw new Error("User not found");
-    }
-
-    // Verify current password
-    const isValidPassword = bcrypt.compareSync(
-      data.currentPassword,
-      user.password_hash
-    );
-    if (!isValidPassword) {
       throw new Error("Current password is incorrect");
     }
 
     // Update password
-    changeUserPassword(session.user.name, data.newPassword);
+    await changeUserPassword(session.user.name, data.newPassword);
 
     logger.info(LogComponent.AUTH, "Password updated successfully", {
       userId: session.user.name,

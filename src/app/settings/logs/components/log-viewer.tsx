@@ -51,12 +51,7 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
   const [date, setDate] = useState<DateRange | undefined>();
   const [error, setError] = useState<string | null>(null);
 
-  // Debug logging
-  console.log("[LOG_VIEWER_DEBUG] Component rendered", {
-    initialEntries: initialEntries.length,
-    logsState: logs.length,
-    error,
-  });
+  // Component rendered successfully
 
   const uniqueComponents = Array.from(
     new Set(logs.map((entry) => entry.component))

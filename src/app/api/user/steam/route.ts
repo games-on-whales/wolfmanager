@@ -1,9 +1,9 @@
 import { authOptions } from "@/lib/auth";
 import {
-  loadConfig,
   updateUserSteamInfo,
   verifyUserSteamCredentials,
 } from "@/lib/config";
+import { getUserByUsername } from "@/lib/db/helpers/users";
 import { LogComponent, logger } from "@/lib/logger";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
@@ -26,11 +26,10 @@ export async function GET() {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const config = loadConfig(true); // Load with decryption
-    const user = config.users[session.user.name];
+    const user = await getUserByUsername(session.user.name);
 
     if (!user) {
-      await logger.warn(LogComponent.STEAM, "User not found in config", {
+      await logger.warn(LogComponent.STEAM, "User not found in database", {
         username: session.user.name,
       });
       return NextResponse.json({ message: "User not found" }, { status: 404 });
@@ -38,13 +37,13 @@ export async function GET() {
 
     await logger.debug(LogComponent.STEAM, "Retrieved Steam settings", {
       username: session.user.name,
-      hasSteamId: !!user.steam_id,
-      hasSteamApiKey: !!user.steam_api_key,
+      hasSteamId: !!user.steamId,
+      hasSteamApiKey: !!user.steamApiKey,
     });
 
     return NextResponse.json({
-      hasSteamId: !!user.steam_id,
-      hasSteamApiKey: !!user.steam_api_key,
+      hasSteamId: !!user.steamId,
+      hasSteamApiKey: !!user.steamApiKey,
     });
   } catch (error) {
     await logger.error(

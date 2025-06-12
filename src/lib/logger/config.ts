@@ -43,7 +43,7 @@ const containerConfig: LoggerConfig = {
     format: "json",
   },
   console: {
-    enabled: false,
+    enabled: true,
     colorize: false,
     includeMetadata: true,
   },
