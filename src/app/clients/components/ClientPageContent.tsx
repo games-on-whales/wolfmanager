@@ -68,7 +68,6 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
 
   // Client-side authentication check (still needed for client-side navigation)
   useEffect(() => {
-    console.log("[DEBUG] Session on mount or refresh:", session, status);
     if (status === "unauthenticated") {
       clientLogger.debug(
         LogComponent.WOLF_UI,

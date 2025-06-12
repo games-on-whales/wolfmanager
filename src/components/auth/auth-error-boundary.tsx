@@ -21,13 +21,10 @@ export class AuthErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    console.error("[DEBUG] AuthErrorBoundary caught error:", error);
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("[DEBUG] AuthErrorBoundary componentDidCatch:", error, errorInfo);
-    
     // Log the error asynchronously to avoid blocking
     setTimeout(async () => {
       try {
@@ -38,7 +35,8 @@ export class AuthErrorBoundary extends Component<Props, State> {
           { errorInfo }
         );
       } catch (logError) {
-        console.error("[DEBUG] Failed to log auth error:", logError);
+        // Fallback if client logger fails - this is a legitimate console.error
+        console.error("Failed to log auth error via client logger:", logError);
       }
     }, 0);
   }

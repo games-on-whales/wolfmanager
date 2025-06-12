@@ -119,11 +119,6 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                       variant="ghost"
                       className="h-8 w-8 text-[#0077B6] hover:text-[#0077B6]/80"
                       onClick={() => {
-                        console.log('[PairedClientsCard] Unpair clicked:', {
-                          databaseId: client.id,
-                          wolfClientId: client.wolf_client_id,
-                          friendlyName: client.friendly_name
-                        });
                         // Use wolf_client_id if available, fallback to database id
                         onUnpair(client.wolf_client_id || client.id);
                       }}
