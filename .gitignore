@@ -41,8 +41,14 @@ config/tasks.toml
 config/steam_library.toml
 config/assets/
 
+# Test Results (but keep test scripts)
+test-results.json
+tests/**/test-results.json
+tests/**/coverage/
+tests/**/*.log
+
 # Temp / Cache
-.shadcn-ui 
+.shadcn-ui
 # Assuming this is cache/generated
 # Add other cache/temp directories if applicable
 

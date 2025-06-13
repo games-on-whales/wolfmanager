@@ -6,74 +6,157 @@ WolfManager uses Drizzle ORM to provide a type-safe, multi-database abstraction 
 
 ## Database Schema Design
 
-### Core Entities
+### Current Active Schema
 
-The database schema is organized around five core domains:
+The database schema currently implements core WolfManager functionality:
 
-#### 1. Users Domain
+#### 1. Users Domain ✅ **Active**
 - **Primary Table**: `users`
 - **Purpose**: User authentication, authorization, and profile management
-- **Key Relationships**: One-to-many with client devices and user libraries
+- **Key Relationships**: One-to-many with client devices
+- **Features**: Username/password auth, admin roles, Steam integration placeholders
 
-#### 2. Client Devices Domain  
+#### 2. Client Devices Domain ✅ **Active**
 - **Primary Table**: `client_devices`
 - **Purpose**: Management of paired Moonlight clients and device authentication
 - **Key Relationships**: Many-to-one with users
+- **Features**: Device pairing secrets, Wolf client ID integration, friendly names
 
-#### 3. Games Domain
-- **Tables**: `platforms`, `games`, `user_libraries`, `user_games`
-- **Purpose**: Multi-platform game catalog and user-specific game libraries
-- **Key Relationships**: Complex many-to-many relationships between users, platforms, and games
-
-#### 4. Tasks Domain
+#### 3. Tasks Domain ✅ **Active**
 - **Primary Table**: `tasks`
 - **Purpose**: Background task scheduling and execution tracking
 - **Key Relationships**: Self-contained with system configuration integration
+- **Features**: Cron-style scheduling, task status tracking, enable/disable controls
 
-#### 5. System Configuration Domain
-- **Tables**: `system_config`, `metadata_providers`
-- **Purpose**: Application configuration and external service integration
+#### 4. System Configuration Domain ✅ **Active**
+- **Primary Table**: `system_config`
+- **Purpose**: Application configuration and settings storage
 - **Key Relationships**: Referenced by other domains for configuration lookup
+- **Features**: Key-value configuration storage with timestamps
+
+### Future Schema (Tables Created, Not Yet Implemented)
+
+#### 5. Game Library Domain 🚧 **Future Feature**
+- **Tables**: `platforms`, `games`, `user_libraries`, `user_games`
+- **Purpose**: Multi-platform game catalog and user-specific game libraries
+- **Key Relationships**: Complex many-to-many relationships between users, platforms, and games
+- **Planned Features**: Steam library sync, game metadata, playtime tracking
+
+#### 6. Metadata Providers Domain 🚧 **Future Feature**
+- **Primary Table**: `metadata_providers`
+- **Purpose**: External service integration for game metadata
+- **Key Relationships**: Referenced by game library features
+- **Planned Features**: SteamGridDB integration, configurable metadata sources
 
 ## Entity Relationship Diagram
 
+### Current Active Schema
+
+```mermaid
+erDiagram
+    USERS {
+        text id PK
+        text username UK
+        text password_hash
+        integer is_admin
+        text created_at
+        text updated_at
+        integer has_changed_password
+        text display_name
+        text steam_id
+        text steam_api_key
+    }
+
+    CLIENT_DEVICES {
+        text id PK
+        text user_id FK
+        text friendly_name
+        text pair_secret
+        text created_at
+        text updated_at
+        text wolf_client_id
+    }
+
+    TASKS {
+        text id PK
+        text name UK
+        text description
+        text schedule
+        integer is_enabled
+        text status
+        text last_run_at
+        text next_run_at
+        text created_at
+        text updated_at
+    }
+
+    SYSTEM_CONFIG {
+        text id PK
+        text key UK
+        text value
+        text created_at
+        text updated_at
+    }
+
+    %% Active Relationships
+    USERS ||--o{ CLIENT_DEVICES : "owns"
 ```
-┌─────────────┐         ┌──────────────────┐         ┌─────────────┐
-│    users    │1      1:N│  client_devices  │         │   tasks     │
-│─────────────│◄─────────│──────────────────│         │─────────────│
-│ id (PK)     │          │ id (PK)          │         │ id (PK)     │
-│ username    │          │ user_id (FK)     │         │ name        │
-│ password    │          │ device_name      │         │ schedule    │
-│ is_admin    │          │ pair_secret      │         │ status      │
-│ steam_id    │          │ last_seen        │         │ enabled     │
-└─────────────┘          └──────────────────┘         └─────────────┘
-       │                                                      │
-       │1                                                     │
-       │                                                      │
-       │N                                               ┌─────────────┐
-┌─────────────┐         ┌──────────────────┐           │system_config│
-│user_libraries│1      1:N│   user_games     │           │─────────────│
-│─────────────│◄─────────│──────────────────│           │ key (PK)    │
-│ id (PK)     │          │ id (PK)          │           │ value       │
-│ user_id (FK)│          │ library_id (FK)  │           │ updated_at  │
-│ platform_id │          │ game_id (FK)     │           └─────────────┘
-│ steam_user  │          │ playtime_minutes │                  │
-└─────────────┘          │ last_played      │                  │
-       │                 │ is_favorite      │           ┌─────────────┐
-       │N                └──────────────────┘           │metadata_    │
-       │                          │N                    │ providers   │
-       │1                         │                     │─────────────│
-┌─────────────┐                   │1                    │ id (PK)     │
-│  platforms  │1                ┌─────────────┐         │ name        │
-│─────────────│◄────────────────│    games    │         │ enabled     │
-│ id (PK)     │N                │─────────────│         │ config      │
-│ name        │                 │ id (PK)     │         │ priority    │
-│ version     │                 │ platform_id │         └─────────────┘
-└─────────────┘                 │ platform_   │
-                                │  game_id    │
-                                │ name        │
-                                │ icon_url    │
-                                └─────────────┘
+
+### Future Game Library Schema (Not Yet Implemented)
+
+```mermaid
+erDiagram
+    PLATFORMS {
+        text id PK "🚧 Future Feature"
+        text name
+        text last_sync
+        text version
+    }
+
+    GAMES {
+        text id PK "🚧 Future Feature"
+        text platform_id FK
+        text platform_game_id
+        text name
+        text icon_url
+        text last_updated
+    }
+
+    USER_LIBRARIES {
+        text id PK "🚧 Future Feature"
+        text user_id FK
+        text platform_id FK
+        text steam_id
+        text created_at
+        text updated_at
+    }
+
+    USER_GAMES {
+        text id PK "🚧 Future Feature"
+        text user_library_id FK
+        text game_id FK
+        integer playtime_total
+        integer playtime_linux
+        integer last_played
+        text created_at
+        text updated_at
+    }
+
+    METADATA_PROVIDERS {
+        text id PK "🚧 Future Feature"
+        text name UK
+        integer enabled
+        text api_key
+        text config
+        text created_at
+        text updated_at
+    }
+
+    %% Future Relationships
+    PLATFORMS ||--o{ GAMES : "contains"
+    PLATFORMS ||--o{ USER_LIBRARIES : "supports"
+    USER_LIBRARIES ||--o{ USER_GAMES : "includes"
+    GAMES ||--o{ USER_GAMES : "belongs_to"
 ```
 
 ## Multi-Database Support Architecture
@@ -150,25 +233,61 @@ npm run db:migrate
 
 Each table includes optimized indexes for common query patterns:
 
-#### Users Table
-- Primary: `id` (UUID)
+### Currently Active Tables
+
+#### Users Table ✅ **Active**
+- Primary: `id` (text)
 - Unique: `username`
-- Index: `steam_id` (for Steam integration)
+- Index: `steam_id` (for future Steam integration)
 
-#### Client Devices Table
-- Primary: `id` (UUID)
+#### Client Devices Table ✅ **Active**
+- Primary: `id` (text)
 - Index: `user_id` (foreign key)
-- Unique: `pair_secret` (for device pairing)
+- Index: `pair_secret` (for device pairing)
+- Index: `wolf_client_id` (for Wolf client integration)
+- Unique: `user_id + pair_secret` (composite)
+- Unique: `user_id + wolf_client_id` (composite)
 
-#### Games Table
-- Primary: `id` (UUID)
+#### Tasks Table ✅ **Active**
+- Primary: `id` (text)
+- Unique: `name`
+- Index: `is_enabled` (for active task filtering)
+- Index: `status` (for status-based queries)
+- Index: `next_run_at` (for scheduling)
+
+#### System Config Table ✅ **Active**
+- Primary: `id` (text)
+- Unique: `key`
+
+### Future Feature Tables 🚧 **Not Yet Implemented**
+
+#### Platforms Table (Future)
+- Primary: `id` (text)
+- Index: `name` (for platform lookup)
+
+#### Games Table (Future)
+- Primary: `id` (text)
 - Unique: `platform_id + platform_game_id` (composite)
+- Index: `platform_id` (for platform filtering)
 - Index: `name` (for search functionality)
 
-#### User Games Table
-- Primary: `id` (UUID)
-- Index: `library_id, game_id` (composite for lookups)
+#### User Libraries Table (Future)
+- Primary: `id` (text)
+- Index: `user_id` (foreign key)
+- Index: `platform_id` (foreign key)
+- Unique: `user_id + platform_id` (composite)
+
+#### User Games Table (Future)
+- Primary: `id` (text)
+- Index: `user_library_id` (foreign key)
+- Index: `game_id` (foreign key)
 - Index: `last_played` (for recent games)
+- Unique: `user_library_id + game_id` (composite)
+
+#### Metadata Providers Table (Future)
+- Primary: `id` (text)
+- Unique: `name`
+- Index: `enabled` (for active provider filtering)
 
 ### Performance Optimization
 
@@ -187,13 +306,31 @@ The schema follows a user-centric design where:
 3. **User Libraries** represent user-platform relationships
 4. **User Games** track individual game ownership and playtime
 
-### Relationship Cardinalities
+### Current Active Relationships
 
-- User → Client Devices: One-to-Many
-- User → User Libraries: One-to-Many
-- User Library → User Games: One-to-Many
-- Platform → Games: One-to-Many
-- Game → User Games: One-to-Many
+- **User → Client Devices**: One-to-Many (A user can have multiple paired devices)
+
+### Future Relationships (When Game Library Features Are Implemented)
+
+- **User → User Libraries**: One-to-Many (A user can have libraries on multiple platforms)
+- **Platform → Games**: One-to-Many (A platform contains many games)
+- **Platform → User Libraries**: One-to-Many (A platform can have multiple user libraries)
+- **User Library → User Games**: One-to-Many (A user library contains many games)
+- **Game → User Games**: One-to-Many (A game can belong to multiple user libraries)
+
+### Key Constraints
+
+#### Active Tables ✅
+- **Users**: Unique username, optional Steam integration fields
+- **Client Devices**: Unique pair secret per user, optional Wolf client ID
+- **Tasks**: Unique task names for scheduling
+- **System Config**: Unique configuration keys
+
+#### Future Tables 🚧
+- **Games**: Unique platform + platform game ID combination
+- **User Libraries**: Unique user + platform combination
+- **User Games**: Unique user library + game combination
+- **Metadata Providers**: Unique provider names
 
 ## Security Considerations
 
