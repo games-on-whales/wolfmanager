@@ -357,3 +357,196 @@ When contributing database-related changes:
 6. **Update documentation** if needed
 
 See the [Database Layer README](../src/lib/db/README.md) for complete API documentation.
+
+## Security & Environment Management
+
+### Automatic Secret Generation
+
+WolfManager implements automatic generation of cryptographic secrets to simplify deployment while maintaining security best practices. This feature addresses the common issue of developers using weak or default secrets in production.
+
+#### Implementation Overview
+
+The auto-generation system is implemented in [`src/lib/env.ts`](../src/lib/env.ts) and automatically invoked during application startup via [`src/instrumentation.ts`](../src/instrumentation.ts).
+
+**Key Components:**
+
+1. **[`ensureSecureKeys()`](../src/lib/env.ts:61)** - Main function that checks and generates missing secrets
+2. **[`generateSecureKey()`](../src/lib/env.ts:14)** - Cryptographically secure key generation using Node.js crypto
+3. **[`readEnvFile()`](../src/lib/env.ts)** / **[`writeEnvFile()`](../src/lib/env.ts)** - Environment file management
+4. **[`getLocalIpAddress()`](../src/lib/env.ts:48)** - Development URL auto-configuration
+
+#### Auto-Generation Process
+
+```typescript
+// Called automatically during application startup
+export function ensureSecureKeys(): void {
+  // 1. Check if secrets already exist in environment variables
+  const hasNextAuthSecret = !!process.env.NEXTAUTH_SECRET;
+  const hasEncryptionKey = !!process.env.ENCRYPTION_KEY;
+  
+  // 2. Skip if both secrets are already available
+  if (hasNextAuthSecret && hasEncryptionKey) {
+    return;
+  }
+  
+  // 3. Read existing .env.local file
+  const envVars = readEnvFile();
+  
+  // 4. Generate missing secrets
+  if (!hasNextAuthSecret && !envVars.NEXTAUTH_SECRET) {
+    envVars.NEXTAUTH_SECRET = generateSecureKey(64);
+  }
+  
+  if (!hasEncryptionKey && (!envVars.ENCRYPTION_KEY || envVars.ENCRYPTION_KEY.length !== 32)) {
+    envVars.ENCRYPTION_KEY = generateSecureKey(32);
+  }
+  
+  // 5. Write updated .env.local file
+  writeEnvFile(envVars);
+  
+  // 6. Set environment variables for current process
+  process.env.NEXTAUTH_SECRET = envVars.NEXTAUTH_SECRET;
+  process.env.ENCRYPTION_KEY = envVars.ENCRYPTION_KEY;
+}
+```
+
+#### Security Features
+
+**Cryptographic Security:**
+- Uses Node.js `crypto.randomBytes()` for maximum entropy
+- Generates 64-character NEXTAUTH_SECRET (512 bits of entropy)
+- Generates 32-character ENCRYPTION_KEY (256 bits of entropy)
+- No predictable patterns or weak default values
+
+**Environment Precedence:**
+1. Environment variables (highest priority)
+2. Existing `.env.local` file values
+3. Auto-generation (fallback)
+
+**Container Support:**
+- Works seamlessly in Docker containers
+- Respects volume mounts for persistence
+- Handles both development and production environments
+
+#### Development Workflow
+
+**Local Development:**
+```bash
+# Secrets are auto-generated on first run
+npm run dev
+
+# Check generated secrets
+cat .env.local
+
+# Force regeneration (remove existing file)
+rm .env.local
+npm run dev
+```
+
+**Docker Development:**
+```bash
+# Auto-generation works in containers
+docker run -v $(pwd):/app wolfmanager:dev
+
+# With persistence
+docker run -v wolfmanager_config:/app/config wolfmanager:latest
+```
+
+#### Testing Auto-Generation
+
+**Unit Testing:**
+```typescript
+import { ensureSecureKeys, generateSecureKey } from '@/lib/env';
+
+describe('Secret Generation', () => {
+  test('generates secure keys', () => {
+    const key = generateSecureKey(32);
+    expect(key).toHaveLength(32);
+    expect(key).toMatch(/^[a-f0-9]+$/);
+  });
+  
+  test('respects existing environment variables', () => {
+    process.env.NEXTAUTH_SECRET = 'existing-secret';
+    ensureSecureKeys();
+    expect(process.env.NEXTAUTH_SECRET).toBe('existing-secret');
+  });
+});
+```
+
+**Integration Testing:**
+```bash
+# Test in clean environment
+rm -f .env.local
+unset NEXTAUTH_SECRET ENCRYPTION_KEY
+npm run dev
+
+# Verify secrets were generated
+grep -E "(NEXTAUTH_SECRET|ENCRYPTION_KEY)" .env.local
+```
+
+#### Debugging Auto-Generation
+
+**Enable Debug Logging:**
+The system provides console output indicating when secrets are generated:
+
+```
+[ENV] Checking and ensuring secure keys are available...
+[ENV] Generated secure keys: NEXTAUTH_SECRET, ENCRYPTION_KEY
+[ENV] Updated .env.local with generated keys
+```
+
+**Common Issues:**
+
+1. **Permission errors writing .env.local:**
+   ```bash
+   # Check write permissions
+   ls -la .env.local
+   chmod 644 .env.local
+   ```
+
+2. **Container persistence issues:**
+   ```bash
+   # Ensure proper volume mounts
+   docker run -v wolfmanager_config:/app/config ...
+   ```
+
+3. **Environment variable conflicts:**
+   ```bash
+   # Check existing environment
+   env | grep -E "(NEXTAUTH_SECRET|ENCRYPTION_KEY)"
+   ```
+
+#### Security Considerations
+
+**Best Practices:**
+- Auto-generation is enabled by default for security
+- Manual secrets should be at least as strong as auto-generated ones
+- Secrets are never logged or exposed in error messages
+- `.env.local` files should be excluded from version control
+
+**Production Deployment:**
+- Auto-generation works in all deployment scenarios
+- Consider using external secret management for enterprise deployments
+- Rotate secrets periodically using the regeneration process
+- Monitor logs for generation events during deployments
+
+#### Migration from Manual Setup
+
+Existing deployments with manual secrets continue to work unchanged:
+
+```bash
+# Existing .env.local with manual secrets
+NEXTAUTH_SECRET=manually-set-secret
+ENCRYPTION_KEY=manually-set-key
+
+# Auto-generation respects existing values
+npm run dev  # No changes made to existing secrets
+```
+
+#### Future Enhancements
+
+Planned improvements to the auto-generation system:
+- Secret rotation scheduling
+- Integration with external secret managers (HashiCorp Vault, AWS Secrets Manager)
+- Backup and recovery mechanisms
+- Enhanced logging and monitoring

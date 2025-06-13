@@ -8,11 +8,14 @@ This directory contains comprehensive documentation for the WolfManager project.
 
 ```
 docs/
-├── README.md               # This file
-├── features/              # Feature-specific documentation
+├── README.md                        # This file
+├── development.md                   # Development workflow and environment management
+├── quick-start-auto-generation.md  # Quick start guide for automatic secret generation
+├── security-auto-generation.md     # Security documentation for automatic secret generation
+├── features/                       # Feature-specific documentation
 │   ├── first-time-setup.md
 │   └── user-management.md
-├── technical/            # Technical documentation
+├── technical/                      # Technical documentation
 │   ├── authentication-architecture.md     # Authentication & session management
 │   ├── authentication-quick-reference.md  # Authentication quick reference
 │   ├── database-architecture.md           # Database design and multi-backend support
@@ -22,8 +25,8 @@ docs/
 │   │   ├── setup.md     # Logger setup and configuration
 │   │   └── standards.md # Logging standards and best practices
 │   └── architecture.md
-├── migration-guide.md   # TOML to database migration guide
-└── guides/              # Developer and user guides
+├── migration-guide.md              # TOML to database migration guide
+└── guides/                         # Developer and user guides
     ├── development.md
     └── deployment.md
 ```
@@ -51,6 +54,12 @@ Technical documentation covering system architecture, internal components, and d
 - Component documentation
 - Standards and best practices
 - Configuration details
+
+### Security
+
+Security-focused documentation covering cryptographic implementations and security best practices:
+
+- **Security: Automatic Secret Generation** - Comprehensive security documentation for the auto-generation feature, including threat model, cryptographic implementation, deployment security, and compliance considerations
 
 ### Guides
 
