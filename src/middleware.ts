@@ -51,12 +51,26 @@ export default withAuth(
 
     // Check for expired or invalid session
     if (!token || token.error === "SessionExpired") {
-      await logger.warn(LogComponent.AUTH, "Invalid or expired session", {
-        path: pathname,
-        error: token?.error || "NoToken",
-        hasToken: !!token,
-        timestamp: new Date().toISOString(),
-      });
+      // Special case: for root path with no token, redirect to login (normal behavior)
+      if (pathname === "/" && !token) {
+        await logger.debug(LogComponent.AUTH, "Unauthenticated user accessing root path, redirecting to login", {
+          path: pathname
+        });
+        return NextResponse.redirect(new URL("/login", req.url));
+      }
+
+      // Log actual auth issues (expired sessions, invalid tokens, or protected routes)
+      if (token?.error === "SessionExpired" || (token && !token.id)) {
+        await logger.warn(LogComponent.AUTH, "Authentication issue detected", {
+          path: pathname,
+          error: token?.error || "InvalidToken",
+          hasToken: !!token,
+        });
+      } else {
+        await logger.debug(LogComponent.AUTH, "Unauthenticated access to protected route", {
+          path: pathname,
+        });
+      }
 
       // For API routes, return 401
       if (pathname.startsWith("/api/")) {
@@ -94,9 +108,13 @@ export default withAuth(
       // Special handling for root path
       if (pathname === "/") {
         if (token) {
+          await logger.debug(LogComponent.AUTH, "Authenticated user accessing root path, redirecting to clients", {
+            userId: token.id,
+          });
           // If authenticated and not requiring setup, redirect to clients page
           return NextResponse.redirect(new URL("/clients", req.url));
         } else {
+          await logger.debug(LogComponent.AUTH, "Unauthenticated user accessing root path, redirecting to login");
           // If not authenticated, redirect to login
           return NextResponse.redirect(new URL("/login", req.url));
         }

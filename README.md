@@ -82,13 +82,15 @@ The easiest way to deploy WolfManager is using Docker Compose. Create a `docker-
 
 ```yaml
 services:
-  wolf-admin:
+  wolfmanager:
     image: ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXTAUTH_SECRET=xyz
+      # NEXTAUTH_SECRET and ENCRYPTION_KEY are auto-generated on first startup
+      # - NEXTAUTH_SECRET=your-secret-here  # Optional: provide your own
+      # - ENCRYPTION_KEY=your-32-char-key   # Optional: provide your own
       - NEXTAUTH_URL=http://localhost:3000
     volumes:
       - /var/run/wolf:/var/run/wolf              # Mount Wolf socket
@@ -104,6 +106,58 @@ docker-compose up -d
 ```
 
 WolfManager will be available at `http://localhost:3000`
+
+## Automatic Secret Generation
+
+WolfManager automatically generates secure secrets on first startup, eliminating the need for manual configuration in most cases. This feature simplifies deployment while maintaining security best practices.
+
+### How It Works
+
+When WolfManager starts for the first time, it automatically:
+
+1. **Generates NEXTAUTH_SECRET**: A 64-character secure random string used for NextAuth.js session encryption
+2. **Generates ENCRYPTION_KEY**: A 32-character secure key used for encrypting sensitive data like Steam API keys
+3. **Creates .env.local file**: Stores the generated secrets for persistence across restarts
+4. **Logs generation**: Provides console output indicating which secrets were auto-generated
+
+### Security Benefits
+
+- **Cryptographically secure**: Uses Node.js `crypto.randomBytes()` for maximum entropy
+- **Unique per installation**: Each deployment gets its own unique secrets
+- **No default values**: Eliminates security risks from shared or default secrets
+- **Automatic rotation**: Regenerates invalid or missing keys automatically
+
+### Manual Configuration (Optional)
+
+While auto-generation is recommended for most users, you can still provide your own secrets:
+
+```bash
+# Generate your own secrets (optional)
+openssl rand -hex 32  # For NEXTAUTH_SECRET
+openssl rand -hex 16  # For ENCRYPTION_KEY (32 characters)
+```
+
+Then set them in your environment:
+```yaml
+environment:
+  - NEXTAUTH_SECRET=your-64-character-secret-here
+  - ENCRYPTION_KEY=your-32-character-key-here
+```
+
+### Container Environments
+
+Auto-generation works seamlessly in Docker containers:
+- Secrets are generated on first container startup
+- Persisted through volume mounts to `/app/config` or `/app/data`
+- Environment variables take precedence over auto-generation
+- No additional configuration required
+
+### Backward Compatibility
+
+Existing deployments continue to work unchanged:
+- Pre-existing `.env.local` files are respected
+- Environment variables take precedence over auto-generation
+- No breaking changes to existing configurations
 
 ### First Time Setup
 
@@ -188,7 +242,7 @@ When using Docker, mount a volume for database persistence:
 
 ```yaml
 services:
-  wolf-admin:
+  wolfmanager:
     image: ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest
     environment:
       - DATABASE_TYPE=sqlite  # or postgresql/mysql

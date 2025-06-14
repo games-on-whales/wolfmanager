@@ -8,31 +8,35 @@ This directory contains comprehensive documentation for the WolfManager project.
 
 ```
 docs/
-├── README.md               # This file
-├── features/              # Feature-specific documentation
-│   ├── first-time-setup.md
-│   └── user-management.md
-├── technical/            # Technical documentation
-│   ├── authentication-architecture.md     # Authentication & session management
-│   ├── authentication-quick-reference.md  # Authentication quick reference
-│   ├── database-architecture.md           # Database design and multi-backend support
-│   ├── database-quick-reference.md        # Database operations quick reference
-│   ├── logging/
-│   │   ├── index.md     # Overview of logging system
-│   │   ├── setup.md     # Logger setup and configuration
-│   │   └── standards.md # Logging standards and best practices
-│   └── architecture.md
-├── migration-guide.md   # TOML to database migration guide
-└── guides/              # Developer and user guides
-    ├── development.md
-    └── deployment.md
+├── README.md                           # This file
+├── quick-start-auto-generation.md     # Quick start guide for automatic secret generation
+├── features/                          # Feature-specific documentation (for future features)
+├── guides/                            # Developer and user guides
+│   └── development.md                 # Development workflow and environment setup
+├── images/                            # Documentation images and screenshots
+│   ├── clients.png
+│   ├── settings.png
+│   ├── systemlogs.png
+│   └── user_management.png
+├── security/                          # Security documentation
+│   └── auto-secret-generation.md     # Comprehensive security guide for auto-generation
+└── technical/                        # Technical documentation
+    ├── authentication-architecture.md      # Authentication & session management
+    ├── authentication-quick-reference.md   # Authentication quick reference
+    ├── database-architecture.md            # Database design and multi-backend support
+    ├── database-quick-reference.md         # Database operations quick reference
+    └── pairing-functions-consolidation-plan.md  # Technical planning document
 ```
 
 ## Documentation Types
 
+### Quick Start
+
+- **`quick-start-auto-generation.md`** - Quick start guide for automatic secret generation
+
 ### Features
 
-Detailed documentation for specific features and functionality. Each feature document includes:
+Reserved for future feature-specific documentation. Each feature document will include:
 
 - Feature overview
 - Implementation details
@@ -43,23 +47,34 @@ Detailed documentation for specific features and functionality. Each feature doc
 
 Technical documentation covering system architecture, internal components, and development standards:
 
-- **Authentication Architecture** - Comprehensive guide to NextAuth.js implementation, session management, middleware protection, and cross-host cookie configuration
-- **Authentication Quick Reference** - Quick reference for common authentication patterns, troubleshooting, and configuration
-- **Database Architecture** - Database design, multi-backend support, schema relationships, and migration system
-- **Database Quick Reference** - Practical examples for database operations, helper functions, and troubleshooting
-- Architecture overview
-- Component documentation
-- Standards and best practices
-- Configuration details
+- **`authentication-architecture.md`** - Comprehensive guide to NextAuth.js implementation, session management, middleware protection, and cross-host cookie configuration
+- **`authentication-quick-reference.md`** - Quick reference for common authentication patterns, troubleshooting, and configuration
+- **`database-architecture.md`** - Database design, multi-backend support, schema relationships, and migration system
+- **`database-quick-reference.md`** - Practical examples for database operations, helper functions, and troubleshooting
+- **`pairing-functions-consolidation-plan.md`** - Technical planning document for device pairing functionality
+
+### Security
+
+Security-focused documentation covering cryptographic implementations and security best practices:
+
+- **`security/auto-secret-generation.md`** - Comprehensive security documentation for the auto-generation feature, including threat model, cryptographic implementation, deployment security, and compliance considerations
 
 ### Guides
 
 Step-by-step guides for common tasks:
 
-- Development setup
-- Deployment procedures
-- Troubleshooting guides
-- Best practices
+- **`guides/development.md`** - Development workflow and environment setup
+- Deployment procedures (planned)
+- Troubleshooting guides (planned)
+- Best practices (planned)
+
+### Images
+
+Screenshots and diagrams supporting the documentation:
+
+- Application interface screenshots
+- Architecture diagrams
+- User workflow examples
 
 ## Contributing
 

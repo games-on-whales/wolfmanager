@@ -10,6 +10,10 @@
 export async function register() {
   // Only run on server side
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Ensure secure keys are generated before any other initialization
+    const { ensureSecureKeys } = await import('./lib/env');
+    ensureSecureKeys();
+    
     // Import and run startup initialization using singleton pattern
     const { getInitializationPromise } = await import('./lib/startup');
     await getInitializationPromise();

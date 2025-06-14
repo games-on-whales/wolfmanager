@@ -19,7 +19,7 @@ services:
     privileged: true
     restart: unless-stopped
 
-  wolf-admin:
+  wolfmanager:
     build:
       context: ..
       dockerfile: build/Dockerfile
@@ -27,8 +27,9 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-generated-secret-here}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-32-character-encryption-key}
+      # NEXTAUTH_SECRET and ENCRYPTION_KEY will be auto-generated if not provided
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
       - DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
       - DATABASE_URL=${DATABASE_URL:-}
     volumes:

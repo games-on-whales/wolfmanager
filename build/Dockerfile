@@ -17,6 +17,7 @@ COPY . .
 
 # Build-time environment variables
 ENV NODE_ENV=production
+# Temporary build-time secrets (will be auto-generated at runtime)
 ENV NEXTAUTH_SECRET="build-time-secret-will-be-regenerated-at-runtime"
 ENV ENCRYPTION_KEY="build-time-key-32chars-regenerated"
 

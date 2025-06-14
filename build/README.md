@@ -60,6 +60,21 @@ Additional devices can be configured using the `WOLF_REQUIRED_DEVICES_OVERRIDE` 
 - `PORT=3000` - Application port
 - `HOSTNAME=0.0.0.0` - Bind hostname
 
+### Security Configuration (Auto-Generated)
+WolfManager automatically generates secure secrets on first startup:
+- `NEXTAUTH_SECRET` - Auto-generated 64-character secret for NextAuth.js session encryption
+- `ENCRYPTION_KEY` - Auto-generated 32-character key for encrypting sensitive data
+
+**Manual Override (Optional):**
+- `NEXTAUTH_SECRET=your-secret` - Provide your own NextAuth secret (64+ characters recommended)
+- `ENCRYPTION_KEY=your-key` - Provide your own encryption key (exactly 32 characters required)
+
+**Auto-Generation Behavior:**
+- Secrets are generated using Node.js `crypto.randomBytes()` for cryptographic security
+- Generated secrets are persisted in `.env.local` within the container
+- Environment variables take precedence over auto-generation
+- Logging indicates when secrets are auto-generated vs. provided
+
 ### Database Configuration
 - `DATABASE_TYPE=sqlite` - Database backend: `sqlite`, `postgresql`, or `mysql`
 - `DATABASE_URL` - Database connection string (optional for SQLite)
@@ -105,8 +120,11 @@ docker run -d \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/run/wolf:/var/run/wolf \
   -v wolfmanager_data:/app/data \
+  -v wolfmanager_config:/app/config \
   wolfmanager:latest
 ```
+
+**Note:** The `/app/config` volume mount ensures auto-generated secrets persist across container restarts.
 
 ### With Custom User
 ```bash
@@ -226,6 +244,35 @@ If the application can't access sockets:
 3. Override device detection:
    ```bash
    docker run -e WOLF_REQUIRED_DEVICES_OVERRIDE="/var/run/docker.sock,/custom/socket" ...
+   ```
+
+### Secret Generation Issues
+If auto-generation fails or secrets are not persisting:
+
+1. Check container logs for generation messages:
+   ```bash
+   docker logs wolfmanager | grep -i "secure keys"
+   ```
+
+2. Verify volume mounts for persistence:
+   ```bash
+   docker inspect wolfmanager | grep -A 5 '"Mounts"'
+   ```
+
+3. Check if `.env.local` is created:
+   ```bash
+   docker exec wolfmanager ls -la /app/.env.local
+   ```
+
+4. Manual secret verification:
+   ```bash
+   docker exec wolfmanager cat /app/.env.local
+   ```
+
+5. Force regeneration (remove existing secrets):
+   ```bash
+   docker exec wolfmanager rm -f /app/.env.local
+   docker restart wolfmanager
    ```
 
 ### Build Issues

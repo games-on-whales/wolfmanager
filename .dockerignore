@@ -8,4 +8,10 @@ dist-server
 *.log
 .DS_Store
 .vscode
-.idea 
+.idea
+
+# Test results and logs (but keep validation scripts)
+test-results.json
+tests/**/test-results.json
+tests/**/coverage/
+tests/**/*.log

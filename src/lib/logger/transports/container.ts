@@ -11,7 +11,7 @@ export class ContainerTransport implements LogTransport {
   private containerId: string;
   private serviceName: string;
 
-  constructor(serviceName: string = "wolf-ui") {
+  constructor(serviceName: string = "wolfmanager") {
     this.serviceName = serviceName;
     // Try to get container ID from cgroup
     this.containerId = this.getContainerId();

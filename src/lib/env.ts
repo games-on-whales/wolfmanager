@@ -59,38 +59,79 @@ function getLocalIpAddress(): string {
 }
 
 export function ensureSecureKeys(): void {
-  const envVars = readEnvFile();
-  let needsUpdate = false;
+  try {
+    // Check if NEXTAUTH_SECRET is already set in environment (container case)
+    const hasNextAuthSecret = !!process.env.NEXTAUTH_SECRET;
+    const hasEncryptionKey = !!process.env.ENCRYPTION_KEY;
+    
+    // If both keys are already available in environment, no need to proceed
+    if (hasNextAuthSecret && hasEncryptionKey) {
+      console.log("[ENV] Secure keys already available in environment");
+      return;
+    }
 
-  // Ensure NEXTAUTH_SECRET exists
-  if (!envVars.NEXTAUTH_SECRET) {
-    envVars.NEXTAUTH_SECRET = generateSecureKey(64);
-    needsUpdate = true;
-  }
+    console.log("[ENV] Checking and ensuring secure keys are available...");
+    
+    const envVars = readEnvFile();
+    let needsUpdate = false;
+    let keysGenerated: string[] = [];
 
-  // Ensure ENCRYPTION_KEY exists and is exactly 32 bytes
-  if (!envVars.ENCRYPTION_KEY || envVars.ENCRYPTION_KEY.length !== 32) {
-    envVars.ENCRYPTION_KEY = generateSecureKey(32);
-    needsUpdate = true;
-  }
+    // Ensure NEXTAUTH_SECRET exists (check environment first, then .env.local)
+    if (!hasNextAuthSecret && !envVars.NEXTAUTH_SECRET) {
+      envVars.NEXTAUTH_SECRET = generateSecureKey(64);
+      needsUpdate = true;
+      keysGenerated.push("NEXTAUTH_SECRET");
+    }
 
-  // Ensure NEXTAUTH_URL exists in development
-  if (process.env.NODE_ENV === "development" && !envVars.NEXTAUTH_URL) {
-    // Use the actual IP address for NEXTAUTH_URL
-    const localIp = getLocalIpAddress();
-    envVars.NEXTAUTH_URL = `http://${localIp}:3000`;
-    needsUpdate = true;
-  }
+    // Ensure ENCRYPTION_KEY exists and is exactly 32 bytes
+    if (!hasEncryptionKey && (!envVars.ENCRYPTION_KEY || envVars.ENCRYPTION_KEY.length !== 32)) {
+      envVars.ENCRYPTION_KEY = generateSecureKey(32);
+      needsUpdate = true;
+      keysGenerated.push("ENCRYPTION_KEY");
+    }
 
-  if (needsUpdate) {
-    writeEnvFile(envVars);
-    console.log("Generated secure keys and updated .env.local");
-  }
+    // Ensure NEXTAUTH_URL exists in development
+    if (process.env.NODE_ENV === "development" && !process.env.NEXTAUTH_URL && !envVars.NEXTAUTH_URL) {
+      // Use the actual IP address for NEXTAUTH_URL
+      const localIp = getLocalIpAddress();
+      envVars.NEXTAUTH_URL = `http://${localIp}:3000`;
+      needsUpdate = true;
+      keysGenerated.push("NEXTAUTH_URL");
+    }
 
-  // Set environment variables for the current process
-  process.env.NEXTAUTH_SECRET = envVars.NEXTAUTH_SECRET;
-  process.env.ENCRYPTION_KEY = envVars.ENCRYPTION_KEY;
-  if (envVars.NEXTAUTH_URL) {
-    process.env.NEXTAUTH_URL = envVars.NEXTAUTH_URL;
+    // Update .env.local file if needed (but only if we can write to it)
+    if (needsUpdate) {
+      try {
+        writeEnvFile(envVars);
+        console.log(`[ENV] Auto-generated secure keys: ${keysGenerated.join(", ")}`);
+        console.log("[ENV] Keys saved to .env.local file");
+      } catch (error) {
+        // In container environments, we might not be able to write to .env.local
+        // This is fine as we'll set the environment variables directly
+        console.log("[ENV] Could not write to .env.local (container environment), setting environment variables directly");
+      }
+    }
+
+    // Always set environment variables for the current process
+    // Use environment variables first, then fall back to .env.local values
+    if (!hasNextAuthSecret) {
+      process.env.NEXTAUTH_SECRET = envVars.NEXTAUTH_SECRET;
+    }
+    if (!hasEncryptionKey) {
+      process.env.ENCRYPTION_KEY = envVars.ENCRYPTION_KEY;
+    }
+    if (envVars.NEXTAUTH_URL && !process.env.NEXTAUTH_URL) {
+      process.env.NEXTAUTH_URL = envVars.NEXTAUTH_URL;
+    }
+
+    if (keysGenerated.length > 0) {
+      console.log("[ENV] Secure environment setup completed successfully");
+    } else {
+      console.log("[ENV] All secure keys were already present");
+    }
+
+  } catch (error) {
+    console.error("[ENV] Failed to ensure secure keys:", error);
+    throw new Error("Failed to initialize secure environment variables");
   }
 }
