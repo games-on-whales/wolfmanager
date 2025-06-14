@@ -136,20 +136,85 @@ export async function addUser(userData: NewUser): Promise<User> {
  * Update user
  */
 export async function updateUser(id: string, updates: UserUpdate): Promise<User> {
+  const isAdminUpdate = updates.isAdmin !== undefined;
+  const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
   try {
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Database updateUser called', {
+      operationId,
+      userId: id,
+      isAdminUpdate,
+      targetAdminState: updates.isAdmin,
+      updateFields: Object.keys(updates),
+      timestamp: new Date().toISOString()
+    });
+
     const db = await getDatabase();
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Database connection obtained', {
+      operationId,
+      userId: id,
+      hasDatabase: !!db,
+      timestamp: new Date().toISOString()
+    });
+
     const usersTable = getUsersTable();
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Users table reference obtained', {
+      operationId,
+      userId: id,
+      tableType: typeof usersTable,
+      timestamp: new Date().toISOString()
+    });
     
-    // Check if user exists
+    // Check if user exists with enhanced logging
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Checking if user exists', {
+      operationId,
+      userId: id,
+      timestamp: new Date().toISOString()
+    });
+
     const existingUser = await getUserById(id);
+    
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: User existence check result', {
+      operationId,
+      userId: id,
+      userExists: !!existingUser,
+      currentState: existingUser ? {
+        id: existingUser.id,
+        username: existingUser.username,
+        isAdmin: existingUser.isAdmin,
+        updatedAt: existingUser.updatedAt
+      } : null,
+      timestamp: new Date().toISOString()
+    });
+
     if (!existingUser) {
+      logger.error(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: User not found in database', undefined, {
+        operationId,
+        userId: id,
+        timestamp: new Date().toISOString()
+      });
       throw new Error('User not found');
     }
     
     // If updating username, check if it's already taken
     if (updates.username && updates.username !== existingUser.username) {
+      logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Checking username availability', {
+        operationId,
+        userId: id,
+        newUsername: updates.username,
+        currentUsername: existingUser.username,
+        timestamp: new Date().toISOString()
+      });
+
       const userWithUsername = await getUserByUsername(updates.username);
       if (userWithUsername) {
+        logger.error(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Username already exists', undefined, {
+          operationId,
+          userId: id,
+          conflictingUsername: updates.username,
+          conflictingUserId: userWithUsername.id,
+          timestamp: new Date().toISOString()
+        });
         throw new Error('Username already exists');
       }
     }
@@ -158,22 +223,205 @@ export async function updateUser(id: string, updates: UserUpdate): Promise<User>
       ...updates,
       updatedAt: new Date().toISOString(),
     };
+
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Prepared update data', {
+      operationId,
+      userId: id,
+      updateFields: Object.keys(updatedData),
+      isAdminUpdate,
+      adminStateChange: isAdminUpdate ? {
+        from: existingUser.isAdmin,
+        to: updates.isAdmin
+      } : null,
+      sanitizedData: {
+        ...updatedData,
+        passwordHash: updatedData.passwordHash ? '[REDACTED]' : undefined
+      },
+      timestamp: new Date().toISOString()
+    });
     
-    await (db as any)
-      .update(usersTable)
-      .set(updatedData)
-      .where(eq(usersTable.id, id));
-    
-    const updatedUser = await getUserById(id);
-    if (!updatedUser) {
-      throw new Error('Failed to retrieve updated user');
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Executing database update query', {
+      operationId,
+      userId: id,
+      databaseType: databaseConfig.type,
+      timestamp: new Date().toISOString()
+    });
+
+    let updateResult;
+    try {
+      // Log the exact SQL that would be generated (for debugging)
+      const query = (db as any)
+        .update(usersTable)
+        .set(updatedData)
+        .where(eq(usersTable.id, id));
+      
+      logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: SQL Query preparation', {
+        operationId,
+        userId: id,
+        queryType: 'UPDATE',
+        tableName: 'users',
+        updateDataKeys: Object.keys(updatedData),
+        isAdminFieldPresent: 'isAdmin' in updatedData,
+        isAdminValue: updatedData.isAdmin,
+        timestamp: new Date().toISOString()
+      });
+
+      updateResult = await query;
+      
+      logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Database update query executed', {
+        operationId,
+        userId: id,
+        updateResult: updateResult,
+        hasResult: !!updateResult,
+        resultType: typeof updateResult,
+        timestamp: new Date().toISOString()
+      });
+    } catch (updateError) {
+      logger.error(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Database update query failed', updateError as Error, {
+        operationId,
+        userId: id,
+        updateData: {
+          ...updatedData,
+          passwordHash: updatedData.passwordHash ? '[REDACTED]' : undefined
+        },
+        errorMessage: updateError instanceof Error ? updateError.message : String(updateError),
+        errorStack: updateError instanceof Error ? updateError.stack : undefined,
+        timestamp: new Date().toISOString()
+      });
+      throw updateError;
     }
     
-    logger.info(LogComponent.SYSTEM, 'User updated successfully', { userId: id });
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Retrieving updated user', {
+      operationId,
+      userId: id,
+      timestamp: new Date().toISOString()
+    });
+
+    // Add a small delay to ensure database write is complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const updatedUser = await getUserById(id);
+    
+    logger.debug(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Updated user retrieved', {
+      operationId,
+      userId: id,
+      hasUpdatedUser: !!updatedUser,
+      originalUserState: existingUser ? {
+        id: existingUser.id,
+        username: existingUser.username,
+        isAdmin: existingUser.isAdmin,
+        updatedAt: existingUser.updatedAt
+      } : null,
+      updatedUserState: updatedUser ? {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        isAdmin: updatedUser.isAdmin,
+        updatedAt: updatedUser.updatedAt
+      } : null,
+      adminStateComparison: isAdminUpdate ? {
+        originalAdminState: existingUser?.isAdmin,
+        expectedAdminState: updates.isAdmin,
+        actualAdminState: updatedUser?.isAdmin,
+        updateSuccessful: updatedUser?.isAdmin === updates.isAdmin,
+        timestampChanged: existingUser?.updatedAt !== updatedUser?.updatedAt
+      } : null,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!updatedUser) {
+      logger.error(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Failed to retrieve updated user', undefined, {
+        operationId,
+        userId: id,
+        timestamp: new Date().toISOString()
+      });
+      throw new Error('Failed to retrieve updated user');
+    }
+
+    // Additional validation for admin updates
+    if (isAdminUpdate && updatedUser.isAdmin !== updates.isAdmin) {
+      // Try direct database query to check the actual value
+      try {
+        const directResult = await (db as any)
+          .select({
+            id: usersTable.id,
+            username: usersTable.username,
+            isAdmin: usersTable.isAdmin,
+            updatedAt: usersTable.updatedAt
+          })
+          .from(usersTable)
+          .where(eq(usersTable.id, id))
+          .limit(1);
+
+        const directUser = directResult[0];
+        
+        logger.error(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Admin state update verification failed - direct query', undefined, {
+          operationId,
+          userId: id,
+          expectedAdminState: updates.isAdmin,
+          getUserByIdResult: updatedUser.isAdmin,
+          directQueryResult: directUser?.isAdmin,
+          directQueryUser: directUser,
+          possibleCachingIssue: directUser?.isAdmin === updates.isAdmin,
+          timestamp: new Date().toISOString()
+        });
+
+        // If direct query shows the correct value, there might be a caching issue
+        if (directUser?.isAdmin === updates.isAdmin) {
+          logger.warn(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Possible caching issue detected - using direct query result', {
+            operationId,
+            userId: id,
+            getUserByIdCached: updatedUser.isAdmin,
+            directQueryCorrect: directUser.isAdmin,
+            timestamp: new Date().toISOString()
+          });
+          // Return the direct query result instead
+          return directUser as User;
+        }
+      } catch (directQueryError) {
+        logger.error(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Direct query failed', directQueryError as Error, {
+          operationId,
+          userId: id,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      logger.error(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Admin state update verification failed', undefined, {
+        operationId,
+        userId: id,
+        expectedAdminState: updates.isAdmin,
+        actualAdminState: updatedUser.isAdmin,
+        timestamp: new Date().toISOString()
+      });
+      throw new Error(`Admin state update failed - expected ${updates.isAdmin}, got ${updatedUser.isAdmin}`);
+    }
+    
+    logger.info(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: User updated successfully in database', {
+      operationId,
+      userId: id,
+      isAdminUpdate,
+      finalState: {
+        username: updatedUser.username,
+        isAdmin: updatedUser.isAdmin,
+        updatedAt: updatedUser.updatedAt
+      },
+      timestamp: new Date().toISOString()
+    });
     
     return updatedUser;
   } catch (error) {
-    logger.error(LogComponent.SYSTEM, 'Failed to update user', error as Error, { userId: id });
+    const errorDetails = {
+      operationId,
+      userId: id,
+      isAdminUpdate,
+      targetAdminState: updates.isAdmin,
+      updateFields: Object.keys(updates),
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      timestamp: new Date().toISOString()
+    };
+
+    logger.error(LogComponent.SYSTEM, 'ADMIN_TOGGLE_DEBUG: Failed to update user in database', error as Error, errorDetails);
     throw error;
   }
 }

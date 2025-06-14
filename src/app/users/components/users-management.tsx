@@ -176,43 +176,149 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
       isAdmin?: boolean;
     }
   ) => {
+    const isAdminToggle = data.isAdmin !== undefined && Object.keys(data).length === 1;
+    const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     try {
-      await clientLogger.debug(LogComponent.WOLF_UI, "Updating user", {
+      await clientLogger.debug(LogComponent.WOLF_UI, "ADMIN_TOGGLE_DEBUG: UI starting user update", {
+        operationId,
         userId,
+        isAdminToggle,
+        targetAdminState: data.isAdmin,
+        updateFields: Object.keys(data),
+        timestamp: new Date().toISOString(),
         ...data,
       });
 
+      // Find current user state for comparison
+      const currentUser = optimisticUsers.find(u => u.id === userId);
+      await clientLogger.debug(LogComponent.WOLF_UI, "ADMIN_TOGGLE_DEBUG: Current user state", {
+        operationId,
+        userId,
+        currentUserFound: !!currentUser,
+        currentAdminState: currentUser?.isAdmin,
+        targetAdminState: data.isAdmin,
+        timestamp: new Date().toISOString()
+      });
+
       startTransition(async () => {
-        const result = await updateUserAction(userId, data);
-
-        if (!result.success || !result.data) {
-          throw new Error(result.error || "Failed to update user");
-        }
-
-        const updatedUser: User = result.data;
-        updateOptimisticUser(userId, updatedUser);
-
-        await clientLogger.info(
-          LogComponent.WOLF_UI,
-          "User updated successfully",
-          {
+        try {
+          await clientLogger.debug(LogComponent.WOLF_UI, "ADMIN_TOGGLE_DEBUG: Calling updateUserAction", {
+            operationId,
             userId,
-          }
-        );
+            timestamp: new Date().toISOString()
+          });
 
-        showToast.success("Success", {
-          description: "User updated successfully",
-        });
+          const result = await updateUserAction(userId, data);
+
+          await clientLogger.debug(LogComponent.WOLF_UI, "ADMIN_TOGGLE_DEBUG: updateUserAction response", {
+            operationId,
+            userId,
+            success: result.success,
+            hasData: !!result.data,
+            error: result.error,
+            debugInfo: result.debugInfo,
+            timestamp: new Date().toISOString()
+          });
+
+          if (!result.success || !result.data) {
+            // Enhanced error handling with debug info
+            let errorMessage = result.error || "Failed to update user";
+            
+            if (result.debugInfo && isAdminToggle) {
+              errorMessage = `Admin toggle failed: ${result.error}`;
+              
+              await clientLogger.error(LogComponent.WOLF_UI, "ADMIN_TOGGLE_DEBUG: Admin toggle operation failed", new Error(errorMessage), {
+                operationId,
+                userId,
+                serverOperationId: result.debugInfo.operationId,
+                targetAdminState: result.debugInfo.targetState,
+                errorType: result.debugInfo.errorType,
+                serverTimestamp: result.debugInfo.timestamp,
+                timestamp: new Date().toISOString()
+              });
+            }
+
+            throw new Error(errorMessage);
+          }
+
+          const updatedUser: User = result.data;
+          
+          // Validate the update for admin toggles
+          if (isAdminToggle && updatedUser.isAdmin !== data.isAdmin) {
+            const validationError = `Admin toggle validation failed - expected isAdmin=${data.isAdmin}, got isAdmin=${updatedUser.isAdmin}`;
+            
+            await clientLogger.error(LogComponent.WOLF_UI, "ADMIN_TOGGLE_DEBUG: UI validation failed", new Error(validationError), {
+              operationId,
+              userId,
+              expectedAdminState: data.isAdmin,
+              actualAdminState: updatedUser.isAdmin,
+              updatedUserData: updatedUser,
+              timestamp: new Date().toISOString()
+            });
+
+            throw new Error(validationError);
+          }
+
+          updateOptimisticUser(userId, updatedUser);
+
+          await clientLogger.info(
+            LogComponent.WOLF_UI,
+            "ADMIN_TOGGLE_DEBUG: User updated successfully in UI",
+            {
+              operationId,
+              userId,
+              isAdminToggle,
+              finalState: {
+                username: updatedUser.username,
+                isAdmin: updatedUser.isAdmin,
+                updatedAt: updatedUser.updatedAt
+              },
+              timestamp: new Date().toISOString()
+            }
+          );
+
+          const successMessage = isAdminToggle
+            ? `Admin privileges ${updatedUser.isAdmin ? 'granted to' : 'removed from'} ${updatedUser.username}`
+            : "User updated successfully";
+
+          showToast.success("Success", {
+            description: successMessage,
+          });
+        } catch (transitionError) {
+          // Log transition-specific errors
+          await clientLogger.error(LogComponent.WOLF_UI, "ADMIN_TOGGLE_DEBUG: Error in transition", transitionError as Error, {
+            operationId,
+            userId,
+            isAdminToggle,
+            timestamp: new Date().toISOString()
+          });
+          throw transitionError;
+        }
       });
     } catch (error) {
-      const err =
-        error instanceof Error ? error : new Error("Failed to update user");
+      const err = error instanceof Error ? error : new Error("Failed to update user");
+      
       await clientLogger.error(
         LogComponent.WOLF_UI,
-        "Failed to update user",
-        err
+        "ADMIN_TOGGLE_DEBUG: UI handleUpdateUser failed",
+        err,
+        {
+          operationId,
+          userId,
+          isAdminToggle,
+          targetAdminState: data.isAdmin,
+          errorMessage: err.message,
+          timestamp: new Date().toISOString()
+        }
       );
-      showToast.error("Error", err);
+
+      // Provide specific error messages for admin toggle failures
+      const errorMessage = isAdminToggle
+        ? `Failed to ${data.isAdmin ? 'grant' : 'remove'} admin privileges: ${err.message}`
+        : err.message;
+
+      showToast.error("Error", new Error(errorMessage));
     }
   };
 
@@ -303,18 +409,25 @@ export function UsersManagement({ initialUsers }: UsersManagementProps) {
                         {user.isAdmin ? "Administrator" : "User"}
                       </p>
                     </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          handleUpdateUser(user.id, {
-                            isAdmin: !user.isAdmin,
-                          })
-                        }
-                        disabled={isPending}
-                      >
-                        Toggle Admin
-                      </Button>
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-2">
+                        <label
+                          htmlFor={`admin-toggle-${user.id}`}
+                          className="text-sm font-medium"
+                        >
+                          Admin
+                        </label>
+                        <Switch
+                          id={`admin-toggle-${user.id}`}
+                          checked={user.isAdmin}
+                          onCheckedChange={(checked) =>
+                            handleUpdateUser(user.id, {
+                              isAdmin: checked,
+                            })
+                          }
+                          disabled={isPending}
+                        />
+                      </div>
                       <Button
                         variant="destructive"
                         onClick={() => handleDeleteUser(user.id)}
