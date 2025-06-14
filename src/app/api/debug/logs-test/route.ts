@@ -18,8 +18,8 @@ export async function GET() {
 
     // Get the log path used by getLogs
     const logPath = process.env.NODE_ENV === "production"
-      ? "/config/logs/wolf-ui.log"
-      : require("path").join(process.cwd(), "config", "logs", "wolf-ui.log");
+      ? "/config/logs/wolfmanager.log"
+      : require("path").join(process.cwd(), "config", "logs", "wolfmanager.log");
 
     const debugInfo: any = {
       NODE_ENV: process.env.NODE_ENV,

@@ -12,7 +12,7 @@ export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 
 // Components that can generate logs
 export const LogComponent = {
-  WOLF_UI: "wolf-ui",
+  WOLF_UI: "wolfmanager-ui",
   WOLF_SERVER: "wolf-server",
   CONTAINER: "container",
   PAIRING: "pairing",
@@ -37,7 +37,7 @@ export interface LogEntry {
 // Container-specific configuration
 export const containerConfigSchema = z.object({
   enabled: z.boolean().default(true),
-  serviceName: z.string().default("wolf-ui"),
+  serviceName: z.string().default("wolfmanager"),
   includeMetadata: z.boolean().default(true),
   useJson: z.boolean().default(true),
 });

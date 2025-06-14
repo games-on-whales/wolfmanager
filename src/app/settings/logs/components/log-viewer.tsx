@@ -165,7 +165,7 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `wolf-ui-logs-${new Date().toISOString()}.json`;
+      a.download = `wolfmanager-logs-${new Date().toISOString()}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

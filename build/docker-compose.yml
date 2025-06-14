@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  wolf-admin:
+  wolfmanager:
     build:
       context: ..
       dockerfile: build/Dockerfile

@@ -19,7 +19,7 @@ services:
     privileged: true
     restart: unless-stopped
 
-  wolf-admin:
+  wolfmanager:
     build:
       context: ..
       dockerfile: build/Dockerfile

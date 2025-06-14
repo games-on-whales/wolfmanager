@@ -7,7 +7,7 @@ const devConfig: LoggerConfig = {
   level: "debug",
   container: {
     enabled: true,
-    serviceName: "wolf-ui-dev",
+    serviceName: "wolfmanager-dev",
     includeMetadata: true,
     useJson: true,
   },
@@ -31,7 +31,7 @@ const containerConfig: LoggerConfig = {
   level: "info",
   container: {
     enabled: true,
-    serviceName: "wolf-ui",
+    serviceName: "wolfmanager",
     includeMetadata: true,
     useJson: true,
   },
@@ -54,7 +54,7 @@ const prodConfig: LoggerConfig = {
   level: "info",
   container: {
     enabled: false,
-    serviceName: "wolf-ui",
+    serviceName: "wolfmanager",
     includeMetadata: true,
     useJson: true,
   },

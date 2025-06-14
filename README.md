@@ -82,7 +82,7 @@ The easiest way to deploy WolfManager is using Docker Compose. Create a `docker-
 
 ```yaml
 services:
-  wolf-admin:
+  wolfmanager:
     image: ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest
     ports:
       - "3000:3000"
@@ -242,7 +242,7 @@ When using Docker, mount a volume for database persistence:
 
 ```yaml
 services:
-  wolf-admin:
+  wolfmanager:
     image: ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest
     environment:
       - DATABASE_TYPE=sqlite  # or postgresql/mysql
