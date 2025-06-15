@@ -151,6 +151,15 @@
   /* Removed transition property to prevent any animations */
 }
 
+/* Enhanced login card with improved contrast */
+.enhanced-login-card {
+  background: rgba(0, 0, 0, 0.65) !important;
+  backdrop-filter: blur(6px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.3);
+}
+
 /* Removed the ::before pseudo-element that was causing the shimmer effect */
 
 /* Removed the hover effects that were causing the card to lift and rotate */

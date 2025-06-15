@@ -41,7 +41,7 @@ export function LoginClient({ error, callbackUrl }: LoginClientProps) {
     handleError();
   }, [error, callbackUrl]);
 
-  const handleLogoClick = async () => {
+  const handleGameControllerClick = async () => {
     setShowEasterEgg(!showEasterEgg);
     await clientLogger.debug(LogComponent.WOLF_UI, "Easter egg toggled", {
       showEasterEgg: !showEasterEgg,
@@ -71,41 +71,7 @@ export function LoginClient({ error, callbackUrl }: LoginClientProps) {
           )}
         >
           {/* Keep the Card and its content, which now uses the updated LoginForm */}
-          <Card className="border-muted/20 bg-card/60 shadow-lg backdrop-blur-md backdrop-saturate-150">
-            <CardHeader className="space-y-4 text-center">
-              <div className="mx-auto flex flex-col items-center space-y-4">
-                <div
-                  className={cn(
-                    "w-16 h-16 overflow-hidden rounded-full cursor-pointer transition-all duration-300",
-                    "hover:scale-110",
-                    showEasterEgg &&
-                      "ring-2 ring-green-500 ring-offset-2 ring-offset-background"
-                  )}
-                  onClick={handleLogoClick}
-                  title={
-                    showEasterEgg
-                      ? "Click to close game"
-                      : "Click for a surprise"
-                  }
-                >
-                  <img
-                    src="https://images.opencollective.com/games-on-whales/33a2797/logo/128.png?height=128"
-                    alt="WolfManager Logo"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <h1 className="text-4xl font-bold tracking-tight gradient-text">
-                  Wolf
-                </h1>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Sign in to your account
-              </p>
-            </CardHeader>
-            <CardContent>
-              <LoginForm />
-            </CardContent>
-          </Card>
+          <LoginForm onGameControllerClick={handleGameControllerClick} />
         </div>
         {showEasterEgg && (
           <div

@@ -1,4 +1,6 @@
-import { SettingsLayout } from "@/app/settings/components/settings-layout";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { LoadingState } from "@/components/loading-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,12 +60,17 @@ export default async function AccountSettingsPage() {
   };
 
   return (
-    <SettingsLayout
-      title="Account Settings"
-      description="Manage your account preferences"
-      navigation={navigation}
-    >
-      <div className="space-y-6">
+    <div className="space-y-6 p-8 max-w-7xl mx-auto">
+      <div className="flex items-center gap-4">
+        <Link href="/settings">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </Link>
+        <h1 className="text-2xl font-bold text-white neon-text">
+          Account Settings
+        </h1>
+      </div>
         <ErrorBoundary>
           <Suspense fallback={<LoadingState />}>
             <ProfileInfo
@@ -97,6 +104,5 @@ export default async function AccountSettingsPage() {
           </ErrorBoundary>
         )}
       </div>
-    </SettingsLayout>
-  );
+    );
 }
