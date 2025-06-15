@@ -19,9 +19,11 @@ import { GamepadIcon as GameController } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
-interface LoginFormProps {}
+interface LoginFormProps {
+  onGameControllerClick?: () => void;
+}
 
-export function LoginForm({}: LoginFormProps) {
+export function LoginForm({ onGameControllerClick }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   // Keep the existing onSubmit function and its logic
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -72,14 +74,22 @@ export function LoginForm({}: LoginFormProps) {
   }
 
   return (
-    <Card className="glass-card border-none">
+    <Card className="glass-card border-none enhanced-login-card">
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-2">
-          <GameController className="h-12 w-12 text-[#00E5CC]" />
+          <div
+            className="cursor-pointer hover:scale-110 transition-all duration-300"
+            onClick={onGameControllerClick}
+            title="Click for a surprise"
+          >
+            <GameController className="h-12 w-12 text-[#00E5CC]" />
+          </div>
         </div>
+        
         <CardTitle className="text-2xl font-bold text-white neon-text">
-          Wolf Game Manager
+          WOLFMANAGER
         </CardTitle>
+        
         <CardDescription className="text-gray-400">
           Enter your credentials to access your dashboard
         </CardDescription>
@@ -105,17 +115,9 @@ export function LoginForm({}: LoginFormProps) {
               />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-[#fffb96]">
-                  {" "}
-                  {/* Change htmlFor and text */}
-                  Password
-                </Label>
-                {/* Add Forgot password link */}
-                <Button variant="link" className="px-0 text-xs text-[#01cdfe]">
-                  Forgot password?
-                </Button>
-              </div>
+              <Label htmlFor="password" className="text-[#fffb96]">
+                Password
+              </Label>
               <Input
                 id="password"
                 name="password"
@@ -139,6 +141,23 @@ export function LoginForm({}: LoginFormProps) {
             </Button>
           </div>
         </form>
+        
+        {/* Wolf Logo and Powered by Wolf - Below Sign In Button */}
+        <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-700">
+          {/* Wolf Logo on Left */}
+          <div className="w-8 h-8 overflow-hidden rounded-full">
+            <img
+              src="https://images.opencollective.com/games-on-whales/33a2797/logo/128.png?height=128"
+              alt="Wolf Logo"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          
+          {/* Powered by Wolf on Right */}
+          <span className="text-sm text-gray-400 lowercase">
+            powered by wolf
+          </span>
+        </div>
       </CardContent>
     </Card>
   );

@@ -317,16 +317,16 @@ export default function ApiTestConsoleClient({ endpoints }: ApiTestConsoleClient
   };
 
   return (
-    <Card className="h-[calc(100vh-12rem)]">
+    <Card className="min-h-[60vh]">
       <CardHeader>
         <CardTitle>API Test Console</CardTitle>
         <CardDescription>
           Test Wolf API endpoints with schema validation
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid grid-cols-[350px_1fr] gap-6 h-[calc(100%-5rem)] overflow-hidden">
+      <CardContent className="grid grid-cols-[350px_1fr] gap-6">
         {/* Left Column - Endpoint List */}
-        <div className="border-r pr-6 h-full flex flex-col">
+        <div className="border-r pr-6 flex flex-col max-h-[70vh]">
           <div className="relative mb-4">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -379,7 +379,7 @@ export default function ApiTestConsoleClient({ endpoints }: ApiTestConsoleClient
                             }}
                           >
                             <MethodChip method={e.method} />
-                            <span className="text-sm font-mono">{e.path}</span>
+                            <span className="text-sm font-mono break-all">{e.path}</span>
                           </div>
                         ))}
                       </div>
@@ -391,12 +391,12 @@ export default function ApiTestConsoleClient({ endpoints }: ApiTestConsoleClient
           </div>
         </div>
         {/* Right Column - Test Interface */}
-        <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex flex-col min-h-[60vh]">
           {selectedEndpoint ? (
             <>
               <div className="flex items-center gap-2 mb-4">
                 <MethodChip method={selectedEndpoint.method} />
-                <span className="font-mono">{selectedEndpoint.path}</span>
+                <span className="font-mono break-all">{selectedEndpoint.path}</span>
               </div>
               {selectedEndpoint.description && (
                 <div className="text-sm text-muted-foreground mb-4">
@@ -482,7 +482,7 @@ export default function ApiTestConsoleClient({ endpoints }: ApiTestConsoleClient
               >
                 {isLoading ? "Testing..." : "Test Endpoint"}
               </Button>
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 min-h-[300px]">
                 <div className="flex items-center justify-between mb-2">
                   <Label>Response</Label>
                   {latestResponse && (
@@ -512,7 +512,7 @@ export default function ApiTestConsoleClient({ endpoints }: ApiTestConsoleClient
                     </div>
                   )}
                 </div>
-                <div className="h-full rounded-md border bg-zinc-950 overflow-hidden">
+                <div className="min-h-[300px] max-h-[500px] rounded-md border bg-zinc-950 overflow-auto">
                   {latestResponse ? (
                     <SyntaxHighlighter
                       language="json"

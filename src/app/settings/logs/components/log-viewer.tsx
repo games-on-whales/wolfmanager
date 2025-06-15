@@ -236,7 +236,7 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
 
   return (
     <div className="p-6">
-      <Card className="glass-card border-none w-full h-[calc(100vh-12rem)] flex flex-col">
+      <Card className="glass-card border-none w-full h-[calc(100vh-16rem)] flex flex-col">
         <CardHeader className="border-b shrink-0 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex flex-col space-y-2">
@@ -381,8 +381,8 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
                         {date?.from ? (
                           date.to ? (
                             <>
-                              {format(date.from, "LLL dd, y")} -{" "}
-                              {format(date.to, "LLL dd, y")}
+                              {format(date.from, "PP")} -{" "}
+                              {format(date.to, "PP")}
                             </>
                           ) : (
                             format(date.from, "LLL dd, y")
@@ -520,7 +520,7 @@ export function LogViewer({ initialEntries = [] }: LogViewerProps) {
                               {entry.component}
                             </span>
                             <span className="text-zinc-500 text-xs">
-                              {new Date(entry.timestamp).toLocaleString()}
+                              {format(new Date(entry.timestamp), "PPpp")}
                             </span>
                           </div>
                           <div className="flex items-center space-x-2">

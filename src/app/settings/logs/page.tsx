@@ -1,5 +1,7 @@
 import { ErrorBoundary } from "@/components/error-boundary";
-import { PageLayout } from "@/components/layout/page-layout";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { LoadingState } from "@/components/loading-state";
 import { getLogs } from "@/lib/actions/logging";
 import { authOptions } from "@/lib/auth";
@@ -30,16 +32,23 @@ export default async function LogsPage() {
 
     // 3. Render with page layout
     return (
-      <PageLayout
-        title="System Logs"
-        description="View and analyze system logs"
-      >
-        <ErrorBoundary>
-          <Suspense fallback={<LoadingState />}>
-            <LogViewer initialEntries={result.entries || []} />
-          </Suspense>
-        </ErrorBoundary>
-      </PageLayout>
+      <div className="space-y-6 p-8 max-w-7xl mx-auto">
+        <div className="flex items-center gap-4">
+          <Link href="/settings">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <h1 className="text-2xl font-bold text-white neon-text">System Logs</h1>
+        </div>
+        <div className="flex flex-col h-full pb-8">
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingState />}>
+              <LogViewer initialEntries={result.entries || []} />
+            </Suspense>
+          </ErrorBoundary>
+        </div>
+      </div>
     );
   } catch (error) {
     throw error;
