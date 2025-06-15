@@ -38,14 +38,28 @@ export function LoginForm({}: LoginFormProps) {
       });
 
       const result = await signIn("credentials", {
-        username,
-        password,
-        redirect: true,
-        callbackUrl: "/clients",
+          username,
+          password,
+          redirect: false, // Prevent NextAuth from handling redirect
       });
-
-      // The code won't reach here due to redirect: true
-      // NextAuth will handle the redirect
+      
+      await clientLogger.debug(LogComponent.AUTH, "SignIn result", {
+        ok: result?.ok,
+        error: result?.error,
+        status: result?.status
+      });
+      
+      if (result?.ok) {
+          await clientLogger.info(LogComponent.AUTH, "Login successful, redirecting");
+          window.location.href = "/clients"; // Handle redirect manually
+      } else {
+          await clientLogger.warn(LogComponent.AUTH, "Login failed", {
+            error: result?.error,
+            status: result?.status
+          });
+          showToast.error("Login Failed", "Invalid credentials");
+          setIsLoading(false); // Reset loading state on failure
+      }
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,
@@ -53,7 +67,7 @@ export function LoginForm({}: LoginFormProps) {
         error as Error
       );
       showToast.error("Login Error", "An unexpected error occurred");
-      setIsLoading(false);
+      setIsLoading(false); // Ensure inputs are re-enabled after exception
     }
   }
 
