@@ -69,7 +69,7 @@ export const authOptions: AuthOptions = {
             return null;
           }
 
-          const user = validateUser(credentials.username, credentials.password);
+          const user = await validateUser(credentials.username, credentials.password);
 
           if (!user) {
             logger.warn(LogComponent.AUTH, "Invalid credentials", {
@@ -137,8 +137,8 @@ export const authOptions: AuthOptions = {
         // This ensures the token reflects current config state
         if (token.id && token.name) {
           try {
-            const { loadConfig } = await import("./config");
-            const config = loadConfig();
+            const { getConfig } = await import("./config");
+            const config = await getConfig();
             const currentUser = config.users[token.name];
             
             if (currentUser) {

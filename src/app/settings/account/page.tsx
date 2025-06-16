@@ -1,9 +1,11 @@
-import { SettingsLayout } from "@/app/settings/components/settings-layout";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { LoadingState } from "@/components/loading-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
-import { loadConfig } from "@/lib/config";
+import { getUserByUsername } from "@/lib/db/helpers/users";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -47,24 +49,28 @@ export default async function AccountSettingsPage() {
     redirect("/auth/signin");
   }
 
-  // Get Steam settings directly from TOML config
-  const config = loadConfig(true); // Load with decryption
-  const user = config.users[session.user.name || ""];
+  // Get Steam settings from database
+  const user = await getUserByUsername(session.user.name || "");
 
   const steamSettings = {
-    maskedSteamId: user?.steam_id ? maskString(user.steam_id) : null,
-    maskedSteamApiKey: user?.steam_api_key
-      ? maskString(user.steam_api_key)
+    maskedSteamId: user?.steamId ? maskString(user.steamId) : null,
+    maskedSteamApiKey: user?.steamApiKey
+      ? maskString(user.steamApiKey)
       : null,
   };
 
   return (
-    <SettingsLayout
-      title="Account Settings"
-      description="Manage your account preferences"
-      navigation={navigation}
-    >
-      <div className="space-y-6">
+    <div className="space-y-6 p-8 max-w-7xl mx-auto">
+      <div className="flex items-center gap-4">
+        <Link href="/settings">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </Link>
+        <h1 className="text-2xl font-bold text-white neon-text">
+          Account Settings
+        </h1>
+      </div>
         <ErrorBoundary>
           <Suspense fallback={<LoadingState />}>
             <ProfileInfo
@@ -98,6 +104,5 @@ export default async function AccountSettingsPage() {
           </ErrorBoundary>
         )}
       </div>
-    </SettingsLayout>
-  );
+    );
 }

@@ -142,30 +142,20 @@ export async function getLogs(): Promise<
       return { success: false, error: "You need admin access to view logs" };
     }
 
-    // Add debug logging to see what's happening
-    console.log("[LOGS_DEBUG] Starting log retrieval process");
-    console.log("[LOGS_DEBUG] Environment:", {
-      NODE_ENV: process.env.NODE_ENV,
-      CONTAINER: process.env.CONTAINER,
-      LOG_FILE_PATH: process.env.LOG_FILE_PATH,
-    });
-    
-    // Test the logger by creating a new log entry
-    await logger.info(LogComponent.SYSTEM, "Testing log file writing - getLogs called", {
+    // Log the retrieval attempt for admin audit trail
+    await logger.debug(LogComponent.SYSTEM, "Log retrieval requested", {
       userId: session.user.id,
-      timestamp: new Date().toISOString(),
+      nodeEnv: process.env.NODE_ENV,
     });
 
     // Read log file with improved path detection
     const logPath = getLogPath();
-    console.log("[LOGS_DEBUG] Primary log path:", logPath);
 
     try {
       await fs.access(logPath);
-      console.log("[LOGS_DEBUG] Primary log file exists");
+      const content = await fs.readFile(logPath, "utf-8");
+      return parseAndReturnLogs(content, session.user.id, logPath);
     } catch (error) {
-      console.log("[LOGS_DEBUG] Primary log file not found:", error);
-      
       // Try alternative paths in production
       if (process.env.NODE_ENV === "production") {
         const alternativePaths = [
@@ -174,18 +164,18 @@ export async function getLogs(): Promise<
           "./config/logs/wolfmanager.log",
         ];
         
-        console.log("[LOGS_DEBUG] Trying alternative paths:", alternativePaths);
-        
         for (const altPath of alternativePaths) {
           try {
             await fs.access(altPath);
-            console.log("[LOGS_DEBUG] Found logs at alternative path:", altPath);
+            logger.debug(LogComponent.SYSTEM, "Using alternative log path", {
+              path: altPath,
+              userId: session.user.id,
+            });
             
-            // Read and parse the alternative file
             const content = await fs.readFile(altPath, "utf-8");
             return parseAndReturnLogs(content, session.user.id, altPath);
           } catch (altError) {
-            console.log("[LOGS_DEBUG] Alternative path failed:", altPath, altError);
+            // Continue to next alternative path
           }
         }
       }
@@ -196,14 +186,8 @@ export async function getLogs(): Promise<
       });
       return { success: true, entries: [] };
     }
-
-    const content = await fs.readFile(logPath, "utf-8");
-    console.log("[LOGS_DEBUG] Log file content length:", content.length);
-    
-    return parseAndReturnLogs(content, session.user.id, logPath);
     
   } catch (error) {
-    console.error("[LOGS_DEBUG] Error in getLogs:", error);
     logger.error(
       LogComponent.SYSTEM,
       "Failed to retrieve logs",
@@ -222,11 +206,8 @@ export async function getLogs(): Promise<
 
 // Helper function to parse logs and return consistent format
 function parseAndReturnLogs(content: string, userId: string, logPath: string): { success: true; entries: LogEntry[] } {
-  console.log("[LOGS_DEBUG] Parsing logs from path:", logPath);
-  
   // Parse last 1000 lines into JSON
   const lines = content.trim().split("\n").slice(-1000);
-  console.log("[LOGS_DEBUG] Total lines to parse:", lines.length);
   
   const entries: LogEntry[] = lines
     .map((line) => {
@@ -239,8 +220,6 @@ function parseAndReturnLogs(content: string, userId: string, logPath: string): {
       }
     })
     .filter((entry): entry is LogEntry => entry !== null);
-
-  console.log("[LOGS_DEBUG] Successfully parsed entries:", entries.length);
 
   logger.info(LogComponent.SYSTEM, "Logs retrieved successfully", {
     count: entries.length,

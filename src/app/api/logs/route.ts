@@ -26,8 +26,8 @@ const logEntrySchema = z.object({
 // Helper function to get log file path
 function getLogPath() {
   return process.env.NODE_ENV === "production"
-    ? "/config/logs/wolf-ui.log"
-    : path.join(process.cwd(), "config", "logs", "wolf-ui.log");
+    ? "/config/logs/wolfmanager.log"
+    : path.join(process.cwd(), "config", "logs", "wolfmanager.log");
 }
 
 // GET /api/logs - Retrieve logs (admin only)

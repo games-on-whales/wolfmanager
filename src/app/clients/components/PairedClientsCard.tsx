@@ -26,6 +26,7 @@ type ClientWithOwner = ClientDevice & {
   device_type?: string;
   last_seen?: string;
   status?: string;
+  wolf_client_id?: string;
 };
 
 interface PairedClientsCardProps {
@@ -78,7 +79,7 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                   {client.friendly_name}
                 </TableCell>
                 <TableCell className="text-white py-3 px-4">
-                  {client.id}
+                  {client.wolf_client_id || client.id}
                 </TableCell>
                 <TableCell className="text-white py-3 px-4">
                   {client.device_type}
@@ -117,17 +118,20 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 text-[#0077B6] hover:text-[#0077B6]/80"
-                      onClick={() => onUnpair(client.id)}
-                      disabled={unpairingId === client.id}
+                      onClick={() => {
+                        // Use wolf_client_id if available, fallback to database id
+                        onUnpair(client.wolf_client_id || client.id);
+                      }}
+                      disabled={unpairingId === (client.wolf_client_id || client.id)}
                       title="Unpair Client"
                     >
-                      {unpairingId === client.id ? (
+                      {unpairingId === (client.wolf_client_id || client.id) ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <X className="h-4 w-4" />
                       )}
                       <span className="sr-only">
-                        {unpairingId === client.id ? "Unpairing..." : "Unpair"}
+                        {unpairingId === (client.wolf_client_id || client.id) ? "Unpairing..." : "Unpair"}
                       </span>
                     </Button>
                   </div>

@@ -1,9 +1,15 @@
 "use server";
 
 import { authOptions } from "@/lib/auth";
-import { loadConfig, saveConfig } from "@/lib/config";
 import { logger } from "@/lib/logger";
 import { LogComponent } from "@/lib/logger/types";
+import {
+  getMetadataProviderByName,
+  addMetadataProvider,
+  updateMetadataProvider
+} from "@/lib/db/helpers/system";
+import { METADATA_PROVIDER_NAMES } from "@/lib/db/schema/system";
+import { encrypt } from "@/lib/crypto";
 import { getServerSession } from "next-auth/next";
 import { z } from "zod";
 
@@ -87,47 +93,43 @@ export async function updateSteamGridDbSettings(
 
   try {
     logger.debug(
-      LogComponent.SYSTEM, // Use SYSTEM instead of ACTIONS
+      LogComponent.SYSTEM,
       "Admin user updating SteamGridDB settings via Server Action",
       { userId: session.user.id, data: { enabled, apiKeyProvided: !!apiKey } }
     );
 
-    // Load current config (decrypting sensitive data is needed for saveConfig)
-    const config = loadConfig(true); // Decrypt needed for save
+    // Get existing SteamGridDB provider from database
+    const existingProvider = await getMetadataProviderByName(METADATA_PROVIDER_NAMES.STEAMGRID_DB);
 
-    // Ensure metadataProviders and steamgridDb sections exist
-    if (!config.metadataProviders) {
-      config.metadataProviders = {};
-    }
-    if (!config.metadataProviders.steamgridDb) {
-      config.metadataProviders.steamgridDb = {
-        enabled: false,
-        apiKey: "",
-      };
-    }
-
-    // Update values
-    config.metadataProviders.steamgridDb.enabled = enabled;
-    let keyWasUpdated = false;
-    if (apiKey !== undefined) {
-      // Only update apiKey if it was provided and different
-      if (config.metadataProviders.steamgridDb.apiKey !== apiKey) {
-        config.metadataProviders.steamgridDb.apiKey = apiKey;
-        keyWasUpdated = true;
+    let provider;
+    if (existingProvider) {
+      // Update existing provider
+      const updates: any = { enabled };
+      
+      if (apiKey !== undefined) {
+        // Encrypt the API key before storing
+        updates.apiKey = apiKey ? encrypt(apiKey) : null;
         logger.info(
-          LogComponent.SYSTEM, // Use SYSTEM instead of ACTIONS
+          LogComponent.SYSTEM,
           "SteamGridDB API key will be updated (value not logged)",
           { userId: session.user.id }
         );
       }
+
+      provider = await updateMetadataProvider(existingProvider.id, updates);
+    } else {
+      // Create new provider
+      const encryptedApiKey = apiKey ? encrypt(apiKey) : null;
+      provider = await addMetadataProvider({
+        name: METADATA_PROVIDER_NAMES.STEAMGRID_DB,
+        enabled,
+        apiKey: encryptedApiKey,
+        config: JSON.stringify({}), // Default empty config
+      });
     }
 
-    // Save the updated config only if something changed
-    // For now, let's save regardless to ensure state consistency, can optimize later
-    saveConfig(config);
-
     logger.info(
-      LogComponent.SYSTEM, // Use SYSTEM instead of ACTIONS
+      LogComponent.SYSTEM,
       "Successfully updated SteamGridDB settings via Server Action",
       {
         userId: session.user.id,
@@ -136,12 +138,8 @@ export async function updateSteamGridDbSettings(
       }
     );
 
-    // Revalidate the path if needed, though settings might not directly affect a rendered path
-    // revalidatePath('/settings/metadata-providers'); // Example
-
-    // Return success state and the potentially updated key status
-    const currentApiKey = config.metadataProviders.steamgridDb.apiKey;
-    const isApiKeySet = !!currentApiKey && currentApiKey.length > 0;
+    // Return success state and the updated key status
+    const isApiKeySet = !!provider.apiKey && provider.apiKey.length > 0;
 
     return {
       success: true,

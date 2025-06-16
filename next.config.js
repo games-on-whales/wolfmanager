@@ -34,7 +34,10 @@ const securityHeaders = [
 
 const nextConfig = {
   distDir: ".next",
-  experimental: {},
+  experimental: {
+    // Enable instrumentation for server startup hooks
+    instrumentationHook: true,
+  },
   // Skip ESLint during build to avoid lint errors blocking production builds
   eslint: {
     ignoreDuringBuilds: true,

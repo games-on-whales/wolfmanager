@@ -1,6 +1,9 @@
-import { PageLayout } from "@/components/layout/page-layout";
 import { getUsers } from "./actions";
 import { UsersManagement } from "./components/users-management";
+import { UserErrorBoundary } from "./components/user-error-boundary";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 // Force dynamic rendering since this page uses server-side session data
 export const dynamic = 'force-dynamic';
@@ -13,13 +16,20 @@ export default async function UsersPage() {
   }
 
   return (
-    <PageLayout
-      title="User Management"
-      description="Manage system users and their roles"
-    >
-      <div className="space-y-6">
-        <UsersManagement initialUsers={result.data} />
+    <div className="space-y-6 p-8 max-w-7xl mx-auto">
+      <div className="flex items-center gap-4">
+        <Link href="/settings">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold text-white neon-text">User Management</h1>
+        </div>
       </div>
-    </PageLayout>
+      <UserErrorBoundary>
+        <UsersManagement initialUsers={result.data} />
+      </UserErrorBoundary>
+    </div>
   );
 }

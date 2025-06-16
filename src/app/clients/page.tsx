@@ -1,4 +1,5 @@
-import { getWolfClientsAction, getPendingPairRequestsAction } from "@/app/actions/wolf-actions";
+import { getClientsAction } from "./actions";
+import { getPendingPairRequestsAction } from "@/app/actions/wolf-actions";
 import { type PendingPairRequest } from "@/lib/api/wolf-pair-server";
 import { ClientDevice } from "@/types/client"; // Import ClientDevice type
 import ClientPageContent from "./components/ClientPageContent";
@@ -10,6 +11,7 @@ type ClientWithOwner = ClientDevice & {
   last_seen?: string;
   status?: string;
   pair_secret?: string; // Include pair_secret for filtering
+  wolf_client_id?: string;
 };
 
 export default async function ClientsPage() {
@@ -36,11 +38,12 @@ export default async function ClientsPage() {
       pair_secret: request.pair_secret,
     }));
 
-    // Get paired clients using new server action
-    const pairedClientsResponse = await getWolfClientsAction();
+    // Get paired clients using database-backed action
+    const pairedClientsResponse = await getClientsAction();
     const pairedClientsData: ClientWithOwner[] = pairedClientsResponse.success
       ? (pairedClientsResponse.data?.clients || []).map((client: any) => ({
           id: client.id || client.client_id,
+          wolf_client_id: client.wolf_client_id,
           friendly_name: client.hostname || client.friendly_name || `Client ${client.id}`,
           device_type: client.device_type || 'Unknown',
           last_seen: client.last_seen,

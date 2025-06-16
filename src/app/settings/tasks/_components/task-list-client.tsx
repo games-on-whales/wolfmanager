@@ -53,7 +53,6 @@ export default function TaskListClient() {
       const data: TasksConfig = await response.json();
       setTasks(data.tasks || []);
     } catch (e: any) {
-      console.error("Failed to fetch tasks:", e);
       setError("Failed to load tasks. Please try again later.");
       toast.error("Failed to load tasks.");
     } finally {
@@ -89,7 +88,6 @@ export default function TaskListClient() {
       // Re-fetch to confirm state, or rely on optimistic update?
       // fetchTasks(); // Option: re-fetch for consistency
     } catch (e: any) {
-      console.error(`Failed to ${action} task:`, e);
       toast.error(`Failed to ${action} task: ${e.message}`);
       // Revert optimistic update on failure
       setTasks((currentTasks) =>
@@ -134,7 +132,6 @@ export default function TaskListClient() {
       toast.success(`Schedule updated for task ${editingTask.name}.`);
       // fetchTasks(); // Option: re-fetch
     } catch (e: any) {
-      console.error("Failed to update schedule:", e);
       toast.error(`Failed to update schedule: ${e.message}`);
       // Revert optimistic update
       setTasks((currentTasks) =>
@@ -172,7 +169,6 @@ export default function TaskListClient() {
 
       toast.success(`Task ${task.name} triggered successfully.`);
     } catch (e: any) {
-      console.error("Failed to trigger task run:", e);
       toast.error(`Failed to trigger task run: ${e.message}`);
       // Revert optimistic task status update on failure
       // We keep the original task status from before the run attempt

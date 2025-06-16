@@ -41,41 +41,46 @@ export default withAuth(
     const token = req.nextauth.token;
     const { pathname } = req.nextUrl;
 
-    await logger.debug(LogComponent.AUTH, "DIAGNOSIS: Middleware called", {
+    await logger.debug(LogComponent.AUTH, "Middleware processing protected route", {
       pathname,
       hasToken: !!token,
       userId: token?.id,
-      userName: token?.name,
       userRole: token?.role,
       requiresFirstTimeSetup: token?.requiresFirstTimeSetup,
-      origin: req.nextUrl.origin,
-      host: req.nextUrl.host
     });
 
-    // Check for expired or invalid session first
+    // Check for expired or invalid session
     if (!token || token.error === "SessionExpired") {
-      await logger.warn(LogComponent.AUTH, "DIAGNOSIS: Invalid or expired session in middleware", {
-        path: pathname,
-        error: token?.error || "NoToken",
-        hasToken: !!token,
-        tokenId: token?.id,
-        tokenName: token?.name,
-        tokenRole: token?.role,
-        tokenExpiry: token?.exp ? new Date(token.exp * 1000).toISOString() : undefined,
-        timestamp: new Date().toISOString(),
-      });
+      // Special case: for root path with no token, redirect to login (normal behavior)
+      if (pathname === "/" && !token) {
+        await logger.debug(LogComponent.AUTH, "Unauthenticated user accessing root path, redirecting to login", {
+          path: pathname
+        });
+        return NextResponse.redirect(new URL("/login", req.url));
+      }
+
+      // Log actual auth issues (expired sessions, invalid tokens, or protected routes)
+      if (token?.error === "SessionExpired" || (token && !token.id)) {
+        await logger.warn(LogComponent.AUTH, "Authentication issue detected", {
+          path: pathname,
+          error: token?.error || "InvalidToken",
+          hasToken: !!token,
+        });
+      } else {
+        await logger.debug(LogComponent.AUTH, "Unauthenticated access to protected route", {
+          path: pathname,
+        });
+      }
 
       // For API routes, return 401
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      // For non-API routes, redirect to unauthorized page if not already on a public error page
-      if (!publicPaths.some((path) => pathname.startsWith(path))) {
-        const url = new URL("/error/unauthorized", req.url);
-        url.searchParams.set("callbackUrl", pathname);
-        return NextResponse.redirect(url);
-      }
+      // For non-API routes, redirect to unauthorized page
+      const url = new URL("/error/unauthorized", req.url);
+      url.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(url);
     }
 
     // Enforce first-time setup for authenticated users who haven't completed it
@@ -103,9 +108,13 @@ export default withAuth(
       // Special handling for root path
       if (pathname === "/") {
         if (token) {
+          await logger.debug(LogComponent.AUTH, "Authenticated user accessing root path, redirecting to clients", {
+            userId: token.id,
+          });
           // If authenticated and not requiring setup, redirect to clients page
           return NextResponse.redirect(new URL("/clients", req.url));
         } else {
+          await logger.debug(LogComponent.AUTH, "Unauthenticated user accessing root path, redirecting to login");
           // If not authenticated, redirect to login
           return NextResponse.redirect(new URL("/login", req.url));
         }
@@ -173,8 +182,17 @@ export default withAuth(
 // Configure the paths that trigger the middleware
 export const config = {
   matcher: [
-    // Match all paths except static assets and auth endpoints
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    // Only run middleware on paths that actually need authentication checks
+    // Exclude public paths, static assets, and auth endpoints
+    "/((?!_next/static|_next/image|favicon.ico|login|register|first-time-setup|error|api/auth).*)",
+    // Include specific API routes that need auth
+    "/api/user/:path*",
+    "/api/wolf/:path*",
+    "/api/libraries/:path*",
+    "/api/settings/:path*",
+    "/api/users/:path*",
+    "/api/admin/:path*",
+    "/api/system/:path*",
   ],
   // Force Node.js runtime to avoid Edge Runtime issues with TOML/crypto
   runtime: 'nodejs',
