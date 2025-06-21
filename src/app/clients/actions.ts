@@ -7,6 +7,7 @@ import {
   type ApiResponse,
 } from "@/lib/api-utils";
 import type { PendingPairRequest } from "@/lib/api/wolf-pair"; // Import PendingPairRequest
+import type { ClientSettings } from "@/types/wolf";
 import { authOptions } from "@/lib/auth";
 import { LogComponent, logger } from "@/lib/logger";
 import { SocketService } from "@/lib/services/socket-service";
@@ -22,6 +23,7 @@ import {
   getClientDeviceByWolfClientId,
   getClientDevicesByUserId,
   getUserByUsername,
+  updateClientDevice,
 } from "@/lib/db/helpers";
 
 interface WolfPairResponse {
@@ -1917,4 +1919,293 @@ export async function getPendingRequestsAction(): Promise<
     // Use the standardized error response structure
     return createErrorResponse(API_ERROR_CODES.INTERNAL_ERROR, errorMessage);
   }
+}
+
+/**
+ * Update client settings via Wolf API
+ */
+export async function updateClientSettingsAction(
+  clientId: string,
+  settings: ClientSettings
+): Promise<ApiResponse<{}>> {
+  const username = await getUsername();
+  if (!username) {
+    return createErrorResponse("Unauthorized", API_ERROR_CODES.UNAUTHORIZED);
+  }
+
+  try {
+    // Validate input parameters
+    if (!clientId || typeof clientId !== 'string') {
+      return createErrorResponse("Invalid client ID", API_ERROR_CODES.INVALID_INPUT);
+    }
+
+    if (!settings || typeof settings !== 'object') {
+      return createErrorResponse("Invalid settings data", API_ERROR_CODES.INVALID_INPUT);
+    }
+
+    // Validate settings structure
+    const { controllers_override, mouse_acceleration, h_scroll_acceleration, v_scroll_acceleration } = settings;
+
+    if (!Array.isArray(controllers_override)) {
+      return createErrorResponse("controllers_override must be an array", API_ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    const validControllerTypes = ['auto', 'xbox', 'nintendo', 'ps'];
+    for (const controller of controllers_override) {
+      if (!validControllerTypes.includes(controller)) {
+        return createErrorResponse(
+          `Invalid controller type: ${controller}. Must be one of: ${validControllerTypes.join(', ')}`,
+          API_ERROR_CODES.VALIDATION_ERROR
+        );
+      }
+    }
+
+    // Convert controller types to uppercase for Wolf API
+    const wolfSettings = {
+      controllers_override: controllers_override.map(controller => controller.toUpperCase()),
+      mouse_acceleration,
+      h_scroll_acceleration,
+      v_scroll_acceleration,
+    };
+
+    if (typeof mouse_acceleration !== 'number' || mouse_acceleration < 0) {
+      return createErrorResponse("mouse_acceleration must be a non-negative number", API_ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    if (typeof h_scroll_acceleration !== 'number' || h_scroll_acceleration < 0) {
+      return createErrorResponse("h_scroll_acceleration must be a non-negative number", API_ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    if (typeof v_scroll_acceleration !== 'number' || v_scroll_acceleration < 0) {
+      return createErrorResponse("v_scroll_acceleration must be a non-negative number", API_ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    logger.info(
+      LogComponent.WOLF_UI,
+      "[Action] Updating client settings",
+      { username, clientId, settings }
+    );
+
+    // 1. Get user from database
+    const user = await getUserByUsername(username);
+    if (!user) {
+      logger.error(
+        LogComponent.WOLF_UI,
+        "[Action] User not found in database",
+        undefined,
+        { username }
+      );
+      return createErrorResponse("User not found", API_ERROR_CODES.NOT_FOUND);
+    }
+
+    // 2. Verify that the client exists and the user owns it
+    let clientDevice = await getClientDeviceById(clientId);
+    
+    if (!clientDevice) {
+      // Try to find by Wolf client ID
+      clientDevice = await getClientDeviceByWolfClientId(clientId);
+      if (!clientDevice) {
+        logger.warn(
+          LogComponent.WOLF_UI,
+          "[Action] Client not found for settings update",
+          { username, userId: user.id, clientId }
+        );
+        return createErrorResponse("Client not found", API_ERROR_CODES.NOT_FOUND);
+      }
+    }
+
+    // CRITICAL SECURITY CHECK: Verify that the requesting user owns this client
+    if (clientDevice.userId !== user.id) {
+      logger.warn(
+        LogComponent.WOLF_UI,
+        "[Action] SECURITY VIOLATION: User attempted to update settings for client they don't own",
+        {
+          requestingUser: username,
+          requestingUserId: user.id,
+          clientOwnerUserId: clientDevice.userId,
+          clientId,
+          securityViolation: true,
+        }
+      );
+      return createErrorResponse(
+        "Unauthorized: You can only update settings for your own clients",
+        API_ERROR_CODES.UNAUTHORIZED
+      );
+    }
+
+    // 3. Use the Wolf client ID for the API call
+    const wolfClientId = clientDevice.wolfClientId;
+
+    // 4. Call Wolf API via SocketService
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      logger.warn(
+        LogComponent.WOLF_UI,
+        "[Action] No session for settings update request"
+      );
+      return createErrorResponse("Authentication required", API_ERROR_CODES.UNAUTHORIZED);
+    }
+
+    const socketService = SocketService.getInstance();
+    
+    // Log the exact payload being sent to Wolf API
+    const payload = {
+      client_id: wolfClientId,
+      settings: wolfSettings as unknown as Record<string, unknown>
+    };
+    
+    logger.debug(
+      LogComponent.WOLF_UI,
+      "[Action] Sending client settings update to Wolf API",
+      {
+        endpoint: "/clients/settings",
+        method: "POST",
+        payload,
+        wolfClientId,
+        originalSettings: settings
+      }
+    );
+
+    const response = await socketService.callWolfApi(
+      session,
+      `/clients/settings`,
+      {
+        method: "POST",
+        body: payload,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+
+    if (!response.success) {
+      logger.error(
+        LogComponent.WOLF_UI,
+        "[Action] Failed to update client settings via Wolf API",
+        new Error(response.error || "Unknown error"),
+        { username, userId: user.id, clientId, wolfClientId, settings }
+      );
+      return createErrorResponse(
+        `Failed to update client settings: ${response.error || "Unknown error"}`,
+        API_ERROR_CODES.INTERNAL_ERROR
+      );
+    }
+
+    logger.info(
+      LogComponent.WOLF_UI,
+      "[Action] Successfully updated client settings",
+      { username, userId: user.id, clientId, wolfClientId, settings }
+    );
+
+    return createSuccessResponse({});
+  } catch (error) {
+    const errorMessage = "Failed to update client settings";
+    logger.error(
+      LogComponent.WOLF_UI,
+      `[Action] ${errorMessage}`,
+      error instanceof Error ? error : new Error(String(error)),
+      { username, clientId, settings }
+    );
+    return createErrorResponse(
+      `${errorMessage}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      API_ERROR_CODES.INTERNAL_ERROR
+    );
+  }
+}
+
+/**
+ * Get paired clients with their current settings from Wolf API
+ * This combines database ownership data with Wolf API client data including settings
+ */
+export async function getPairedClientsWithSettingsAction(): Promise<
+  ApiResponse<{ clients: (ClientDevice & { owner?: string; settings?: ClientSettings })[] }>
+> {
+  const username = await getUsername();
+  if (!username) {
+    return createErrorResponse("Unauthorized", API_ERROR_CODES.UNAUTHORIZED);
+  }
+
+  try {
+    logger.debug(
+      LogComponent.WOLF_UI,
+      "[Action] Getting paired clients with settings",
+      { username }
+    );
+
+    // 1. Get user from database
+    const user = await getUserByUsername(username);
+    if (!user) {
+      logger.error(
+        LogComponent.WOLF_UI,
+        "[Action] User not found in database",
+        undefined,
+        { username }
+      );
+      return createErrorResponse("User not found", API_ERROR_CODES.NOT_FOUND);
+    }
+
+    // 2. Get user's client devices from database
+    const userClientDevices = await getClientDevicesByUserId(user.id);
+
+    // 3. Get clients from Wolf API (includes settings)
+    const wolfClients = await getWolfClients();
+    
+    // 4. Create a map of wolf client ID to database client
+    const dbClientMap = new Map();
+    userClientDevices.forEach(dbClient => {
+      dbClientMap.set(dbClient.wolfClientId, dbClient);
+    });
+
+    // 5. Combine Wolf API data with database data for user's clients only
+    const userPairedClients = wolfClients
+      .filter(wolfClient => {
+        const wolfClientId = wolfClient.id || wolfClient.client_id;
+        return dbClientMap.has(wolfClientId);
+      })
+      .map(wolfClient => {
+        const wolfClientId = wolfClient.id || wolfClient.client_id;
+        const dbClient = dbClientMap.get(wolfClientId);
+        
+        return {
+          id: dbClient.id, // Use database ID as primary ID
+          wolf_client_id: wolfClientId,
+          friendly_name: dbClient.friendlyName,
+          pair_secret: dbClient.pairSecret,
+          owner: username,
+          settings: wolfClient.settings || undefined, // Include settings from Wolf API
+          // Additional properties that might be in Wolf API response
+          device_type: wolfClient.device_type || 'Unknown',
+          last_seen: wolfClient.last_seen,
+          status: wolfClient.status || 'Unknown',
+        };
+      });
+
+    logger.info(
+      LogComponent.WOLF_UI,
+      "[Action] Successfully retrieved paired clients with settings",
+      {
+        username,
+        userId: user.id,
+        clientCount: userPairedClients.length,
+        clientsWithSettings: userPairedClients.filter(c => c.settings).length
+      }
+    );
+
+    return createSuccessResponse({ clients: userPairedClients });
+  } catch (error) {
+    const errorMessage = "Failed to get paired clients with settings";
+    logger.error(
+      LogComponent.WOLF_UI,
+      `[Action] ${errorMessage}`,
+      error instanceof Error ? error : new Error(String(error)),
+      { username }
+    );
+    return createErrorResponse(
+      `${errorMessage}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      API_ERROR_CODES.INTERNAL_ERROR
+    );
+}
+
 }

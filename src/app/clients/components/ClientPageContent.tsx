@@ -4,7 +4,7 @@ import {
   getPendingPairRequestsAction,
   unpairWolfClientAction,
 } from "@/app/actions/wolf-actions"; // Import Wolf API Server Actions
-import { getClientsAction, pairAndAddClientAction, removeClientAction } from "@/app/clients/actions"; // Import database-backed clients action
+import { getPairedClientsWithSettingsAction, pairAndAddClientAction, removeClientAction } from "@/app/clients/actions"; // Import database-backed clients action
 import { Button } from "@/components/ui/button"; // Import Button
 import { useToast } from "@/components/ui/use-toast";
 import { type PendingPairRequest } from "@/lib/api/wolf-pair";
@@ -26,6 +26,7 @@ type ClientWithOwner = ClientDevice & {
   last_seen?: string;
   status?: string;
   pair_secret?: string; // Include pair_secret for filtering
+  settings?: import("@/types/wolf").ClientSettings;
 };
 
 interface ClientPageContentProps {
@@ -119,8 +120,8 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
         }
       }
 
-      // Get paired clients using database-backed server action
-      const pairedClientsResponse = await getClientsAction();
+      // Get paired clients using database-backed server action with settings
+      const pairedClientsResponse = await getPairedClientsWithSettingsAction();
       let pairedClientsData = pairedClients; // Preserve existing clients on failure
       
       if (pairedClientsResponse.success) {
@@ -131,8 +132,9 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           device_type: client.device_type || 'Unknown',
           last_seen: client.last_seen,
           status: client.status || 'Unknown',
-          owner: 'Current User', // Since we're getting user-specific clients
+          owner: client.owner || 'Current User', // Use actual owner from response
           pair_secret: client.pair_secret,
+          settings: client.settings, // Include settings from Wolf API
         }));
       } else {
         // Log error but don't throw - preserve existing data
@@ -430,6 +432,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
         isLoading={isLoadingPairedClients}
         unpairingId={unpairingId}
         onUnpair={handleUnpair}
+        onEditSuccess={() => fetchRequests(true)}
       />
     </>
   );

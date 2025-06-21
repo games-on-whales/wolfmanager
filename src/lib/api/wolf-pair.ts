@@ -1,4 +1,5 @@
 import { LogComponent, logger } from "@/lib/logger";
+import type { ClientSettings, UpdateClientSettingsResponse } from "@/types/wolf";
 
 interface WolfPairResponse {
   success: boolean;
@@ -195,6 +196,64 @@ export const wolfPairApi = {
     } catch (error) {
       await logger.error(LogComponent.WOLF_UI, "Failed to fetch clients", {
         error,
+      });
+      throw error;
+    }
+  },
+
+  // Update client settings
+  updateClientSettings: async (clientId: string, settings: ClientSettings): Promise<void> => {
+    try {
+      await logger.debug(LogComponent.WOLF_UI, "Updating client settings", {
+        clientId,
+        settings,
+      });
+
+      // Use fetch to call through the proxy route
+      const response = await fetch("/api/wolf/clients/settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          client_id: clientId,
+          settings,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const responseData = (await response.json()) as UpdateClientSettingsResponse;
+
+      // Check the response structure and success status
+      if (!responseData || !responseData.success) {
+        const errorMessage =
+          responseData?.error || "Settings update failed with unknown reason";
+        await logger.error(LogComponent.WOLF_UI, "Client settings update failed", {
+          error: errorMessage,
+          requestData: {
+            clientId,
+            settings,
+          },
+          responseData,
+        });
+        throw new Error(`Failed to update client settings: ${errorMessage}`);
+      }
+
+      await logger.debug(LogComponent.WOLF_UI, "Client settings update successful", {
+        clientId,
+        response: responseData,
+      });
+    } catch (error) {
+      await logger.error(LogComponent.WOLF_UI, "Failed to update client settings", {
+        error: error instanceof Error ? error : new Error(String(error)),
+        requestData: {
+          clientId,
+          settings,
+        },
       });
       throw error;
     }

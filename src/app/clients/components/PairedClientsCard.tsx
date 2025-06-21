@@ -17,8 +17,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { type ClientDevice } from "@/types/client";
-import { Laptop, Loader2, X } from "lucide-react";
-import React from "react";
+import { Laptop, Loader2, X, Edit } from "lucide-react";
+import React, { useState } from "react";
+import EditClientSettingsDialog from "./EditClientSettingsDialog";
 
 // Define a type for the client data including the optional owner and additional properties
 type ClientWithOwner = ClientDevice & {
@@ -27,6 +28,7 @@ type ClientWithOwner = ClientDevice & {
   last_seen?: string;
   status?: string;
   wolf_client_id?: string;
+  settings?: import("@/types/wolf").ClientSettings;
 };
 
 interface PairedClientsCardProps {
@@ -34,6 +36,7 @@ interface PairedClientsCardProps {
   isLoading: boolean;
   unpairingId: string | null;
   onUnpair: (deviceId: string) => void;
+  onEditSuccess?: () => void;
 }
 
 const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
@@ -41,7 +44,25 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
   isLoading,
   unpairingId,
   onUnpair,
+  onEditSuccess,
 }) => {
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<ClientWithOwner | null>(null);
+
+  const handleEditClick = (client: ClientWithOwner) => {
+    setEditingClient(client);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditDialogClose = () => {
+    setEditDialogOpen(false);
+    setEditingClient(null);
+  };
+
+  const handleEditSuccess = () => {
+    handleEditDialogClose();
+    onEditSuccess?.();
+  };
   return (
     <Card className="glass-card border-none mt-6">
       <CardHeader>
@@ -113,7 +134,18 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                   </div>
                 </TableCell>
                 <TableCell className="text-right py-3 px-4">
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-[#00E5CC] hover:text-[#00E5CC]/80"
+                      onClick={() => handleEditClick(client)}
+                      disabled={unpairingId === (client.wolf_client_id || client.id)}
+                      title="Edit Client Settings"
+                    >
+                      <Edit className="h-4 w-4" />
+                      <span className="sr-only">Edit Client Settings</span>
+                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -152,6 +184,16 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
           </TableBody>
         </Table>
       </CardContent>
+      
+      {/* Edit Client Settings Dialog */}
+      {editingClient && (
+        <EditClientSettingsDialog
+          isOpen={editDialogOpen}
+          onClose={handleEditDialogClose}
+          client={editingClient}
+          onSuccess={handleEditSuccess}
+        />
+      )}
     </Card>
   );
 };
