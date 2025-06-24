@@ -43,7 +43,7 @@ chown -R "$PUID:$PGID" \
 # Handle node_modules if it exists
 if [ -d "/app/node_modules" ]; then
     wolf_log "Setting ownership of node_modules"
-    chown -R "$PUID:$PGID" /app/node_modules
+    find /app/node_modules -print0 | xargs -0 -P $(nproc) chown -h "$PUID:$PGID"
 fi
 
 wolf_log "Directory permissions setup complete"
