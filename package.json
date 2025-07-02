@@ -16,7 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:generate:script": "ts-node src/scripts/generate-migration.ts"
   },
   "dependencies": {
     "@auth/core": "^0.34.2",
@@ -53,17 +54,21 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/socket.io": "^3.0.2",
     "bcryptjs": "^3.0.0",
+    "better-sqlite3": "^11.7.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cron-parser": "^5.1.1",
     "date-fns": "^3.0.0",
     "dockerode": "^4.0.5",
+    "drizzle-orm": "^0.36.4",
     "lucide-react": "^0.344.0",
+    "mysql2": "^3.12.0",
     "next": "14.2.25",
     "next-auth": "^4.24.11",
     "next-themes": "^0.2.1",
     "node-cron": "^3.0.3",
     "nuqs": "^1.17.1",
+    "postgres": "^3.4.5",
     "react": "^18.2.0",
     "react-day-picker": "8.10.1",
     "react-dom": "^18.2.0",
@@ -76,23 +81,22 @@
     "tailwind-merge": "^2.6.0",
     "toml": "^3.0.0",
     "undici": "^7.3.0",
-    "zod": "^3.22.4",
-    "drizzle-orm": "^0.36.4",
-    "better-sqlite3": "^11.7.0",
-    "postgres": "^3.4.5",
-    "mysql2": "^3.12.0"
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.33.1",
-    "@typescript-eslint/parser": "^8.33.1",
     "@eslint/js": "^9.25.0",
     "@shadcn/ui": "^0.0.4",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.11.19",
+    "@types/pg": "^8.11.12",
     "@types/react": "^18.2.57",
     "@types/react-dom": "^18.2.19",
+    "@typescript-eslint/eslint-plugin": "^8.33.1",
+    "@typescript-eslint/parser": "^8.33.1",
     "autoprefixer": "^10.4.20",
     "dotenv": "^16.4.7",
     "dotenv-cli": "^8.0.0",
+    "drizzle-kit": "^0.29.1",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.25",
     "globals": "^16.0.0",
@@ -101,9 +105,6 @@
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3",
-    "drizzle-kit": "^0.29.0",
-    "@types/better-sqlite3": "^7.6.11",
-    "@types/pg": "^8.11.12"
+    "typescript": "^5.3.3"
   }
 }

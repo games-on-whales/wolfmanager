@@ -9,6 +9,7 @@ interface EnvVars {
   NEXTAUTH_SECRET: string;
   ENCRYPTION_KEY: string;
   NEXTAUTH_URL?: string;
+  INTERNAL_SERVICE_TOKEN?: string;
 }
 
 function generateSecureKey(length: number = 32): string {
@@ -83,12 +84,23 @@ export function ensureSecureKeys(): void {
       keysGenerated.push("NEXTAUTH_SECRET");
     }
 
+    // Ensure INTERNAL_SERVICE_TOKEN exists and is exactly 64 bytes
+    if (!envVars.INTERNAL_SERVICE_TOKEN || envVars.INTERNAL_SERVICE_TOKEN.length !== 64) {
+      envVars.INTERNAL_SERVICE_TOKEN = generateSecureKey(64);
+      needsUpdate = true;
+      keysGenerated.push("INTERNAL_SERVICE_TOKEN");
+    }
+
     // Ensure ENCRYPTION_KEY exists and is exactly 32 bytes
     if (!hasEncryptionKey && (!envVars.ENCRYPTION_KEY || envVars.ENCRYPTION_KEY.length !== 32)) {
       envVars.ENCRYPTION_KEY = generateSecureKey(32);
       needsUpdate = true;
       keysGenerated.push("ENCRYPTION_KEY");
     }
+// Validate INTERNAL_SERVICE_TOKEN at runtime
+if (!process.env.INTERNAL_SERVICE_TOKEN) {
+  console.warn("[ENV] Warning: INTERNAL_SERVICE_TOKEN is missing. Ensure it is set for secure communication.");
+}
 
     // Ensure NEXTAUTH_URL exists in development
     if (process.env.NODE_ENV === "development" && !process.env.NEXTAUTH_URL && !envVars.NEXTAUTH_URL) {

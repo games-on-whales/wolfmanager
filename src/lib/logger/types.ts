@@ -20,6 +20,7 @@ export const LogComponent = {
   SYSTEM: "system",
   STEAM: "steam",
   API: "api",
+  WOLF_EVENTS: "wolf-events",
 } as const;
 
 export type LogComponent = (typeof LogComponent)[keyof typeof LogComponent];

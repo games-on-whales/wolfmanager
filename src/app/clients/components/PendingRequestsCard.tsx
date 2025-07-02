@@ -17,9 +17,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { type PendingPairRequest } from "@/lib/api/wolf-pair";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Circle } from "lucide-react";
 import React from "react";
 import { formatDateTimeUTC } from "./date-format";
+import { Badge } from "@/components/ui/badge";
 
 interface PendingRequestsCardProps {
   requests: PendingPairRequest[];
@@ -40,23 +41,18 @@ const PendingRequestsCard: React.FC<PendingRequestsCardProps> = ({
     <Card className="glass-card border-none">
       <CardHeader>
         <div className="flex justify-between items-center">
-          <div>
-            <CardTitle className="text-white">Pending Requests</CardTitle>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-white">Pending Requests</CardTitle>
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Circle className="h-2 w-2 fill-current text-green-500 animate-pulse" />
+                <span className="text-xs">Live</span>
+              </Badge>
+            </div>
             <CardDescription className="text-gray-400">
               Clients waiting to be paired with your server
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-          >
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
         </div>
       </CardHeader>
       <CardContent className="p-6">

@@ -28,7 +28,7 @@ declare module "next-auth" {
       role?: string;
     };
     requiresFirstTimeSetup: boolean;
-    error?: "SessionExpired";
+    error?: "SessionExpired" | "MissingToken";
   }
 }
 
@@ -45,13 +45,12 @@ declare module "next-auth/jwt" {
 export const authOptions: AuthOptions = {
   cookies: {
     sessionToken: {
-      name: `next-auth.session-token`,
+      name: `${process.env.NODE_ENV === "production" && process.env.INSECURE_COOKIES_IN_PRODUCTION !== "false" ? "__Secure-" : ""}next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: false, // Allow non-HTTPS for development/internal networks
-        domain: undefined, // Allow cookies to work across different hosts
+        secure: process.env.NODE_ENV === "production" && process.env.INSECURE_COOKIES_IN_PRODUCTION !== "false",
       },
     },
   },
@@ -120,17 +119,29 @@ export const authOptions: AuthOptions = {
 
         // Handle new sign in
         if (user) {
-          logger.debug(LogComponent.AUTH, "Creating new JWT token", {
+          logger.info(LogComponent.AUTH, "Creating new JWT token", {
             userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            requiresFirstTimeSetup: user.requiresFirstTimeSetup,
           });
 
-          return {
+          const newToken = {
             ...token,
             id: user.id,
             name: user.name,
             role: user.role,
             requiresFirstTimeSetup: user.requiresFirstTimeSetup,
           };
+          
+          logger.info(LogComponent.AUTH, "JWT token created successfully", { 
+            tokenId: newToken.id,
+            tokenName: newToken.name,
+            tokenRole: newToken.role,
+            tokenRequiresSetup: newToken.requiresFirstTimeSetup
+          });
+          
+          return newToken;
         }
 
         // For existing tokens, periodically re-check the user's first-time setup status
@@ -171,6 +182,21 @@ export const authOptions: AuthOptions = {
     },
     async session({ session, token }: any) {
       try {
+        if (!token) {
+          logger.warn(
+            LogComponent.AUTH,
+            "Session validation failed - missing token",
+            {
+              timestamp: new Date().toISOString(),
+            }
+          );
+          return {
+            ...session,
+            error: "MissingToken",
+            expires: new Date(0).toISOString(),
+          };
+        }
+
         if (token.error) {
           logger.info(
             LogComponent.AUTH,
@@ -276,8 +302,8 @@ export const authOptions: AuthOptions = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 8 * 60 * 60, // 8 hours
-    updateAge: 1 * 60 * 60, // 1 hour
+    maxAge: 4 * 60 * 60, // Reduced to 4 hours for better security
+    updateAge: 30 * 60, // Update every 30 minutes
   },
   events: {
     async signOut({ token }: any) {
@@ -293,4 +319,3 @@ export const authOptions: AuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
-

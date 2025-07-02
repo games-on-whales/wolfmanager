@@ -45,7 +45,7 @@ export default async function ClientsPage() {
       ? (pairedClientsResponse.data?.clients || []).map((client: any) => ({
           id: client.id || client.client_id,
           wolf_client_id: client.wolf_client_id,
-          friendly_name: client.hostname || client.friendly_name || `Client ${client.id}`,
+          friendly_name: client.friendly_name,
           device_type: client.device_type || 'Unknown',
           last_seen: client.last_seen,
           status: client.status || 'Unknown',

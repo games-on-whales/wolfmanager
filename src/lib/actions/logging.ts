@@ -25,7 +25,7 @@ const logEntrySchema = z.object({
   ]),
   message: z.string(),
   raw: z.any().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.any().optional(),
 });
 
 export async function createLogEntry(entry: LogEntry) {

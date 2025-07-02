@@ -49,6 +49,7 @@ ENV HOSTNAME="0.0.0.0"
 ENV PUID=1000
 ENV PGID=1000
 ENV UNAME=node
+ENV INSECURE_COOKIES_IN_PRODUCTION=false
 
 # Install pnpm in production stage
 RUN npm install -g pnpm

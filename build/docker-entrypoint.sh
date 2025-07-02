@@ -6,6 +6,19 @@ source /opt/wolf/scripts/utils.sh
 
 wolf_log "=== WolfManager Container Startup ==="
 
+# Run database migrations if needed
+wolf_log "Checking for pending database migrations"
+if node -e "import('./src/lib/db/migrate-config.js').then(m => m.isMigrationNeeded()).then(console.log).catch(() => process.exit(1))" | grep -q "true"; then
+    wolf_log "Applying database migrations"
+    if ! node -e "import('./src/lib/db/migrate-config.js').then(m => m.migrateLegacyConfigToDatabase()).catch(() => process.exit(1))"; then
+        wolf_log "ERROR: Failed to apply database migrations"
+        exit 1
+    fi
+    wolf_log "Database migrations applied successfully"
+else
+    wolf_log "No pending database migrations"
+fi
+
 # Get environment variables with defaults
 UNAME="${UNAME:-node}"
 

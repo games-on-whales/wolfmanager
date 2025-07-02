@@ -15,6 +15,7 @@ const publicPaths = [
   "/error/unauthorized",
   "/error/forbidden",
   "/error/expired",
+  "/api/wolf/events", // Exclude SSE endpoint from strict authentication
 ];
 
 // Define paths that require admin access
@@ -93,6 +94,11 @@ export default withAuth(
       
       // For API routes, return 403 with specific message
       if (pathname.startsWith("/api/")) {
+        // Allow session revalidation during first-time setup
+        if (pathname.startsWith("/api/auth/session")) {
+          return NextResponse.next();
+        }
+
         return NextResponse.json({
           error: "First-time setup required",
           redirectTo: "/first-time-setup"
@@ -193,6 +199,7 @@ export const config = {
     "/api/users/:path*",
     "/api/admin/:path*",
     "/api/system/:path*",
+    "/api/client-events",
   ],
   // Force Node.js runtime to avoid Edge Runtime issues with TOML/crypto
   runtime: 'nodejs',
