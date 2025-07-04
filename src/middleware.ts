@@ -62,11 +62,30 @@ export default withAuth(
 
       // Log actual auth issues (expired sessions, invalid tokens, or protected routes)
       if (token?.error === "SessionExpired" || (token && !token.id)) {
-        await logger.warn(LogComponent.AUTH, "Authentication issue detected", {
+        await logger.warn(LogComponent.AUTH, "Authentication issue detected - clearing invalid session", {
           path: pathname,
           error: token?.error || "InvalidToken",
           hasToken: !!token,
         });
+        
+        // Clear invalid JWT cookies to prevent repeated decryption errors
+        const response = pathname.startsWith("/api/")
+          ? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+          : NextResponse.redirect(new URL("/error/unauthorized", req.url));
+        
+        // Clear the session token cookie
+        response.cookies.set("next-auth.session-token", "", {
+          expires: new Date(0),
+          path: "/",
+        });
+        
+        // Also clear the secure version if it exists
+        response.cookies.set("__Secure-next-auth.session-token", "", {
+          expires: new Date(0),
+          path: "/",
+        });
+        
+        return response;
       } else {
         await logger.debug(LogComponent.AUTH, "Unauthenticated access to protected route", {
           path: pathname,

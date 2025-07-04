@@ -458,16 +458,31 @@ export async function pairAndAddClientAction(pairingData: { pair_secret: string;
       };
 
     } catch (dbError) {
+      const errorMessage = dbError instanceof Error ? dbError.message : String(dbError);
+      
+      // Check for specific duplicate client error from the database helper
+      if (errorMessage.startsWith('DUPLICATE_CLIENT:')) {
+        logger.warn(
+          LogComponent.WOLF_UI,
+          "[Action] Duplicate client detected during database insertion",
+          { userId: session.user.id, wolfClientId: newDeviceId, error: errorMessage }
+        );
+        return {
+          success: false,
+          error: errorMessage // Forward the specific duplicate error message
+        };
+      }
+
       logger.error(
         LogComponent.WOLF_UI,
         "[Action] Failed to add client to database after successful Wolf pairing",
-        dbError instanceof Error ? dbError : new Error(String(dbError)),
+        dbError instanceof Error ? dbError : new Error(errorMessage),
         { userId: session.user.id, wolfClientId: newDeviceId }
       );
       
-      return { 
-        success: false, 
-        error: `Pairing succeeded but failed to save client: ${dbError instanceof Error ? dbError.message : "Unknown error"}` 
+      return {
+        success: false,
+        error: `Pairing succeeded but failed to save client: ${errorMessage}`
       };
     }
 

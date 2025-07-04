@@ -44,6 +44,13 @@ if [ "$(id -u)" = "0" ]; then
         exit 1
     fi
     
+    # Generate required secrets BEFORE symlink setup to ensure they exist before Node.js starts
+    wolf_log "Ensuring secure secrets are generated before Node.js startup"
+    if ! ensure_docker_secrets; then
+        wolf_log "ERROR: Failed to generate required secrets"
+        exit 1
+    fi
+    
     # Setup symlink for .env.local to persist in /app/config
     wolf_log "Setting up persistent .env.local symlink"
     if [ ! -L "/app/.env.local" ]; then

@@ -8,9 +8,14 @@ import { LogComponent } from "./logger/types";
 // Initialize logger
 // Use the imported singleton logger instance directly
 
-if (!process.env.NEXTAUTH_SECRET) {
-  throw new Error("Please provide process.env.NEXTAUTH_SECRET");
-}
+// DIAGNOSIS: Log when this module is loaded to verify initialization order.
+// This should appear AFTER the instrumentation logs.
+console.log(`[AUTH] auth.ts module loaded at ${new Date().toISOString()}`);
+console.log(`[AUTH] NEXTAUTH_SECRET availability check: hasNextAuthSecret=${!!process.env.NEXTAUTH_SECRET}, length=${process.env.NEXTAUTH_SECRET?.length || 0}`);
+
+// By the time this module is loaded, `instrumentation.ts` should have already
+// run and set the necessary environment variables. We can now safely rely on
+// `process.env.NEXTAUTH_SECRET`.
 
 // Extend the built-in types
 declare module "next-auth" {
@@ -109,7 +114,18 @@ export const authOptions: AuthOptions = {
           hasUser: !!user,
           hasTrigger: !!trigger,
           timestamp: new Date().toISOString(),
+          nextauthSecretLength: process.env.NEXTAUTH_SECRET?.length || 0,
         });
+
+        // Add diagnostic logging for JWT decryption issues
+        if (!user && !trigger && token) {
+          logger.debug(LogComponent.AUTH, "DIAGNOSIS: Processing existing JWT token", {
+            hasTokenId: !!token.id,
+            hasTokenName: !!token.name,
+            tokenKeys: Object.keys(token || {}),
+            timestamp: new Date().toISOString(),
+          });
+        }
 
         // Handle session update
         if (trigger === "update" && session?.name) {
@@ -177,6 +193,23 @@ export const authOptions: AuthOptions = {
         return token;
       } catch (error) {
         logger.error(LogComponent.AUTH, "JWT callback error", error);
+        
+        // If this is a JWT validation/decryption error, clear the token
+        if (error instanceof Error && (error.message.includes("decryption") || error.message.includes("invalid"))) {
+          logger.warn(LogComponent.AUTH, "JWT validation/decryption failed, clearing token", {
+            errorMessage: error.message,
+            hasUser: !!user,
+            hasTrigger: !!trigger,
+          });
+          
+          // Return a token with error flag to force re-authentication
+          return {
+            ...token, // Keep existing token properties if any
+            error: "SessionExpired",
+          };
+        }
+        
+        // For other errors, return the original token to avoid logging out unnecessarily
         return token;
       }
     },
@@ -304,6 +337,34 @@ export const authOptions: AuthOptions = {
     strategy: "jwt",
     maxAge: 4 * 60 * 60, // Reduced to 4 hours for better security
     updateAge: 30 * 60, // Update every 30 minutes
+  },
+  // Add JWT configuration to handle decryption errors gracefully
+  jwt: {
+    // Custom encode/decode to handle secret changes
+    async encode({ token, secret, maxAge }) {
+      try {
+        const { encode } = await import("next-auth/jwt");
+        return await encode({ token, secret, maxAge });
+      } catch (error) {
+        logger.error(LogComponent.AUTH, "JWT encode error", error);
+        throw error;
+      }
+    },
+    async decode({ token, secret }) {
+      try {
+        const { decode } = await import("next-auth/jwt");
+        return await decode({ token, secret });
+      } catch (error) {
+        logger.warn(LogComponent.AUTH, "JWT decode error - likely due to secret change during fresh deployment", {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          hasToken: !!token,
+          secretLength: typeof secret === 'string' ? secret.length : 0,
+        });
+        
+        // Return null to force re-authentication instead of crashing
+        return null;
+      }
+    },
   },
   events: {
     async signOut({ token }: any) {
