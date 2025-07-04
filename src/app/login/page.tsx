@@ -8,7 +8,7 @@ import { LoginClient } from "./components/login-client";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: { error?: string; callbackUrl?: string };
+  searchParams: { error?: string; callbackUrl?: string; message?: string };
 }) {
   const session = await getServerSession(authOptions);
 
@@ -17,7 +17,7 @@ export default async function LoginPage({
     if (session.requiresFirstTimeSetup) {
       redirect("/first-time-setup");
     } else {
-      redirect(searchParams.callbackUrl || "/dashboard");
+      redirect(searchParams.callbackUrl || "/clients");
     }
   }
 
@@ -27,6 +27,7 @@ export default async function LoginPage({
         <LoginClient
           error={searchParams.error}
           callbackUrl={searchParams.callbackUrl}
+          message={searchParams.message}
         />
       </Suspense>
     </div>

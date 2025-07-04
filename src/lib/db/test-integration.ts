@@ -158,6 +158,7 @@ async function testClientDeviceManagement(): Promise<void> {
     friendlyName: "Test Device",
     pairSecret: "test-secret-123",
     wolfClientId: deviceId,
+    lastSeen: null,
   });
   
   // Retrieve devices for user

@@ -12,7 +12,7 @@ export default async function FirstTimeSetupPage() {
   // 1. Authentication
   const session = await getServerSession(authOptions);
   if (!session?.user) {
-    redirect("/auth/signin");
+    redirect("/login");
   }
 
   // If user has already completed first-time setup, redirect to clients

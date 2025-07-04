@@ -173,11 +173,34 @@ export class SocketService {
     session: Session | null,
     socketType: SocketType,
     operation: SocketOperation,
-    endpoint?: string
+    endpoint?: string,
+    isInternalCall?: boolean
   ): Promise<{ valid: boolean; error?: string }> {
     try {
-      // Check session validity
+      // For internal system calls, require a special service token
+      if (isInternalCall && process.env.INTERNAL_SERVICE_TOKEN) {
+        // Validate internal service token
+        const internalToken = session as any;
+        if (internalToken?.serviceToken === process.env.INTERNAL_SERVICE_TOKEN) {
+          logger.debug(LogComponent.AUTH, "Internal service call authenticated", {
+            socketType,
+            operation,
+            endpoint
+          });
+          return { valid: true };
+        }
+      }
+
+      // Check session validity - no bypass allowed
       if (!session?.user) {
+        logger.warn(LogComponent.AUTH, "Socket access denied - no valid session", {
+          socketType,
+          operation,
+          endpoint,
+          isInternalCall,
+          hasSession: !!session,
+          sessionKeys: session ? Object.keys(session) : []
+        });
         return { valid: false, error: "Authentication required" };
       }
 
@@ -276,7 +299,8 @@ export class SocketService {
         session,
         SOCKET_TYPES.WOLF,
         operation,
-        endpoint
+        endpoint,
+        false
       );
 
       if (!accessCheck.valid) {
@@ -345,6 +369,95 @@ export class SocketService {
   }
 
   /**
+   * Make a streaming request to the Wolf API through Unix domain socket
+   *
+   * @param session - User session for authentication (or null for internal calls)
+   * @param endpoint - API endpoint (e.g., "/events")
+   * @param options - Request options including method, body, headers
+   * @returns Promise with the HTTP response stream
+   */
+  public async callWolfApiStream(
+    session: Session | null,
+    endpoint: string,
+    options: WolfApiOptions = {}
+  ): Promise<http.IncomingMessage> {
+    ensureServerSide();
+
+    const { method = "GET", headers = {} } = options;
+    const operation = getOperationFromMethod(method);
+
+    // Validate access permissions
+    logger.debug(LogComponent.API, "Validating access for Wolf API stream", {
+      endpoint,
+      hasSession: !!session,
+      sessionUserId: session?.user?.id,
+      operation,
+      isInternalCall: false
+    });
+    
+    const accessCheck = await this.validateAccess(
+      session,
+      SOCKET_TYPES.WOLF,
+      operation,
+      endpoint,
+      false
+    );
+
+    if (!accessCheck.valid) {
+      logger.error(LogComponent.API, "Access validation failed for Wolf API stream", {
+        endpoint,
+        error: accessCheck.error,
+        hasSession: !!session,
+        sessionUserId: session?.user?.id
+      });
+      throw new Error(accessCheck.error);
+    }
+    
+    logger.debug(LogComponent.API, "Access validation passed for Wolf API stream");
+
+    // Check socket availability
+    const socketAvailable = await this.checkSocketAvailability(SOCKET_TYPES.WOLF);
+    if (!socketAvailable) {
+      throw new Error("Wolf socket not available");
+    }
+
+    logger.debug(LogComponent.API, "Making Wolf API stream request", {
+      endpoint,
+      method,
+      userId: session?.user?.id,
+    });
+
+    // Prepare request
+    const requestOptions = {
+      socketPath: SOCKET_PATHS[SOCKET_TYPES.WOLF],
+      path: `/api/v1${endpoint}`,
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...headers,
+      },
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = http.request(requestOptions, (res) => {
+        resolve(res);
+      });
+
+      req.on("error", (error) => {
+        logger.error(LogComponent.API, "Wolf API stream request failed", error, {
+          endpoint,
+          method,
+          userId: session?.user?.id,
+        });
+        reject(error);
+      });
+
+      req.end();
+    });
+  }
+
+  /**
    * Execute Docker operations through Docker socket
    * 
    * @param session - User session for authentication
@@ -369,7 +482,9 @@ export class SocketService {
       const accessCheck = await this.validateAccess(
         session,
         SOCKET_TYPES.DOCKER,
-        requiredOperation
+        requiredOperation,
+        undefined,
+        false
       );
 
       if (!accessCheck.valid) {
@@ -640,6 +755,107 @@ export class SocketService {
       return {
         success: false,
         error: "Failed to clear rate limit",
+        statusCode: 500,
+      };
+    }
+  }
+
+  /**
+   * Internal service method for Wolf event streaming
+   * This method requires proper service-to-service authentication
+   */
+  public async callWolfApiStreamInternal(
+    endpoint: string,
+    options: WolfApiOptions = {}
+  ): Promise<http.IncomingMessage> {
+    ensureServerSide();
+
+    // Use internal service token for authentication
+    const serviceToken = process.env.INTERNAL_SERVICE_TOKEN;
+    if (!serviceToken) {
+      throw new Error("Internal service token not configured");
+    }
+
+    // Create a pseudo-session with service token
+    const internalSession = { serviceToken } as any;
+
+    const { method = "GET", headers = {} } = options;
+    const operation = getOperationFromMethod(method);
+
+    // Validate access with internal flag
+    const accessCheck = await this.validateAccess(
+      internalSession,
+      SOCKET_TYPES.WOLF,
+      operation,
+      endpoint,
+      true
+    );
+
+    if (!accessCheck.valid) {
+      throw new Error(accessCheck.error || "Internal service authentication failed");
+    }
+
+    // Check socket availability
+    const socketAvailable = await this.checkSocketAvailability(SOCKET_TYPES.WOLF);
+    if (!socketAvailable) {
+      throw new Error("Wolf socket not available");
+    }
+
+    logger.debug(LogComponent.API, "Making internal Wolf API stream request", {
+      endpoint,
+      method,
+      internal: true,
+    });
+
+    // Prepare request
+    const requestOptions = {
+      socketPath: SOCKET_PATHS[SOCKET_TYPES.WOLF],
+      path: `/api/v1${endpoint}`,
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        "X-Internal-Service": "true",
+        ...headers,
+      },
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = http.request(requestOptions, (res) => {
+        resolve(res);
+      });
+
+      req.on("error", (error) => {
+        logger.error(LogComponent.API, "Internal Wolf API stream request failed", error, {
+          endpoint,
+          method,
+          internal: true,
+        });
+        reject(error);
+      });
+
+      req.end();
+    });
+  }
+
+  /**
+   * Revalidate the current session by calling the session revalidation endpoint.
+   * This is used to ensure that the session is still valid during long-lived connections.
+   * @returns Promise with the session revalidation response
+   */
+  public async revalidateSession(session: Session | null): Promise<SocketServiceResponse> {
+    ensureServerSide();
+
+    try {
+      // We can't call the /api/auth/session endpoint directly, so we'll have to fake it
+      // by calling a known-good endpoint and seeing if it fails with an auth error.
+      const response = await this.callWolfApi(session, "/clients");
+      return response;
+    } catch (error) {
+      logger.error(LogComponent.API, "Session revalidation failed", error);
+      return {
+        success: false,
+        error: "Session revalidation failed",
         statusCode: 500,
       };
     }
