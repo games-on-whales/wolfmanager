@@ -4,6 +4,7 @@ import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { logger } from "./logger"; // Import the singleton instance
 import { LogComponent } from "./logger/types";
+import { jwtDebugger } from "./debug/jwt-debug";
 
 // Initialize logger
 // Use the imported singleton logger instance directly
@@ -105,8 +106,25 @@ export const authOptions: AuthOptions = {
     signOut: "/login",
   },
   callbacks: {
-    async jwt({ token, user, trigger, session }: any) {
+    async jwt({ token, user, trigger, session, account }: any) {
       try {
+        // Enhanced JWT debugging for reverse proxy issues
+        if (user) {
+          await jwtDebugger.logJWTGeneration({
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            trigger,
+          });
+        } else if (token) {
+          await jwtDebugger.logJWTValidation({
+            hasToken: !!token,
+            tokenKeys: Object.keys(token || {}),
+            validationResult: token.error ? 'failed' : 'success',
+            errorMessage: token.error,
+          });
+        }
+
         // Log NEXTAUTH_URL for remote access debugging
         logger.debug(LogComponent.AUTH, "DIAGNOSIS: JWT callback - NEXTAUTH_URL check", {
           nextauthUrl: process.env.NEXTAUTH_URL,
@@ -194,12 +212,26 @@ export const authOptions: AuthOptions = {
       } catch (error) {
         logger.error(LogComponent.AUTH, "JWT callback error", error);
         
+        // Enhanced error logging for JWT issues
+        await jwtDebugger.logUrlMismatch({
+          requestUrl: 'jwt_callback',
+          headers: {},
+        });
+        
         // If this is a JWT validation/decryption error, clear the token
         if (error instanceof Error && (error.message.includes("decryption") || error.message.includes("invalid"))) {
           logger.warn(LogComponent.AUTH, "JWT validation/decryption failed, clearing token", {
             errorMessage: error.message,
             hasUser: !!user,
             hasTrigger: !!trigger,
+          });
+          
+          // Log the specific JWT validation failure
+          await jwtDebugger.logJWTValidation({
+            hasToken: !!token,
+            tokenKeys: Object.keys(token || {}),
+            validationResult: 'failed',
+            errorMessage: error.message,
           });
           
           // Return a token with error flag to force re-authentication
