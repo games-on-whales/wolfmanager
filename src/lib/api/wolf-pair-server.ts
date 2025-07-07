@@ -1,4 +1,5 @@
 import { LogComponent, logger } from "@/lib/logger";
+import { getInternalBaseUrl } from "@/lib/url-resolver";
 
 interface WolfPairResponse {
   success: boolean;
@@ -35,9 +36,9 @@ export const wolfPairServerApi = {
   getPendingRequests: async (sessionToken?: string): Promise<PendingPairRequest[]> => {
     try {
       // Use internal fetch to proxy endpoint for server-side calls
-      // For server-side calls within container, always use internal port 3000
-      // NEXTAUTH_URL is for external access, but we need internal container communication
-      const baseUrl = 'http://localhost:3000';
+      // For server-side calls within container, use appropriate internal URL
+      // getInternalBaseUrl() handles NEXTAUTH_URL and fallback logic
+      const baseUrl = getInternalBaseUrl();
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -100,9 +101,9 @@ export const wolfPairServerApi = {
   getClients: async (): Promise<PairedClient[]> => {
     try {
       // Use internal fetch to proxy endpoint for server-side calls
-      // For server-side calls within container, always use internal port 3000
-      // NEXTAUTH_URL is for external access, but we need internal container communication
-      const baseUrl = 'http://localhost:3000';
+      // For server-side calls within container, use appropriate internal URL
+      // getInternalBaseUrl() handles NEXTAUTH_URL and fallback logic
+      const baseUrl = getInternalBaseUrl();
       const response = await fetch(`${baseUrl}/api/wolf/clients`, {
         method: "GET",
         headers: {
