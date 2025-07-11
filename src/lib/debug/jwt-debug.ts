@@ -1,5 +1,6 @@
 import { logger } from "../logger";
 import { LogComponent } from "../logger/types";
+import { detectReverseProxy, shouldUseSecureCookies } from "../auth/reverse-proxy-detection";
 
 /**
  * Enhanced JWT debugging utility to track URL context mismatches
@@ -46,14 +47,19 @@ export class JWTDebugger {
         isContainer: process.env.DOCKER_CONTAINER === 'true',
       },
       cookieSettings: {
-        sessionTokenName: this.getSessionTokenName(),
-        cookieSecure: this.getCookieSecure(),
+        sessionTokenName: this.getSessionTokenName(context.headers),
+        cookieSecure: this.getCookieSecure(context.headers),
         cookieSameSite: 'lax',
         cookiePath: '/',
+      },
+      reverseProxyDetection: {
+        isReverseProxy: detectReverseProxy(context.headers),
+        shouldUseSecureCookies: shouldUseSecureCookies(context.headers),
+        autoDetectionActive: process.env.INSECURE_COOKIES_IN_PRODUCTION !== 'true' && process.env.INSECURE_COOKIES_IN_PRODUCTION !== 'force-secure',
       }
     };
 
-    await logger.info(LogComponent.AUTH, "JWT_DEBUG: Token generation context", debugData);
+    await logger.debug(LogComponent.AUTH, "JWT_DEBUG: Token generation context", debugData);
   }
 
   /**
@@ -82,12 +88,17 @@ export class JWTDebugger {
         urlMismatch: this.detectUrlMismatch(),
       },
       cookieContext: {
-        sessionTokenName: this.getSessionTokenName(),
+        sessionTokenName: this.getSessionTokenName(context.headers),
         expectedCookieNames: this.getExpectedCookieNames(),
+      },
+      reverseProxyDetection: {
+        isReverseProxy: detectReverseProxy(context.headers),
+        shouldUseSecureCookies: shouldUseSecureCookies(context.headers),
+        autoDetectionActive: process.env.INSECURE_COOKIES_IN_PRODUCTION !== 'true' && process.env.INSECURE_COOKIES_IN_PRODUCTION !== 'force-secure',
       }
     };
 
-    await logger.info(LogComponent.AUTH, "JWT_DEBUG: Token validation context", debugData);
+    await logger.debug(LogComponent.AUTH, "JWT_DEBUG: Token validation context", debugData);
   }
 
   /**
@@ -195,16 +206,11 @@ export class JWTDebugger {
   }
 
   /**
-   * Get session token name based on environment
+   * Get session token name based on environment and reverse proxy detection
    */
-  private getSessionTokenName(): string {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const insecureCookies = process.env.INSECURE_COOKIES_IN_PRODUCTION === 'true';
-    
-    if (isProduction && !insecureCookies) {
-      return '__Secure-next-auth.session-token';
-    }
-    return 'next-auth.session-token';
+  private getSessionTokenName(headers?: Record<string, string>): string {
+    const useSecureCookies = shouldUseSecureCookies(headers);
+    return `${useSecureCookies ? "__Secure-" : ""}next-auth.session-token`;
   }
 
   /**
@@ -220,10 +226,10 @@ export class JWTDebugger {
   }
 
   /**
-   * Get cookie secure setting
+   * Get cookie secure setting based on reverse proxy detection
    */
-  private getCookieSecure(): boolean {
-    return process.env.NODE_ENV === 'production' && process.env.INSECURE_COOKIES_IN_PRODUCTION !== 'true';
+  private getCookieSecure(headers?: Record<string, string>): boolean {
+    return shouldUseSecureCookies(headers);
   }
 }
 

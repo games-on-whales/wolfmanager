@@ -5,6 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { logger } from "./logger"; // Import the singleton instance
 import { LogComponent } from "./logger/types";
 import { jwtDebugger } from "./debug/jwt-debug";
+import { shouldUseSecureCookies } from "./auth/reverse-proxy-detection";
 
 // Initialize logger
 // Use the imported singleton logger instance directly
@@ -49,17 +50,8 @@ declare module "next-auth/jwt" {
 }
 
 export const authOptions: AuthOptions = {
-  cookies: {
-    sessionToken: {
-      name: `${process.env.NODE_ENV === "production" && process.env.INSECURE_COOKIES_IN_PRODUCTION !== "false" ? "__Secure-" : ""}next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production" && process.env.INSECURE_COOKIES_IN_PRODUCTION !== "false",
-      },
-    },
-  },
+  // Use default NextAuth cookie configuration to handle both secure and insecure cookies
+  // This allows backward compatibility during transition
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -387,10 +379,13 @@ export const authOptions: AuthOptions = {
         const { decode } = await import("next-auth/jwt");
         return await decode({ token, secret });
       } catch (error) {
-        logger.warn(LogComponent.AUTH, "JWT decode error - likely due to secret change during fresh deployment", {
+        // This is expected during configuration transitions (secure vs insecure cookies)
+        // or after secret changes during fresh deployments
+        logger.debug(LogComponent.AUTH, "JWT decode error - clearing invalid token", {
           errorMessage: error instanceof Error ? error.message : String(error),
           hasToken: !!token,
           secretLength: typeof secret === 'string' ? secret.length : 0,
+          reason: "Configuration transition or invalid token format"
         });
         
         // Return null to force re-authentication instead of crashing

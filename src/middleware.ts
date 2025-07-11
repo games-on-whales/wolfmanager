@@ -54,6 +54,7 @@ export default withAuth(
       headers: requestHeaders,
     });
 
+
     await logger.debug(LogComponent.AUTH, "Middleware processing protected route", {
       pathname,
       hasToken: !!token,
