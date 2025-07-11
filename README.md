@@ -102,6 +102,14 @@ docker-compose up -d
 
 Access WolfManager at `http://localhost:3000`
 
+> On first login use the following credentials:
+>
+> **Username:** admin
+>
+> **Password:** admin
+>
+> First time wizard will be triggered to prompt reset of password.
+
 ## Key Features
 
 ### ✅ Available Now
