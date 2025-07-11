@@ -9,6 +9,7 @@ import {
 
 // Action to get clients
 import { WolfEventService } from "@/lib/services/wolf-event.service";
+import { SocketService } from "@/lib/services/socket-service";
 
 export async function getClientsAction(): Promise<any[]> {
   try {
@@ -116,26 +117,97 @@ export async function getPairedClientsWithSettingsAction(): Promise<{ success: b
 
     const rawClients = await getClientDevicesByUserId(session.user.id);
 
-    // Transform camelCase database fields to snake_case for UI compatibility
-    const clients = rawClients.map(client => ({
-      id: client.id,
-      wolf_client_id: client.wolfClientId,
-      friendly_name: client.friendlyName,
-      pair_secret: client.pairSecret,
-      created_at: client.createdAt,
-      updated_at: client.updatedAt,
-      last_seen: client.lastSeen,
-      user_id: client.userId,
-      // Add default values for fields that UI expects
-      device_type: 'Unknown',
-      status: 'paired',
-      owner: 'Current User'
-    }));
+    // Fetch current settings from Wolf API
+    let wolfClientsWithSettings: any[] = [];
+    try {
+      const socketService = SocketService.getInstance();
+      const wolfResponse = await socketService.callWolfApi(session, "/clients", {
+        method: "GET",
+      });
+
+      if (wolfResponse.success) {
+        const wolfData = wolfResponse.data as any;
+        if (wolfData && typeof wolfData === "object" && wolfData.success === true && Array.isArray(wolfData.clients)) {
+          wolfClientsWithSettings = wolfData.clients;
+          logger.debug(
+            LogComponent.WOLF_UI,
+            "[Action] Successfully fetched settings from Wolf API",
+            { userId: session.user.id, wolfClientCount: wolfClientsWithSettings.length }
+          );
+        }
+      } else {
+        logger.warn(
+          LogComponent.WOLF_UI,
+          "[Action] Failed to fetch settings from Wolf API, continuing with empty settings",
+          { userId: session.user.id, error: wolfResponse.error }
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        LogComponent.WOLF_UI,
+        "[Action] Wolf API unavailable, continuing with empty settings",
+        error instanceof Error ? error : new Error(String(error)),
+        { userId: session.user.id }
+      );
+    }
+
+    // Create a map of Wolf client settings by client ID for quick lookup
+    const wolfSettingsMap = new Map<string, any>();
+    wolfClientsWithSettings.forEach(wolfClient => {
+      const clientId = wolfClient.client_id || wolfClient.id;
+      if (clientId) {
+        wolfSettingsMap.set(clientId, wolfClient);
+      }
+    });
+
+    // Transform camelCase database fields to snake_case for UI compatibility and merge with Wolf API settings
+    const clients = rawClients.map(client => {
+      const wolfClient = wolfSettingsMap.get(client.wolfClientId);
+      let settings = undefined;
+
+      if (wolfClient) {
+        // Transform settings from Wolf API format to expected format
+        // Wolf API uses uppercase controllers (e.g., "XBOX"), form expects lowercase (e.g., "xbox")
+        const rawSettings = wolfClient.settings || wolfClient;
+        if (rawSettings) {
+          settings = {
+            controllers_override: rawSettings.controllers_override?.map((controller: string) =>
+              controller.toLowerCase()
+            ) || ["auto"],
+            mouse_acceleration: rawSettings.mouse_acceleration || 1.0,
+            h_scroll_acceleration: rawSettings.h_scroll_acceleration || 1.0,
+            v_scroll_acceleration: rawSettings.v_scroll_acceleration || 1.0,
+          };
+        }
+      }
+
+      return {
+        id: client.id,
+        wolf_client_id: client.wolfClientId,
+        friendly_name: client.friendlyName,
+        pair_secret: client.pairSecret,
+        created_at: client.createdAt,
+        updated_at: client.updatedAt,
+        last_seen: client.lastSeen,
+        user_id: client.userId,
+        // Add default values for fields that UI expects
+        device_type: wolfClient?.device_type || 'Unknown',
+        status: wolfClient?.status || 'paired',
+        owner: 'Current User',
+        // Include settings from Wolf API
+        settings: settings
+      };
+    });
 
     logger.info(
       LogComponent.WOLF_UI,
       "[Action] Successfully fetched and transformed paired clients with settings",
-      { userId: session.user.id, clientCount: clients.length }
+      {
+        userId: session.user.id,
+        clientCount: clients.length,
+        clientsWithSettings: clients.filter(c => c.settings).length,
+        wolfApiAvailable: wolfClientsWithSettings.length > 0
+      }
     );
 
     return { success: true, data: { clients } };
