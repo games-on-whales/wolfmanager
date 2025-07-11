@@ -1,11 +1,12 @@
 import { LogComponent, logger } from "@/lib/logger";
+import { getInternalBaseUrl } from "@/lib/url-resolver";
 import fs from "fs/promises";
 import path from "path";
 // Use global fetch instead of undici to avoid compatibility issues
 
 // Use our internal API endpoint instead of direct SteamGridDB API
 // Use absolute URL for server-side fetch compatibility
-const INTERNAL_API_URL = "http://localhost:3000";
+const INTERNAL_API_URL = getInternalBaseUrl();
 const API_BASE = `${INTERNAL_API_URL}/api/metadata/steamgriddb`;
 const ASSETS_BASE_PATH = path.resolve(process.cwd(), "config/assets"); // Use absolute path for reliability
 

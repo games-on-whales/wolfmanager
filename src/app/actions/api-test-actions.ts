@@ -10,6 +10,7 @@ import {
   createSuccessResponse,
   type ApiResponse,
 } from "@/lib/api-utils";
+import { getInternalBaseUrl } from "@/lib/url-resolver";
 
 /**
  * API Test Actions
@@ -167,7 +168,7 @@ export async function testSteamApiAction(request: ApiTestRequest): Promise<ApiRe
     const startTime = Date.now();
     
     // Make internal request to our own API route
-    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const baseUrl = getInternalBaseUrl();
     const fullUrl = `${baseUrl}${endpoint}`;
     
     const fetchOptions: RequestInit = {
@@ -262,7 +263,7 @@ export async function testSystemApiAction(request: ApiTestRequest): Promise<ApiR
     const startTime = Date.now();
     
     // Make internal request to our own API route
-    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const baseUrl = getInternalBaseUrl();
     const fullUrl = `${baseUrl}${endpoint}`;
     
     const fetchOptions: RequestInit = {

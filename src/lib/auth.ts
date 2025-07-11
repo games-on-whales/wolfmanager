@@ -4,6 +4,8 @@ import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { logger } from "./logger"; // Import the singleton instance
 import { LogComponent } from "./logger/types";
+import { jwtDebugger } from "./debug/jwt-debug";
+import { shouldUseSecureCookies } from "./auth/reverse-proxy-detection";
 
 // Initialize logger
 // Use the imported singleton logger instance directly
@@ -48,17 +50,8 @@ declare module "next-auth/jwt" {
 }
 
 export const authOptions: AuthOptions = {
-  cookies: {
-    sessionToken: {
-      name: `${process.env.NODE_ENV === "production" && process.env.INSECURE_COOKIES_IN_PRODUCTION !== "false" ? "__Secure-" : ""}next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production" && process.env.INSECURE_COOKIES_IN_PRODUCTION !== "false",
-      },
-    },
-  },
+  // Use default NextAuth cookie configuration to handle both secure and insecure cookies
+  // This allows backward compatibility during transition
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -105,8 +98,25 @@ export const authOptions: AuthOptions = {
     signOut: "/login",
   },
   callbacks: {
-    async jwt({ token, user, trigger, session }: any) {
+    async jwt({ token, user, trigger, session, account }: any) {
       try {
+        // Enhanced JWT debugging for reverse proxy issues
+        if (user) {
+          await jwtDebugger.logJWTGeneration({
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            trigger,
+          });
+        } else if (token) {
+          await jwtDebugger.logJWTValidation({
+            hasToken: !!token,
+            tokenKeys: Object.keys(token || {}),
+            validationResult: token.error ? 'failed' : 'success',
+            errorMessage: token.error,
+          });
+        }
+
         // Log NEXTAUTH_URL for remote access debugging
         logger.debug(LogComponent.AUTH, "DIAGNOSIS: JWT callback - NEXTAUTH_URL check", {
           nextauthUrl: process.env.NEXTAUTH_URL,
@@ -194,12 +204,26 @@ export const authOptions: AuthOptions = {
       } catch (error) {
         logger.error(LogComponent.AUTH, "JWT callback error", error);
         
+        // Enhanced error logging for JWT issues
+        await jwtDebugger.logUrlMismatch({
+          requestUrl: 'jwt_callback',
+          headers: {},
+        });
+        
         // If this is a JWT validation/decryption error, clear the token
         if (error instanceof Error && (error.message.includes("decryption") || error.message.includes("invalid"))) {
           logger.warn(LogComponent.AUTH, "JWT validation/decryption failed, clearing token", {
             errorMessage: error.message,
             hasUser: !!user,
             hasTrigger: !!trigger,
+          });
+          
+          // Log the specific JWT validation failure
+          await jwtDebugger.logJWTValidation({
+            hasToken: !!token,
+            tokenKeys: Object.keys(token || {}),
+            validationResult: 'failed',
+            errorMessage: error.message,
           });
           
           // Return a token with error flag to force re-authentication
@@ -355,10 +379,13 @@ export const authOptions: AuthOptions = {
         const { decode } = await import("next-auth/jwt");
         return await decode({ token, secret });
       } catch (error) {
-        logger.warn(LogComponent.AUTH, "JWT decode error - likely due to secret change during fresh deployment", {
+        // This is expected during configuration transitions (secure vs insecure cookies)
+        // or after secret changes during fresh deployments
+        logger.debug(LogComponent.AUTH, "JWT decode error - clearing invalid token", {
           errorMessage: error instanceof Error ? error.message : String(error),
           hasToken: !!token,
           secretLength: typeof secret === 'string' ? secret.length : 0,
+          reason: "Configuration transition or invalid token format"
         });
         
         // Return null to force re-authentication instead of crashing

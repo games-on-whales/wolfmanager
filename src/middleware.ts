@@ -2,6 +2,7 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 import { logger } from "./lib/logger";
 import { LogComponent } from "./lib/logger/types";
+import { jwtDebugger } from "./lib/debug/jwt-debug";
 
 // Define paths that don't require authentication
 const publicPaths = [
@@ -42,6 +43,18 @@ export default withAuth(
     const token = req.nextauth.token;
     const { pathname } = req.nextUrl;
 
+    // Enhanced JWT debugging in middleware
+    const requestHeaders = Object.fromEntries(req.headers.entries());
+    await jwtDebugger.logJWTValidation({
+      hasToken: !!token,
+      tokenKeys: token ? Object.keys(token) : [],
+      validationResult: token?.error ? 'failed' : (token ? 'success' : 'failed'),
+      errorMessage: token?.error,
+      requestUrl: pathname,
+      headers: requestHeaders,
+    });
+
+
     await logger.debug(LogComponent.AUTH, "Middleware processing protected route", {
       pathname,
       hasToken: !!token,
@@ -66,6 +79,12 @@ export default withAuth(
           path: pathname,
           error: token?.error || "InvalidToken",
           hasToken: !!token,
+        });
+        
+        // Enhanced debugging for JWT validation failures
+        await jwtDebugger.logUrlMismatch({
+          requestUrl: pathname,
+          headers: requestHeaders,
         });
         
         // Clear invalid JWT cookies to prevent repeated decryption errors
