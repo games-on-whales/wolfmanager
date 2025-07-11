@@ -6,6 +6,19 @@ source /opt/wolf/scripts/utils.sh
 
 wolf_log "=== WolfManager Container Startup ==="
 
+# Run database migrations if needed
+wolf_log "Checking for pending database migrations"
+if node -e "import('./src/lib/db/migrate-config.js').then(m => m.isMigrationNeeded()).then(console.log).catch(() => process.exit(1))" | grep -q "true"; then
+    wolf_log "Applying database migrations"
+    if ! node -e "import('./src/lib/db/migrate-config.js').then(m => m.migrateLegacyConfigToDatabase()).catch(() => process.exit(1))"; then
+        wolf_log "ERROR: Failed to apply database migrations"
+        exit 1
+    fi
+    wolf_log "Database migrations applied successfully"
+else
+    wolf_log "No pending database migrations"
+fi
+
 # Get environment variables with defaults
 UNAME="${UNAME:-node}"
 
@@ -28,6 +41,13 @@ if [ "$(id -u)" = "0" ]; then
     # Run device/socket group setup
     if ! /opt/wolf/scripts/setup-groups.sh; then
         wolf_log "ERROR: Group setup failed"
+        exit 1
+    fi
+    
+    # Generate required secrets BEFORE symlink setup to ensure they exist before Node.js starts
+    wolf_log "Ensuring secure secrets are generated before Node.js startup"
+    if ! ensure_docker_secrets; then
+        wolf_log "ERROR: Failed to generate required secrets"
         exit 1
     fi
     

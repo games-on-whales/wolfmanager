@@ -25,7 +25,6 @@ import { clientLogger } from "@/lib/logger/client";
 import { showToast } from "@/lib/toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -52,7 +51,6 @@ const passwordSchema = z
 type PasswordForm = z.infer<typeof passwordSchema>;
 
 export function FirstTimeWizard() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   const passwordForm = useForm<PasswordForm>({
@@ -69,10 +67,12 @@ export function FirstTimeWizard() {
         LogComponent.WOLF_UI,
         "Completing first-time setup"
       );
-      // Small delay to ensure session is updated, then use smooth navigation
-      setTimeout(() => {
-        router.push("/clients");
-      }, 100);
+      
+      // Sign out to clear any invalid session tokens, then redirect to login
+      await signOut({ 
+        callbackUrl: "/login?message=setup-complete",
+        redirect: true 
+      });
     } catch (error) {
       await clientLogger.error(
         LogComponent.AUTH,

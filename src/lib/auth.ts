@@ -4,13 +4,20 @@ import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { logger } from "./logger"; // Import the singleton instance
 import { LogComponent } from "./logger/types";
+import { jwtDebugger } from "./debug/jwt-debug";
+import { shouldUseSecureCookies } from "./auth/reverse-proxy-detection";
 
 // Initialize logger
 // Use the imported singleton logger instance directly
 
-if (!process.env.NEXTAUTH_SECRET) {
-  throw new Error("Please provide process.env.NEXTAUTH_SECRET");
-}
+// DIAGNOSIS: Log when this module is loaded to verify initialization order.
+// This should appear AFTER the instrumentation logs.
+console.log(`[AUTH] auth.ts module loaded at ${new Date().toISOString()}`);
+console.log(`[AUTH] NEXTAUTH_SECRET availability check: hasNextAuthSecret=${!!process.env.NEXTAUTH_SECRET}, length=${process.env.NEXTAUTH_SECRET?.length || 0}`);
+
+// By the time this module is loaded, `instrumentation.ts` should have already
+// run and set the necessary environment variables. We can now safely rely on
+// `process.env.NEXTAUTH_SECRET`.
 
 // Extend the built-in types
 declare module "next-auth" {
@@ -28,7 +35,7 @@ declare module "next-auth" {
       role?: string;
     };
     requiresFirstTimeSetup: boolean;
-    error?: "SessionExpired";
+    error?: "SessionExpired" | "MissingToken";
   }
 }
 
@@ -43,18 +50,8 @@ declare module "next-auth/jwt" {
 }
 
 export const authOptions: AuthOptions = {
-  cookies: {
-    sessionToken: {
-      name: `next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: false, // Allow non-HTTPS for development/internal networks
-        domain: undefined, // Allow cookies to work across different hosts
-      },
-    },
-  },
+  // Use default NextAuth cookie configuration to handle both secure and insecure cookies
+  // This allows backward compatibility during transition
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -101,8 +98,25 @@ export const authOptions: AuthOptions = {
     signOut: "/login",
   },
   callbacks: {
-    async jwt({ token, user, trigger, session }: any) {
+    async jwt({ token, user, trigger, session, account }: any) {
       try {
+        // Enhanced JWT debugging for reverse proxy issues
+        if (user) {
+          await jwtDebugger.logJWTGeneration({
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            trigger,
+          });
+        } else if (token) {
+          await jwtDebugger.logJWTValidation({
+            hasToken: !!token,
+            tokenKeys: Object.keys(token || {}),
+            validationResult: token.error ? 'failed' : 'success',
+            errorMessage: token.error,
+          });
+        }
+
         // Log NEXTAUTH_URL for remote access debugging
         logger.debug(LogComponent.AUTH, "DIAGNOSIS: JWT callback - NEXTAUTH_URL check", {
           nextauthUrl: process.env.NEXTAUTH_URL,
@@ -110,7 +124,18 @@ export const authOptions: AuthOptions = {
           hasUser: !!user,
           hasTrigger: !!trigger,
           timestamp: new Date().toISOString(),
+          nextauthSecretLength: process.env.NEXTAUTH_SECRET?.length || 0,
         });
+
+        // Add diagnostic logging for JWT decryption issues
+        if (!user && !trigger && token) {
+          logger.debug(LogComponent.AUTH, "DIAGNOSIS: Processing existing JWT token", {
+            hasTokenId: !!token.id,
+            hasTokenName: !!token.name,
+            tokenKeys: Object.keys(token || {}),
+            timestamp: new Date().toISOString(),
+          });
+        }
 
         // Handle session update
         if (trigger === "update" && session?.name) {
@@ -120,17 +145,29 @@ export const authOptions: AuthOptions = {
 
         // Handle new sign in
         if (user) {
-          logger.debug(LogComponent.AUTH, "Creating new JWT token", {
+          logger.info(LogComponent.AUTH, "Creating new JWT token", {
             userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            requiresFirstTimeSetup: user.requiresFirstTimeSetup,
           });
 
-          return {
+          const newToken = {
             ...token,
             id: user.id,
             name: user.name,
             role: user.role,
             requiresFirstTimeSetup: user.requiresFirstTimeSetup,
           };
+          
+          logger.info(LogComponent.AUTH, "JWT token created successfully", { 
+            tokenId: newToken.id,
+            tokenName: newToken.name,
+            tokenRole: newToken.role,
+            tokenRequiresSetup: newToken.requiresFirstTimeSetup
+          });
+          
+          return newToken;
         }
 
         // For existing tokens, periodically re-check the user's first-time setup status
@@ -166,11 +203,57 @@ export const authOptions: AuthOptions = {
         return token;
       } catch (error) {
         logger.error(LogComponent.AUTH, "JWT callback error", error);
+        
+        // Enhanced error logging for JWT issues
+        await jwtDebugger.logUrlMismatch({
+          requestUrl: 'jwt_callback',
+          headers: {},
+        });
+        
+        // If this is a JWT validation/decryption error, clear the token
+        if (error instanceof Error && (error.message.includes("decryption") || error.message.includes("invalid"))) {
+          logger.warn(LogComponent.AUTH, "JWT validation/decryption failed, clearing token", {
+            errorMessage: error.message,
+            hasUser: !!user,
+            hasTrigger: !!trigger,
+          });
+          
+          // Log the specific JWT validation failure
+          await jwtDebugger.logJWTValidation({
+            hasToken: !!token,
+            tokenKeys: Object.keys(token || {}),
+            validationResult: 'failed',
+            errorMessage: error.message,
+          });
+          
+          // Return a token with error flag to force re-authentication
+          return {
+            ...token, // Keep existing token properties if any
+            error: "SessionExpired",
+          };
+        }
+        
+        // For other errors, return the original token to avoid logging out unnecessarily
         return token;
       }
     },
     async session({ session, token }: any) {
       try {
+        if (!token) {
+          logger.warn(
+            LogComponent.AUTH,
+            "Session validation failed - missing token",
+            {
+              timestamp: new Date().toISOString(),
+            }
+          );
+          return {
+            ...session,
+            error: "MissingToken",
+            expires: new Date(0).toISOString(),
+          };
+        }
+
         if (token.error) {
           logger.info(
             LogComponent.AUTH,
@@ -276,8 +359,39 @@ export const authOptions: AuthOptions = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 8 * 60 * 60, // 8 hours
-    updateAge: 1 * 60 * 60, // 1 hour
+    maxAge: 4 * 60 * 60, // Reduced to 4 hours for better security
+    updateAge: 30 * 60, // Update every 30 minutes
+  },
+  // Add JWT configuration to handle decryption errors gracefully
+  jwt: {
+    // Custom encode/decode to handle secret changes
+    async encode({ token, secret, maxAge }) {
+      try {
+        const { encode } = await import("next-auth/jwt");
+        return await encode({ token, secret, maxAge });
+      } catch (error) {
+        logger.error(LogComponent.AUTH, "JWT encode error", error);
+        throw error;
+      }
+    },
+    async decode({ token, secret }) {
+      try {
+        const { decode } = await import("next-auth/jwt");
+        return await decode({ token, secret });
+      } catch (error) {
+        // This is expected during configuration transitions (secure vs insecure cookies)
+        // or after secret changes during fresh deployments
+        logger.debug(LogComponent.AUTH, "JWT decode error - clearing invalid token", {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          hasToken: !!token,
+          secretLength: typeof secret === 'string' ? secret.length : 0,
+          reason: "Configuration transition or invalid token format"
+        });
+        
+        // Return null to force re-authentication instead of crashing
+        return null;
+      }
+    },
   },
   events: {
     async signOut({ token }: any) {
@@ -293,4 +407,3 @@ export const authOptions: AuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
-

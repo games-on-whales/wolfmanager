@@ -13,6 +13,7 @@ export const clientDevicesSqlite = sqliteTable('client_devices', {
   pairSecret: text('pair_secret').notNull(),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  lastSeen: text('last_seen'),
 }, (table) => ({
   userIdIdx: index('client_devices_user_id_idx').on(table.userId),
   pairSecretIdx: index('client_devices_pair_secret_idx').on(table.pairSecret),
@@ -30,6 +31,7 @@ export const clientDevicesPostgres = pgTable('client_devices', {
   pairSecret: varchar('pair_secret', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeen: timestamp('last_seen', { withTimezone: true }),
 }, (table) => ({
   userIdIdx: pgIndex('client_devices_user_id_idx').on(table.userId),
   pairSecretIdx: pgIndex('client_devices_pair_secret_idx').on(table.pairSecret),
@@ -47,6 +49,7 @@ export const clientDevicesMysql = mysqlTable('client_devices', {
   pairSecret: mysqlVarchar('pair_secret', { length: 255 }).notNull(),
   createdAt: mysqlTimestamp('created_at').notNull().defaultNow(),
   updatedAt: mysqlTimestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+  lastSeen: mysqlTimestamp('last_seen'),
 }, (table) => ({
   userIdIdx: mysqlIndex('client_devices_user_id_idx').on(table.userId),
   pairSecretIdx: mysqlIndex('client_devices_pair_secret_idx').on(table.pairSecret),
@@ -64,6 +67,7 @@ export type ClientDevice = {
   pairSecret: string;
   createdAt: string;
   updatedAt: string;
+  lastSeen: string | null;
 };
 
 export type NewClientDevice = Omit<ClientDevice, 'id' | 'createdAt' | 'updatedAt'>;

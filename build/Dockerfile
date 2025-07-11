@@ -17,9 +17,8 @@ COPY . .
 
 # Build-time environment variables
 ENV NODE_ENV=production
-# Temporary build-time secrets (will be auto-generated at runtime)
-ENV NEXTAUTH_SECRET="build-time-secret-will-be-regenerated-at-runtime"
-ENV ENCRYPTION_KEY="build-time-key-32chars-regenerated"
+# Secrets will be generated at runtime by docker-entrypoint.sh
+# No build-time secrets needed for Next.js build
 
 # Build the application
 RUN pnpm run build
@@ -32,6 +31,7 @@ RUN apt-get update && \
     apt-get install -y \
         gosu \
         ca-certificates \
+        openssl \
         python3 \
         make \
         g++ \
@@ -49,6 +49,7 @@ ENV HOSTNAME="0.0.0.0"
 ENV PUID=1000
 ENV PGID=1000
 ENV UNAME=node
+ENV INSECURE_COOKIES_IN_PRODUCTION=false
 
 # Install pnpm in production stage
 RUN npm install -g pnpm

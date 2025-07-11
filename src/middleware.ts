@@ -2,6 +2,7 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 import { logger } from "./lib/logger";
 import { LogComponent } from "./lib/logger/types";
+import { jwtDebugger } from "./lib/debug/jwt-debug";
 
 // Define paths that don't require authentication
 const publicPaths = [
@@ -15,6 +16,7 @@ const publicPaths = [
   "/error/unauthorized",
   "/error/forbidden",
   "/error/expired",
+  "/api/wolf/events", // Exclude SSE endpoint from strict authentication
 ];
 
 // Define paths that require admin access
@@ -41,6 +43,18 @@ export default withAuth(
     const token = req.nextauth.token;
     const { pathname } = req.nextUrl;
 
+    // Enhanced JWT debugging in middleware
+    const requestHeaders = Object.fromEntries(req.headers.entries());
+    await jwtDebugger.logJWTValidation({
+      hasToken: !!token,
+      tokenKeys: token ? Object.keys(token) : [],
+      validationResult: token?.error ? 'failed' : (token ? 'success' : 'failed'),
+      errorMessage: token?.error,
+      requestUrl: pathname,
+      headers: requestHeaders,
+    });
+
+
     await logger.debug(LogComponent.AUTH, "Middleware processing protected route", {
       pathname,
       hasToken: !!token,
@@ -61,11 +75,36 @@ export default withAuth(
 
       // Log actual auth issues (expired sessions, invalid tokens, or protected routes)
       if (token?.error === "SessionExpired" || (token && !token.id)) {
-        await logger.warn(LogComponent.AUTH, "Authentication issue detected", {
+        await logger.warn(LogComponent.AUTH, "Authentication issue detected - clearing invalid session", {
           path: pathname,
           error: token?.error || "InvalidToken",
           hasToken: !!token,
         });
+        
+        // Enhanced debugging for JWT validation failures
+        await jwtDebugger.logUrlMismatch({
+          requestUrl: pathname,
+          headers: requestHeaders,
+        });
+        
+        // Clear invalid JWT cookies to prevent repeated decryption errors
+        const response = pathname.startsWith("/api/")
+          ? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+          : NextResponse.redirect(new URL("/error/unauthorized", req.url));
+        
+        // Clear the session token cookie
+        response.cookies.set("next-auth.session-token", "", {
+          expires: new Date(0),
+          path: "/",
+        });
+        
+        // Also clear the secure version if it exists
+        response.cookies.set("__Secure-next-auth.session-token", "", {
+          expires: new Date(0),
+          path: "/",
+        });
+        
+        return response;
       } else {
         await logger.debug(LogComponent.AUTH, "Unauthenticated access to protected route", {
           path: pathname,
@@ -93,6 +132,11 @@ export default withAuth(
       
       // For API routes, return 403 with specific message
       if (pathname.startsWith("/api/")) {
+        // Allow session revalidation during first-time setup
+        if (pathname.startsWith("/api/auth/session")) {
+          return NextResponse.next();
+        }
+
         return NextResponse.json({
           error: "First-time setup required",
           redirectTo: "/first-time-setup"
@@ -193,6 +237,7 @@ export const config = {
     "/api/users/:path*",
     "/api/admin/:path*",
     "/api/system/:path*",
+    "/api/client-events",
   ],
   // Force Node.js runtime to avoid Edge Runtime issues with TOML/crypto
   runtime: 'nodejs',

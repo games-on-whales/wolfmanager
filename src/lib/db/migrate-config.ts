@@ -238,6 +238,7 @@ async function migrateUsers(users: { [username: string]: LegacyUserConfig }): Pr
               friendlyName: client.friendly_name,
               pairSecret: client.pair_secret,
               wolfClientId: `legacy-${client.friendly_name}-${Date.now()}`, // Generate legacy ID for migrated clients
+              lastSeen: null, // Legacy clients don't have lastSeen data
             });
             
             logger.debug(LogComponent.SYSTEM, "Migrated client device", {

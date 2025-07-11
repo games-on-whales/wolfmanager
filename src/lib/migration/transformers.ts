@@ -81,6 +81,7 @@ export function transformClientDevices(
         friendlyName: clientData.friendly_name,
         pairSecret: clientData.pair_secret || '', // Use the actual pair_secret from TOML
         wolfClientId: clientData.id || `legacy-${clientData.friendly_name}-${Date.now()}`, // Use TOML client ID or generate one
+        lastSeen: null, // Legacy clients don't have lastSeen data
       };
       
       console.log(`Created client device object:`, {

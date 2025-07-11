@@ -16,9 +16,10 @@ import { useEffect, useState } from "react";
 interface LoginClientProps {
   error?: string;
   callbackUrl?: string;
+  message?: string;
 }
 
-export function LoginClient({ error, callbackUrl }: LoginClientProps) {
+export function LoginClient({ error, callbackUrl, message }: LoginClientProps) {
   const [showEasterEgg, setShowEasterEgg] = useState(false);
   const router = useRouter();
 
@@ -36,10 +37,17 @@ export function LoginClient({ error, callbackUrl }: LoginClientProps) {
           "Session Expired",
           "Your session has expired. Please log in again."
         );
+      } else if (message === "setup-complete") {
+        showToast.success(
+          "Setup Complete",
+          {
+            description: "Your password has been updated successfully. Please log in with your new password."
+          }
+        );
       }
     };
     handleError();
-  }, [error, callbackUrl]);
+  }, [error, callbackUrl, message]);
 
   const handleGameControllerClick = async () => {
     setShowEasterEgg(!showEasterEgg);
