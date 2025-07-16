@@ -2,7 +2,6 @@
 
 import { SocketService } from "@/lib/services/socket-service";
 import { LogComponent, logger } from "@/lib/logger";
-import { loadConfig, type Config } from "@/lib/config";
 import {
   API_ERROR_CODES,
   createErrorResponse,
@@ -10,6 +9,7 @@ import {
   type ApiResponse,
 } from "@/lib/api-utils";
 import { getAuthenticatedSession } from "./auth";
+import { getAllPairSecrets } from "@/lib/db/helpers/clients";
 import type { PendingPairRequest } from "./types";
 
 /**
@@ -86,31 +86,18 @@ export async function getPendingPairRequestsAction(): Promise<ApiResponse<{ requ
       sampleRequest: rawRequests[0] || "none",
     });
 
-    // Load config to get all paired clients across all users
-    let config: Config;
+    // Get all paired clients from database
+    let pairedSecrets: Set<string>;
     try {
-      config = (await loadConfig(false)) as Config; // Read-only config load
+      const allPairSecrets = await getAllPairSecrets();
+      pairedSecrets = new Set(allPairSecrets);
     } catch (error) {
-      await logger.error(LogComponent.WOLF_UI, "Failed to load config for pending request filtering", error);
-      // Return raw requests if config load fails
+      await logger.error(LogComponent.WOLF_UI, "Failed to load pair secrets from database for pending request filtering", error);
+      // Return raw requests if database query fails
       return createSuccessResponse({ requests: rawRequests });
     }
 
-    // Extract all pair_secret values from all users' paired clients
-    const pairedSecrets = new Set<string>();
-    if (config.users) {
-      for (const userConfig of Object.values(config.users)) {
-        if (userConfig.clients) {
-          for (const client of userConfig.clients) {
-            if (client.pair_secret) {
-              pairedSecrets.add(client.pair_secret);
-            }
-          }
-        }
-      }
-    }
-
-    await logger.debug(LogComponent.WOLF_UI, "Extracted paired secrets for filtering", {
+    await logger.debug(LogComponent.WOLF_UI, "Retrieved paired secrets from database for filtering", {
       userId: session.user.id,
       totalPairedSecrets: pairedSecrets.size,
       pairedSecrets: Array.from(pairedSecrets),

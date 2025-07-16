@@ -496,6 +496,34 @@ export async function synchronizeAndCleanupClients(userId: string): Promise<{
  * Advanced duplicate detection that compares clients by multiple criteria
  * Returns detailed information about potential duplicates
  */
+/**
+ * Get all pair secrets from the client_devices table
+ * Used for filtering pending pair requests
+ */
+export async function getAllPairSecrets(): Promise<string[]> {
+  try {
+    const db = await getDatabase();
+    const clientDevicesTable = getClientDevicesTable();
+    
+    const devices = await (db as any)
+      .select({
+        pairSecret: clientDevicesTable.pairSecret
+      })
+      .from(clientDevicesTable);
+    
+    const pairSecrets = devices.map((device: { pairSecret: string }) => device.pairSecret);
+    
+    logger.debug(LogComponent.SYSTEM, 'Retrieved all pair secrets from database', {
+      count: pairSecrets.length
+    });
+    
+    return pairSecrets;
+  } catch (error) {
+    logger.error(LogComponent.SYSTEM, 'Failed to get all pair secrets', error as Error);
+    throw new Error('Failed to retrieve pair secrets from database');
+  }
+}
+
 export async function detectClientDuplicates(userId: string): Promise<{
   exactDuplicates: { byPairSecret: ClientDevice[][] },
   potentialDuplicates: { byFriendlyName: ClientDevice[][] },
