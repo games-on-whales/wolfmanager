@@ -79,13 +79,13 @@ interface StartRunnerEvent {
 interface RTPVideoPingEvent {
     type: "wolf::core::events::RTPVideoPingEvent";
     session_id: number;
-    ping_payload: number[];
+    ping_payload?: number[];
 }
 
 interface RTPAudioPingEvent {
     type: "wolf::core::events::RTPAudioPingEvent";
     session_id: number;
-    ping_payload: number[];
+    ping_payload?: number[];
 }
 
 interface PairRequestEvent extends PendingPairRequest {
@@ -298,17 +298,36 @@ this.on('error', (error) => {
     }
 
     private async processEvent(event: WolfEvent) {
-        // Ensure the event has a type field
-        const eventType = event.type || (event as any).eventType;
-        if (!eventType) {
-            logger.warn(LogComponent.WOLF_EVENTS, "Event missing type field", { event });
-            return;
+        try {
+            // Ensure the event has a type field
+            const eventType = event.type || (event as any).eventType;
+            if (!eventType) {
+                logger.warn(LogComponent.WOLF_EVENTS, "Event missing type field", { event });
+                return;
+            }
+            
+            logger.info(LogComponent.WOLF_EVENTS, `Processing event: ${eventType}`, { event });
+            
+            await this.processEventByType(eventType, event);
+        } catch (error) {
+            logger.error(LogComponent.WOLF_EVENTS, "Failed to process event", error, {
+                eventType: event.type || (event as any).eventType,
+                eventData: event,
+                errorMessage: error instanceof Error ? error.message : String(error),
+                errorStack: error instanceof Error ? error.stack : undefined
+            });
+            // Continue processing other events - don't let one failure break the stream
         }
-        
-        logger.info(LogComponent.WOLF_EVENTS, `Processing event: ${eventType}`, { event });
+    }
+
+    private async processEventByType(eventType: string, event: WolfEvent) {
         switch (eventType) {
             case "wolf::core::events::PauseStreamEvent": {
                 const pauseEvent = event as PauseStreamEvent;
+                if (pauseEvent.session_id == null) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "PauseStreamEvent missing session_id", { event: pauseEvent });
+                    break;
+                }
                 const pauseClientId = String(pauseEvent.session_id);
                 this.clientStates.set(pauseClientId, {
                     ...this.clientStates.get(pauseClientId),
@@ -321,6 +340,10 @@ this.on('error', (error) => {
             }
             case "wolf::core::events::StopStreamEvent": {
                 const stopEvent = event as StopStreamEvent;
+                if (stopEvent.session_id == null) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "StopStreamEvent missing session_id", { event: stopEvent });
+                    break;
+                }
                 const stopClientId = String(stopEvent.session_id);
                 this.clientStates.set(stopClientId, {
                     status: "OFFLINE",
@@ -333,6 +356,10 @@ this.on('error', (error) => {
             }
             case "wolf::core::events::StreamSession": {
                 const streamEvent = event as StreamSession;
+                if (!streamEvent.client_id) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "StreamSession missing client_id", { event: streamEvent });
+                    break;
+                }
                 this.clientStates.set(streamEvent.client_id, { status: "STREAMING", session: streamEvent });
                 this.emit("SESSION_UPDATE", streamEvent);
                 break;
@@ -340,6 +367,10 @@ this.on('error', (error) => {
             case "wolf::core::events::VideoSession":
             case "wolf::core::events::AudioSession": {
                 const sessionEvent = event as VideoSession | AudioSession;
+                if (sessionEvent.session_id == null) {
+                    logger.warn(LogComponent.WOLF_EVENTS, `${eventType} missing session_id`, { event: sessionEvent });
+                    break;
+                }
                 const sessionClientId = String(sessionEvent.session_id);
                 this.clientStates.set(sessionClientId, { status: "STREAMING", session: sessionEvent });
                 this.emit("SESSION_UPDATE", sessionEvent);
@@ -347,6 +378,10 @@ this.on('error', (error) => {
             }
             case "wolf::core::events::ResumeStreamEvent": {
                 const resumeEvent = event as ResumeStreamEvent;
+                if (resumeEvent.session_id == null) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "ResumeStreamEvent missing session_id", { event: resumeEvent });
+                    break;
+                }
                 const resumeClientId = String(resumeEvent.session_id);
                 this.clientStates.set(resumeClientId, {
                     ...this.clientStates.get(resumeClientId),
@@ -359,43 +394,59 @@ this.on('error', (error) => {
             }
             case "wolf::core::events::PairSignal": {
                 const pairEvent = event as PairSignalEvent;
+                if (!pairEvent.client_ip || !pairEvent.host_ip) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "PairSignal missing required IP addresses", { event: pairEvent });
+                    break;
+                }
                 // Wolf sends PairSignal events when pairing is requested
                 // We need to fetch the actual pending requests from the API
-                logger.info(LogComponent.WOLF_EVENTS, "Received PairSignal event", { 
-                    client_ip: pairEvent.client_ip, 
-                    host_ip: pairEvent.host_ip 
+                logger.info(LogComponent.WOLF_EVENTS, "Received PairSignal event", {
+                    client_ip: pairEvent.client_ip,
+                    host_ip: pairEvent.host_ip
                 });
                 this.emit("PAIR_REQUEST_UPDATE", []); // Trigger UI refresh - client will call API
                 break;
             }
             case "wolf::core::events::PlugDeviceEvent": {
                 const plugEvent = event as PlugDeviceEvent;
+                if (!plugEvent.device_id || !plugEvent.device_type) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "PlugDeviceEvent missing required fields", { event: plugEvent });
+                    break;
+                }
                 logger.info(LogComponent.WOLF_EVENTS, "Device plugged in", {
                     device_id: plugEvent.device_id,
                     device_type: plugEvent.device_type,
                     vendor_id: plugEvent.vendor_id,
                     product_id: plugEvent.product_id
                 });
-                this.emit("DEVICE_UPDATE", { 
-                    action: "PLUG", 
-                    device: plugEvent 
+                this.emit("DEVICE_UPDATE", {
+                    action: "PLUG",
+                    device: plugEvent
                 });
                 break;
             }
             case "wolf::core::events::UnplugDeviceEvent": {
                 const unplugEvent = event as UnplugDeviceEvent;
+                if (!unplugEvent.device_id || !unplugEvent.device_type) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "UnplugDeviceEvent missing required fields", { event: unplugEvent });
+                    break;
+                }
                 logger.info(LogComponent.WOLF_EVENTS, "Device unplugged", {
                     device_id: unplugEvent.device_id,
                     device_type: unplugEvent.device_type
                 });
-                this.emit("DEVICE_UPDATE", { 
-                    action: "UNPLUG", 
-                    device: unplugEvent 
+                this.emit("DEVICE_UPDATE", {
+                    action: "UNPLUG",
+                    device: unplugEvent
                 });
                 break;
             }
             case "wolf::core::events::IDRRequestEvent": {
                 const idrEvent = event as IDRRequestEvent;
+                if (idrEvent.session_id == null) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "IDRRequestEvent missing session_id", { event: idrEvent });
+                    break;
+                }
                 const idrClientId = String(idrEvent.session_id);
                 logger.debug(LogComponent.WOLF_EVENTS, "IDR request received", {
                     session_id: idrEvent.session_id
@@ -405,26 +456,34 @@ this.on('error', (error) => {
             }
             case "wolf::core::events::StartRunner": {
                 const runnerEvent = event as StartRunnerEvent;
+                if (!runnerEvent.runner_id || !runnerEvent.app_id) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "StartRunner missing required fields", { event: runnerEvent });
+                    break;
+                }
                 logger.info(LogComponent.WOLF_EVENTS, "Runner started", {
                     runner_id: runnerEvent.runner_id,
                     app_id: runnerEvent.app_id,
                     session_id: runnerEvent.session_id
                 });
-                this.emit("RUNNER_UPDATE", { 
-                    action: "START", 
-                    runner: runnerEvent 
+                this.emit("RUNNER_UPDATE", {
+                    action: "START",
+                    runner: runnerEvent
                 });
                 break;
             }
             case "wolf::core::events::RTPVideoPingEvent": {
                 const videoPingEvent = event as RTPVideoPingEvent;
+                if (videoPingEvent.session_id == null) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "RTPVideoPingEvent missing session_id", { event: videoPingEvent });
+                    break;
+                }
                 const videoPingClientId = String(videoPingEvent.session_id);
                 logger.debug(LogComponent.WOLF_EVENTS, "RTP video ping received", {
                     session_id: videoPingEvent.session_id,
-                    ping_payload_length: videoPingEvent.ping_payload.length
+                    ping_payload_length: videoPingEvent.ping_payload?.length || 0
                 });
-                this.emit("RTP_PING", { 
-                    clientId: videoPingClientId, 
+                this.emit("RTP_PING", {
+                    clientId: videoPingClientId,
                     type: "video",
                     session_id: videoPingEvent.session_id,
                     ping_payload: videoPingEvent.ping_payload
@@ -433,13 +492,17 @@ this.on('error', (error) => {
             }
             case "wolf::core::events::RTPAudioPingEvent": {
                 const audioPingEvent = event as RTPAudioPingEvent;
+                if (audioPingEvent.session_id == null) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "RTPAudioPingEvent missing session_id", { event: audioPingEvent });
+                    break;
+                }
                 const audioPingClientId = String(audioPingEvent.session_id);
                 logger.debug(LogComponent.WOLF_EVENTS, "RTP audio ping received", {
                     session_id: audioPingEvent.session_id,
-                    ping_payload_length: audioPingEvent.ping_payload.length
+                    ping_payload_length: audioPingEvent.ping_payload?.length || 0
                 });
-                this.emit("RTP_PING", { 
-                    clientId: audioPingClientId, 
+                this.emit("RTP_PING", {
+                    clientId: audioPingClientId,
                     type: "audio",
                     session_id: audioPingEvent.session_id,
                     ping_payload: audioPingEvent.ping_payload
@@ -448,6 +511,10 @@ this.on('error', (error) => {
             }
             case "PairRequest": {
                 const pairReqEvent = event as PairRequestEvent;
+                if (!pairReqEvent.pair_secret) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "PairRequest missing pair_secret", { event: pairReqEvent });
+                    break;
+                }
                 // Add if not already present
                 if (!this.pendingPairRequests.some(req => req.pair_secret === pairReqEvent.pair_secret)) {
                     this.pendingPairRequests.push(pairReqEvent);
@@ -457,6 +524,10 @@ this.on('error', (error) => {
             }
             case "PairRequestRemoved": {
                 const pairRemovedEvent = event as PairRequestRemovedEvent;
+                if (!pairRemovedEvent.pair_secret) {
+                    logger.warn(LogComponent.WOLF_EVENTS, "PairRequestRemoved missing pair_secret", { event: pairRemovedEvent });
+                    break;
+                }
                 this.pendingPairRequests = this.pendingPairRequests.filter(
                     req => req.pair_secret !== pairRemovedEvent.pair_secret
                 );
