@@ -12,30 +12,45 @@ const clientDevices = databaseConfig.type === 'sqlite' ? clientDevicesSqlite : d
 // Define event types from Wolf SSE
 interface PauseStreamEvent {
     type: "wolf::core::events::PauseStreamEvent";
-    session_id: number;
+    session_id: string; // Fixed: Use string to prevent precision loss
 }
 
 interface StopStreamEvent {
     type: "wolf::core::events::StopStreamEvent";
-    session_id: number;
+    session_id: string; // Fixed: Use string to prevent precision loss
 }
 
 interface StreamSession {
     type: "wolf::core::events::StreamSession";
     client_id: string;
     client_ip: string;
-    // ... other properties
+    app_id: string;
+    aes_key: string;
+    aes_iv: string;
+    rtsp_fake_ip: string;
+    video_width: number;
+    video_height: number;
+    video_refresh_rate: number;
+    audio_channel_count: number;
+    client_settings: {
+        run_uid: number;
+        run_gid: number;
+        controllers_override: any[];
+        mouse_acceleration: number;
+        v_scroll_acceleration: number;
+        h_scroll_acceleration: number;
+    };
 }
 
 interface VideoSession {
     type: "wolf::core::events::VideoSession";
-    session_id: number;
+    session_id: string; // Fixed: Use string to prevent precision loss
     // ... other properties
 }
 
 interface AudioSession {
     type: "wolf::core::events::AudioSession";
-    session_id: number;
+    session_id: string; // Fixed: Use string to prevent precision loss
     // ... other properties
 }
 
@@ -47,7 +62,7 @@ interface PairSignalEvent {
 
 interface ResumeStreamEvent {
     type: "wolf::core::events::ResumeStreamEvent";
-    session_id: number;
+    session_id: string; // Fixed: Use string to prevent precision loss
 }
 
 interface PlugDeviceEvent {
@@ -66,26 +81,32 @@ interface UnplugDeviceEvent {
 
 interface IDRRequestEvent {
     type: "wolf::core::events::IDRRequestEvent";
-    session_id: number;
+    session_id: string; // Fixed: Use string to prevent precision loss
 }
 
 interface StartRunnerEvent {
     type: "wolf::core::events::StartRunner";
     runner_id: string;
     app_id: string;
-    session_id?: number;
+    session_id?: string; // Fixed: Use string to prevent precision loss
 }
 
 interface RTPVideoPingEvent {
     type: "wolf::core::events::RTPVideoPingEvent";
-    session_id: number;
-    ping_payload?: number[];
+    session_id?: string; // Fixed: Use string to prevent precision loss
+    client_ip?: string;
+    client_port?: number;
+    payload?: number[];
+    ping_payload?: number[]; // Legacy field name
 }
 
 interface RTPAudioPingEvent {
     type: "wolf::core::events::RTPAudioPingEvent";
-    session_id: number;
-    ping_payload?: number[];
+    session_id?: string; // Fixed: Use string to prevent precision loss
+    client_ip?: string;
+    client_port?: number;
+    payload?: number[];
+    ping_payload?: number[]; // Legacy field name
 }
 
 interface PairRequestEvent extends PendingPairRequest {
@@ -110,12 +131,13 @@ export class WolfEventService extends EventEmitter {
     
     // Memory management configuration
     private readonly MAX_CLIENT_STATES = 1000; // Maximum number of client states to cache
-    private readonly CLIENT_STATE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    private readonly CLIENT_STATE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds (increased from 24 hours)
+    private readonly ACTIVE_SESSION_TTL = 2 * 60 * 60 * 1000; // 2 hours for active sessions
     private readonly CLEANUP_INTERVAL = 60 * 60 * 1000; // Run cleanup every hour
     private cleanupTimer: NodeJS.Timeout | null = null;
     private readonly reconnectDelay: number = 5000; // 5 seconds
     private sessionValidationTimer: NodeJS.Timeout | null = null;
-    private readonly sessionValidationInterval: number = 5 * 60 * 1000; // 5 minutes
+    private readonly sessionValidationInterval: number = 15 * 60 * 1000; // 15 minutes (increased from 5 minutes)
 
     private constructor() {
         super();
@@ -164,11 +186,7 @@ this.on('error', (error) => {
             eventStream.on("data", (chunk: Buffer) => {
                 try {
                     const message = chunk.toString();
-                    logger.info(LogComponent.WOLF_EVENTS, "Raw data received from Wolf events stream", {
-                        chunkSize: chunk.length,
-                        messagePreview: message.substring(0, 200),
-                        messageLength: message.length
-                    });
+                    // Skip logging raw data - too noisy
                     
                     // SSE messages are separated by double newlines
                     const events = message.split("\n\n");
@@ -193,35 +211,25 @@ this.on('error', (error) => {
                         
                         if (eventData) {
                             try {
-                                const parsedEvent: WolfEvent = JSON.parse(eventData);
+                                const parsedEvent: WolfEvent = this.parseJsonWithBigIntSupport(eventData);
                                 
                                 // Add the event type if it wasn't in the JSON data
                                 if (eventType && !parsedEvent.type) {
                                     (parsedEvent as any).type = eventType;
                                 }
                                 
-                                logger.info(LogComponent.WOLF_EVENTS, "Parsed Wolf SSE event", { 
-                                    eventType: eventType || parsedEvent.type, 
-                                    eventData: parsedEvent,
-                                    rawData: eventData.substring(0, 200),
-                                    rawEvent: event.substring(0, 100)
+                                logger.debug(LogComponent.WOLF_EVENTS, "Parsed Wolf SSE event", { 
+                                    eventType: eventType || parsedEvent.type
                                 });
                                 
                                 this.processEvent(parsedEvent);
                                 // Reset reconnect attempts on successful data
                                 this.reconnectAttempts = 0;
                             } catch (error) {
-                                logger.error(LogComponent.WOLF_EVENTS, "Failed to parse SSE event JSON", error, {
-                                    eventType,
-                                    data: eventData.substring(0, 100),
-                                    rawEvent: event.substring(0, 100)
-                                });
+                                logger.error(LogComponent.WOLF_EVENTS, "Failed to parse SSE event JSON", error);
                             }
                         } else {
-                            logger.debug(LogComponent.WOLF_EVENTS, "Skipping SSE event without data", {
-                                eventType,
-                                rawEvent: event.substring(0, 100)
-                            });
+                            // Skip empty events silently
                         }
                     }
                 } catch (error) {
@@ -297,6 +305,54 @@ this.on('error', (error) => {
         }
     }
 
+    /**
+     * Parse JSON treating all large integers as strings to prevent precision loss
+     */
+    private parseJsonWithBigIntSupport(jsonString: string): any {
+        // Replace any large integer values (13+ digits) with quoted strings to prevent precision loss
+        // This handles session_id, client_id, and any other large integer fields from Wolf
+        const processedJson = jsonString.replace(
+            /"(session_id|client_id|app_id)"\s*:\s*(\d{13,})/g, 
+            (_, fieldName, value) => {
+                return `"${fieldName}":"${value}"`;
+            }
+        );
+        
+        return JSON.parse(processedJson);
+    }
+
+    /**
+     * Converts ID values to string (should already be strings from JSON parsing)
+     */
+    private safeBigIntToString(value: string | number | bigint): string {
+        if (typeof value === 'string') {
+            return value;
+        }
+        
+        // This should rarely happen now that we preprocess JSON
+        logger.warn(LogComponent.WOLF_EVENTS, "Unexpected non-string ID value", {
+            value,
+            type: typeof value
+        });
+        
+        return String(value);
+    }
+
+    /**
+     * Find client ID by IP address from active sessions
+     */
+    private findClientIdByIP(clientIP: string): string | null {
+        for (const [clientId, state] of this.clientStates) {
+            if (state.session) {
+                // Check any session type that has client_ip
+                if ((state.session as any).client_ip === clientIP) {
+                    return clientId;
+                }
+            }
+        }
+        return null;
+    }
+
     private async processEvent(event: WolfEvent) {
         try {
             // Ensure the event has a type field
@@ -306,7 +362,10 @@ this.on('error', (error) => {
                 return;
             }
             
-            logger.info(LogComponent.WOLF_EVENTS, `Processing event: ${eventType}`, { event });
+            // Only log important events, not high-frequency ones
+        if (!eventType.includes('RTPVideoPingEvent') && !eventType.includes('RTPAudioPingEvent')) {
+            logger.debug(LogComponent.WOLF_EVENTS, `Processing event: ${eventType}`);
+        }
             
             await this.processEventByType(eventType, event);
         } catch (error) {
@@ -328,14 +387,20 @@ this.on('error', (error) => {
                     logger.warn(LogComponent.WOLF_EVENTS, "PauseStreamEvent missing session_id", { event: pauseEvent });
                     break;
                 }
-                const pauseClientId = String(pauseEvent.session_id);
+                const pauseClientId = this.safeBigIntToString(pauseEvent.session_id);
+                
+                // Update database first to ensure consistency
+                await this.updateClientLastSeen(pauseClientId);
+                
+                // Then update memory state
                 this.clientStates.set(pauseClientId, {
                     ...this.clientStates.get(pauseClientId),
-                    status: "PAUSED",
+                    status: "Paused",
                     lastSeen: new Date(),
                 });
-                await this.updateClientLastSeen(pauseClientId);
-                this.emit("CLIENT_UPDATE", { clientId: pauseClientId, status: "PAUSED" });
+                
+                // Finally emit the event
+                this.emit("CLIENT_UPDATE", { clientId: pauseClientId, status: "Paused" });
                 break;
             }
             case "wolf::core::events::StopStreamEvent": {
@@ -344,14 +409,24 @@ this.on('error', (error) => {
                     logger.warn(LogComponent.WOLF_EVENTS, "StopStreamEvent missing session_id", { event: stopEvent });
                     break;
                 }
-                const stopClientId = String(stopEvent.session_id);
+                const stopClientId = this.safeBigIntToString(stopEvent.session_id);
+                
+                logger.info(LogComponent.WOLF_EVENTS, "Client going offline", {
+                    clientId: stopClientId
+                });
+                
+                // Update database first to ensure consistency
+                await this.updateClientLastSeen(stopClientId);
+                
+                // Then update memory state
                 this.clientStates.set(stopClientId, {
-                    status: "OFFLINE",
+                    status: "Offline",
                     session: undefined,
                     lastSeen: new Date(),
                 });
-                await this.updateClientLastSeen(stopClientId);
-                this.emit("CLIENT_UPDATE", { clientId: stopClientId, status: "OFFLINE" });
+                
+                // Emit offline status update
+                this.emit("CLIENT_UPDATE", { clientId: stopClientId, status: "Offline" });
                 break;
             }
             case "wolf::core::events::StreamSession": {
@@ -360,8 +435,19 @@ this.on('error', (error) => {
                     logger.warn(LogComponent.WOLF_EVENTS, "StreamSession missing client_id", { event: streamEvent });
                     break;
                 }
-                this.clientStates.set(streamEvent.client_id, { status: "STREAMING", session: streamEvent });
-                this.emit("SESSION_UPDATE", streamEvent);
+                // Store session for both client_id tracking and IP mapping
+                this.clientStates.set(streamEvent.client_id, { status: "Online", session: streamEvent });
+                
+                logger.info(LogComponent.WOLF_EVENTS, "Client session established", {
+                    client_id: streamEvent.client_id,
+                    client_ip: streamEvent.client_ip,
+                    app_id: streamEvent.app_id
+                });
+                
+                // Emit both SESSION_UPDATE and CLIENT_UPDATE for real-time status updates
+                this.emit("SESSION_UPDATE", { ...streamEvent, clientId: streamEvent.client_id });
+                this.emit("CLIENT_UPDATE", { clientId: streamEvent.client_id, status: "Online" });
+                await this.updateClientLastSeen(streamEvent.client_id);
                 break;
             }
             case "wolf::core::events::VideoSession":
@@ -371,9 +457,27 @@ this.on('error', (error) => {
                     logger.warn(LogComponent.WOLF_EVENTS, `${eventType} missing session_id`, { event: sessionEvent });
                     break;
                 }
-                const sessionClientId = String(sessionEvent.session_id);
-                this.clientStates.set(sessionClientId, { status: "STREAMING", session: sessionEvent });
-                this.emit("SESSION_UPDATE", sessionEvent);
+                // Use BigInt for precision, then convert to string for consistency
+                const sessionClientId = this.safeBigIntToString(sessionEvent.session_id);
+                
+                // Update existing client state or create new one, preserving IP mapping
+                const existingState = this.clientStates.get(sessionClientId);
+                this.clientStates.set(sessionClientId, {
+                    ...existingState,
+                    status: "Online",
+                    session: sessionEvent
+                });
+                
+                logger.debug(LogComponent.WOLF_EVENTS, `${eventType} updated for client`, {
+                    session_id: sessionEvent.session_id,
+                    client_ip: (sessionEvent as any).client_ip,
+                    client_id: sessionClientId
+                });
+                
+                // Emit both SESSION_UPDATE and CLIENT_UPDATE for real-time status updates
+                this.emit("SESSION_UPDATE", { ...sessionEvent, clientId: sessionClientId });
+                this.emit("CLIENT_UPDATE", { clientId: sessionClientId, status: "Online" });
+                await this.updateClientLastSeen(sessionClientId);
                 break;
             }
             case "wolf::core::events::ResumeStreamEvent": {
@@ -382,14 +486,20 @@ this.on('error', (error) => {
                     logger.warn(LogComponent.WOLF_EVENTS, "ResumeStreamEvent missing session_id", { event: resumeEvent });
                     break;
                 }
-                const resumeClientId = String(resumeEvent.session_id);
+                const resumeClientId = this.safeBigIntToString(resumeEvent.session_id);
+                
+                // Update database first to ensure consistency
+                await this.updateClientLastSeen(resumeClientId);
+                
+                // Then update memory state
                 this.clientStates.set(resumeClientId, {
                     ...this.clientStates.get(resumeClientId),
-                    status: "STREAMING",
+                    status: "Online",
                     lastSeen: new Date(),
                 });
-                await this.updateClientLastSeen(resumeClientId);
-                this.emit("CLIENT_UPDATE", { clientId: resumeClientId, status: "STREAMING" });
+                
+                // Finally emit the event
+                this.emit("CLIENT_UPDATE", { clientId: resumeClientId, status: "Online" });
                 break;
             }
             case "wolf::core::events::PairSignal": {
@@ -473,39 +583,59 @@ this.on('error', (error) => {
             }
             case "wolf::core::events::RTPVideoPingEvent": {
                 const videoPingEvent = event as RTPVideoPingEvent;
-                if (videoPingEvent.session_id == null) {
-                    logger.warn(LogComponent.WOLF_EVENTS, "RTPVideoPingEvent missing session_id", { event: videoPingEvent });
+                
+                // RTP ping events often don't have session_id, try to find active client by IP
+                let videoPingClientId: string | null = null;
+                
+                if (videoPingEvent.session_id != null) {
+                    videoPingClientId = this.safeBigIntToString(videoPingEvent.session_id);
+                } else if (videoPingEvent.client_ip) {
+                    // Find active session by client IP
+                    videoPingClientId = this.findClientIdByIP(videoPingEvent.client_ip);
+                }
+                
+                if (!videoPingClientId) {
+                    // Skip logging for missing ping events - too noisy
                     break;
                 }
-                const videoPingClientId = String(videoPingEvent.session_id);
-                logger.debug(LogComponent.WOLF_EVENTS, "RTP video ping received", {
-                    session_id: videoPingEvent.session_id,
-                    ping_payload_length: videoPingEvent.ping_payload?.length || 0
-                });
+                
+                // Update client last seen for ping activity (no logging)
+                await this.updateClientLastSeen(videoPingClientId);
+                
                 this.emit("RTP_PING", {
                     clientId: videoPingClientId,
                     type: "video",
                     session_id: videoPingEvent.session_id,
-                    ping_payload: videoPingEvent.ping_payload
+                    ping_payload: videoPingEvent.ping_payload || videoPingEvent.payload
                 });
                 break;
             }
             case "wolf::core::events::RTPAudioPingEvent": {
                 const audioPingEvent = event as RTPAudioPingEvent;
-                if (audioPingEvent.session_id == null) {
-                    logger.warn(LogComponent.WOLF_EVENTS, "RTPAudioPingEvent missing session_id", { event: audioPingEvent });
+                
+                // RTP ping events often don't have session_id, try to find active client by IP
+                let audioPingClientId: string | null = null;
+                
+                if (audioPingEvent.session_id != null) {
+                    audioPingClientId = this.safeBigIntToString(audioPingEvent.session_id);
+                } else if (audioPingEvent.client_ip) {
+                    // Find active session by client IP
+                    audioPingClientId = this.findClientIdByIP(audioPingEvent.client_ip);
+                }
+                
+                if (!audioPingClientId) {
+                    // Skip logging for missing ping events - too noisy
                     break;
                 }
-                const audioPingClientId = String(audioPingEvent.session_id);
-                logger.debug(LogComponent.WOLF_EVENTS, "RTP audio ping received", {
-                    session_id: audioPingEvent.session_id,
-                    ping_payload_length: audioPingEvent.ping_payload?.length || 0
-                });
+                
+                // Update client last seen for ping activity (no logging)
+                await this.updateClientLastSeen(audioPingClientId);
+                
                 this.emit("RTP_PING", {
                     clientId: audioPingClientId,
                     type: "audio",
                     session_id: audioPingEvent.session_id,
-                    ping_payload: audioPingEvent.ping_payload
+                    ping_payload: audioPingEvent.ping_payload || audioPingEvent.payload
                 });
                 break;
             }
@@ -557,15 +687,44 @@ this.on('error', (error) => {
         }
     }
 
+    // Batched database updates to improve performance
+    private pendingDbUpdates = new Map<string, NodeJS.Timeout>();
+    private readonly DB_UPDATE_BATCH_DELAY = 100; // Batch updates within 100ms
+    
     private async updateClientLastSeen(clientId: string) {
+        // Clear any existing pending update for this client
+        const existingTimeout = this.pendingDbUpdates.get(clientId);
+        if (existingTimeout) {
+            clearTimeout(existingTimeout);
+        }
+        
+        // Batch database updates to reduce load
+        const timeout = setTimeout(async () => {
+            this.pendingDbUpdates.delete(clientId);
+            await this.performDatabaseUpdate(clientId);
+        }, this.DB_UPDATE_BATCH_DELAY);
+        
+        this.pendingDbUpdates.set(clientId, timeout);
+    }
+    
+    private async performDatabaseUpdate(clientId: string) {
         try {
             const db = await getDatabase();
+            const timestamp = new Date().toISOString();
+            
             await (db as any).update(clientDevices).set({
-                lastSeen: new Date()
+                lastSeen: timestamp
             }).where(eq(clientDevices.wolfClientId, clientId));
-            logger.info(LogComponent.WOLF_EVENTS, `Updated lastSeen for client: ${clientId}`);
+            
+            logger.debug(LogComponent.WOLF_EVENTS, "Database update completed", {
+                clientId,
+                timestamp
+            });
+            
         } catch (error) {
-            logger.error(LogComponent.WOLF_EVENTS, `Failed to update lastSeen for client: ${clientId}`, error);
+            logger.error(LogComponent.WOLF_EVENTS, "Database update failed", error, {
+                clientId
+            });
         }
     }
 
@@ -613,26 +772,35 @@ this.on('error', (error) => {
             this.cleanupStaleClientStates();
         }, this.CLEANUP_INTERVAL);
 
-        logger.info(LogComponent.WOLF_EVENTS, "Started periodic cleanup of client states", {
-            interval: this.CLEANUP_INTERVAL,
-            maxStates: this.MAX_CLIENT_STATES,
-            ttl: this.CLIENT_STATE_TTL
-        });
+        logger.debug(LogComponent.WOLF_EVENTS, "Started periodic cleanup of client states");
     }
 
     /**
      * Clean up stale client states to prevent memory growth
+     * Excludes active sessions from cleanup
      */
     private cleanupStaleClientStates(): void {
         const now = Date.now();
         let removedCount = 0;
         const statesToRemove: string[] = [];
 
-        // Find stale entries
+        // Find stale entries, excluding active sessions
         for (const [clientId, state] of this.clientStates.entries()) {
             if (state.lastSeen) {
                 const age = now - state.lastSeen.getTime();
-                if (age > this.CLIENT_STATE_TTL) {
+                const isActiveSession = state.status === "Online" || state.status === "Paused";
+                const ttlToUse = isActiveSession ? this.ACTIVE_SESSION_TTL : this.CLIENT_STATE_TTL;
+                
+                // Only remove if older than appropriate TTL
+                if (age > ttlToUse) {
+                    // Extra protection: don't remove if status is active and within grace period
+                    if (!(isActiveSession && age < this.CLIENT_STATE_TTL)) {
+                        statesToRemove.push(clientId);
+                    }
+                }
+            } else {
+                // Remove entries without lastSeen that are not active
+                if (state.status !== "Online" && state.status !== "Paused") {
                     statesToRemove.push(clientId);
                 }
             }
@@ -644,23 +812,27 @@ this.on('error', (error) => {
             removedCount++;
         }
 
-        // If still over limit, remove oldest entries
-        // If still over limit, remove oldest entries
-        while (this.clientStates.size > this.MAX_CLIENT_STATES) {
-            const oldestClientId = this.clientStates.keys().next().value;
-            if (oldestClientId) {
-                this.clientStates.delete(oldestClientId);
-                removedCount++;
-            } else {
-                // Should not happen, but as a safeguard
-                break;
-            }
+        // If still over limit, remove oldest inactive entries only
+        const inactiveEntries = Array.from(this.clientStates.entries())
+            .filter(([_, state]) => state.status !== "Online" && state.status !== "Paused")
+            .sort((a, b) => {
+                const aTime = a[1].lastSeen?.getTime() || 0;
+                const bTime = b[1].lastSeen?.getTime() || 0;
+                return aTime - bTime; // Oldest first
+            });
+
+        let toRemoveCount = Math.max(0, this.clientStates.size - this.MAX_CLIENT_STATES);
+        for (let i = 0; i < Math.min(toRemoveCount, inactiveEntries.length); i++) {
+            const [clientId] = inactiveEntries[i];
+            this.clientStates.delete(clientId);
+            removedCount++;
         }
 
         if (removedCount > 0) {
             logger.info(LogComponent.WOLF_EVENTS, "Cleaned up stale client states", {
                 removedCount,
-                remainingCount: this.clientStates.size
+                remainingCount: this.clientStates.size,
+                activeSessionsProtected: true
             });
         }
     }
@@ -673,6 +845,16 @@ this.on('error', (error) => {
             clearInterval(this.cleanupTimer);
             this.cleanupTimer = null;
         }
+        if (this.sessionValidationTimer) {
+            clearInterval(this.sessionValidationTimer);
+            this.sessionValidationTimer = null;
+        }
+        // Clear pending database updates
+        for (const timeout of this.pendingDbUpdates.values()) {
+            clearTimeout(timeout);
+        }
+        this.pendingDbUpdates.clear();
+        
         this.clientStates.clear();
         this.pendingPairRequests = [];
         this.removeAllListeners();
