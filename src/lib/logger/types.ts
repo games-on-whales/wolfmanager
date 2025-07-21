@@ -16,6 +16,7 @@ export const LogComponent = {
   WOLF_SERVER: "wolf-server",
   CONTAINER: "container",
   PAIRING: "pairing",
+  CLIENT: "client",
   AUTH: "auth",
   SYSTEM: "system",
   STEAM: "steam",

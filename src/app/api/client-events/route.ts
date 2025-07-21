@@ -13,7 +13,14 @@ const clientDevices = databaseConfig.type === 'sqlite' ? clientDevicesSqlite : d
 async function getUserClientIds(userId: string): Promise<string[]> {
     const db = await getDatabase();
     const userClients = await (db as any).select({ wolfClientId: clientDevices.wolfClientId }).from(clientDevices).where(eq(clientDevices.userId, userId));
-    return userClients.map((c: { wolfClientId: string }) => c.wolfClientId);
+    const clientIds = userClients.map((c: { wolfClientId: string }) => c.wolfClientId);
+    
+    logger.debug(LogComponent.API, "Retrieved user client IDs", {
+        userId,
+        clientCount: clientIds.length
+    });
+    
+    return clientIds;
 }
 
 export async function GET(request: NextRequest) {
@@ -24,8 +31,8 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = session.user.id;
-    const userClientIds = await getUserClientIds(userId);
-
+    // FIXED: Remove cached userClientIds - fetch fresh for each event to prevent cross-client contamination
+    
     const stream = new ReadableStream({
         async start(controller) {
             const wolfEventService = WolfEventService.getInstance();
@@ -34,13 +41,10 @@ export async function GET(request: NextRequest) {
                 wolfEventServiceInitialized: wolfEventService.getIsInitialized()
             });
 
-            const sendEvent = (eventName: string, data: any) => {
-                logger.debug(LogComponent.API, `Attempting to send SSE event: ${eventName}`, {
-                    userId,
-                    eventName,
-                    dataKeys: data ? Object.keys(data) : [],
-                    hasClientId: data && 'clientId' in data
-                });
+            const sendEvent = async (eventName: string, data: any) => {
+                // Get fresh user client IDs for each event to prevent stale data issues
+                const userClientIds = await getUserClientIds(userId);
+                
                 // Enhanced security: strict validation of clientId
                 if (!data || typeof data !== 'object') {
                     logger.warn(LogComponent.API, "Invalid event data received", { eventName, dataType: typeof data });
@@ -58,11 +62,12 @@ export async function GET(request: NextRequest) {
                         return;
                     }
                     
-                    if (!userClientIds.includes(data.clientId)) {
-                        logger.debug(LogComponent.API, "Filtering out event for unauthorized client", {
+                    const isClientAuthorized = userClientIds.includes(data.clientId);
+                    
+                    if (!isClientAuthorized) {
+                        logger.debug(LogComponent.API, "Filtering unauthorized client event", {
                             eventName,
-                            clientId: data.clientId,
-                            userId
+                            clientId: data.clientId
                         });
                         return;
                     }
@@ -79,13 +84,19 @@ export async function GET(request: NextRequest) {
                     return;
                 }
 
+                logger.debug(LogComponent.API, "Sending SSE event", {
+                    eventName,
+                    clientId: data.clientId || 'N/A',
+                    status: data.status || 'N/A'
+                });
+
                 controller.enqueue(`event: ${eventName}\n`);
                 controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
             };
 
-            const clientUpdateListener = (data: any) => sendEvent("CLIENT_UPDATE", data);
-            const sessionUpdateListener = (data: any) => sendEvent("SESSION_UPDATE", data);
-            const pairRequestListener = (data: any) => sendEvent("PAIR_REQUEST_UPDATE", data);
+            const clientUpdateListener = async (data: any) => await sendEvent("CLIENT_UPDATE", data);
+            const sessionUpdateListener = async (data: any) => await sendEvent("SESSION_UPDATE", data);
+            const pairRequestListener = async (data: any) => await sendEvent("PAIR_REQUEST_UPDATE", data);
 
             // Register event listeners
             logger.debug(LogComponent.API, `Registering SSE event listeners for user: ${userId}`);
@@ -93,11 +104,7 @@ export async function GET(request: NextRequest) {
             wolfEventService.on("SESSION_UPDATE", sessionUpdateListener);
             wolfEventService.on("PAIR_REQUEST_UPDATE", pairRequestListener);
             
-            logger.debug(LogComponent.API, `Event listeners registered, current listener count:`, {
-                CLIENT_UPDATE: wolfEventService.listenerCount("CLIENT_UPDATE"),
-                SESSION_UPDATE: wolfEventService.listenerCount("SESSION_UPDATE"),
-                PAIR_REQUEST_UPDATE: wolfEventService.listenerCount("PAIR_REQUEST_UPDATE")
-            });
+            logger.debug(LogComponent.API, "Event listeners registered");
 
             // Keep-alive interval
             const keepAliveInterval = setInterval(() => {
