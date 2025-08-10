@@ -56,6 +56,7 @@ tests/**/*.log
 .cursor/mcp.json
 .roomodes
 .roo/*
+.claude/*
 
 # Comment out or remove if default.toml should be tracked
 # !config/default.toml

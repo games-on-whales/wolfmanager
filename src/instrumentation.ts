@@ -12,6 +12,24 @@
 export async function register() {
   // Only run on server side
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Suppress harmless NextAuth JWT errors during startup when no valid tokens exist
+    const originalConsoleError = console.error;
+    console.error = (...args: any[]) => {
+      const errorMessage = args.join(' ');
+      // Suppress expected NextAuth JWT validation errors during startup/unauthenticated access
+      if (
+        errorMessage.includes('[next-auth][error][JWT_SESSION_ERROR]') ||
+        (errorMessage.includes('JWT invalid') && errorMessage.includes('next-auth')) ||
+        // Suppress server action fetch failures during session transitions
+        (errorMessage.includes('failed to forward action response') && errorMessage.includes('TypeError: fetch failed'))
+      ) {
+        // These are expected during startup/session transitions - don't log them
+        return;
+      }
+      // Allow all other console.error calls to proceed normally
+      originalConsoleError.apply(console, args);
+    };
+    
     console.log("[INSTRUMENTATION] DIAGNOSIS: register() called at", new Date().toISOString());
     console.log("[INSTRUMENTATION] DIAGNOSIS: Environment before ensureSecureKeys", {
       hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,

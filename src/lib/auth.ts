@@ -319,11 +319,9 @@ export const authOptions: AuthOptions = {
     },
     async redirect({ url, baseUrl }: any) {
       try {
-        logger.info(LogComponent.AUTH, "Redirect callback triggered", {
+        logger.debug(LogComponent.AUTH, "Redirect callback triggered", {
           url,
-          baseUrl,
-          urlType: typeof url,
-          baseUrlType: typeof baseUrl,
+          baseUrl
         });
         
         // For first-time setup flow, we'll rely on the signIn callback to set the correct callback URL
@@ -364,7 +362,7 @@ export const authOptions: AuthOptions = {
   },
   // Add JWT configuration to handle decryption errors gracefully
   jwt: {
-    // Custom encode/decode to handle secret changes
+    // Custom encode/decode to handle secret changes and suppress NextAuth error logging
     async encode({ token, secret, maxAge }) {
       try {
         const { encode } = await import("next-auth/jwt");
@@ -377,7 +375,45 @@ export const authOptions: AuthOptions = {
     async decode({ token, secret }) {
       try {
         const { decode } = await import("next-auth/jwt");
-        return await decode({ token, secret });
+        
+        // Temporarily suppress NextAuth.js console errors during decode
+        const originalConsoleError = console.error;
+        let suppressedError: any = null;
+        
+        console.error = (...args: any[]) => {
+          // Check if this is a NextAuth JWT error we want to suppress
+          const errorMessage = args.join(' ');
+          if (
+            errorMessage.includes('[next-auth][error][JWT_SESSION_ERROR]') ||
+            errorMessage.includes('JWT invalid') ||
+            errorMessage.includes('JWTDecryptionFailed') ||
+            errorMessage.includes('JWTExpired')
+          ) {
+            // Store the error for our own logging but don't output to console
+            suppressedError = args;
+            return;
+          }
+          // Allow other console.error calls to proceed normally
+          originalConsoleError.apply(console, args);
+        };
+        
+        try {
+          const result = await decode({ token, secret });
+          return result;
+        } finally {
+          // Always restore original console.error
+          console.error = originalConsoleError;
+          
+          // Log suppressed errors at debug level if they occurred
+          if (suppressedError) {
+            logger.debug(LogComponent.AUTH, "JWT decode validation failed - expected behavior", {
+              suppressedError: suppressedError.join(' '),
+              hasToken: !!token,
+              secretLength: typeof secret === 'string' ? secret.length : 0,
+              reason: "Invalid/expired token during unauthenticated access"
+            });
+          }
+        }
       } catch (error) {
         // This is expected during configuration transitions (secure vs insecure cookies)
         // or after secret changes during fresh deployments

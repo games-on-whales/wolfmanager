@@ -14,6 +14,7 @@ import { ClientDevice } from "@/types/client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState, useTransition, useRef } from "react";
+import { flushSync } from "react-dom"; // FIXED: Import flushSync to prevent React batching delays
 import { toast as sonnerToast } from "sonner";
 import PairedClientsCard from "./PairedClientsCard";
 import PairingForm from "./PairingForm";
@@ -84,6 +85,69 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
     // Do NOT redirect if status is "loading"
   }, [status, session, router]);
 
+  // --- Logic for fetching sessions and initial status ---
+  const fetchSessionsAndUpdateStatus = async () => {
+    try {
+      clientLogger.info(
+        LogComponent.CLIENT,
+        "Fetching Wolf sessions for initial status"
+      );
+
+      // Fetch active sessions from Wolf API
+      const response = await fetch("/api/wolf/sessions", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sessions API error: ${response.status}`);
+      }
+
+      const sessionsData = await response.json();
+      const activeSessions = sessionsData.sessions || [];
+
+      clientLogger.debug(
+        LogComponent.CLIENT,
+        "Received Wolf sessions data",
+        { activeSessionsCount: activeSessions.length, activeSessions }
+      );
+
+      // Extract active client IDs from sessions
+      const activeClientIds = new Set(
+        activeSessions.map((session: any) => session.client_id).filter(Boolean)
+      );
+
+      // Update paired clients with Online/Offline status based on active sessions
+      setPairedClients((prev: ClientWithOwner[]) =>
+        prev.map((client: ClientWithOwner) => {
+          const isOnline = activeClientIds.has(client.wolf_client_id);
+          return {
+            ...client,
+            status: isOnline ? "Online" : "Offline",
+          };
+        })
+      );
+
+      clientLogger.info(
+        LogComponent.CLIENT,
+        "Updated client status based on active sessions",
+        {
+          totalClients: pairedClients.length,
+          activeClientIds: Array.from(activeClientIds)
+        }
+      );
+
+    } catch (error) {
+      clientLogger.error(
+        LogComponent.CLIENT,
+        "Failed to fetch Wolf sessions for initial status",
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  };
+
   // --- Logic for fetching and refreshing data ---
   const fetchRequests = async (isBackgroundRefresh = false) => {
     try {
@@ -136,7 +200,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           friendly_name: client.friendly_name || client.friendlyName,
           device_type: client.device_type || 'Unknown',
           last_seen: client.last_seen || client.lastSeen,
-          status: client.status || 'Unknown',
+          status: client.status || 'Offline', // Default to Offline instead of Unknown
           owner: client.owner || 'Current User',
           pair_secret: client.pair_secret || client.pairSecret,
           settings: client.settings,
@@ -147,7 +211,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           ? pairedClientsResponse.error
           : pairedClientsResponse.error || "Failed to fetch paired clients";
         clientLogger.warn(
-          LogComponent.PAIRING,
+          LogComponent.CLIENT,
           "Failed to fetch paired clients during background refresh",
           { error: errorMessage }
         );
@@ -157,10 +221,15 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           setErrorPairedClients("Failed to load paired clients");
         }
       }
+// Update state with either new data or preserved existing data
+setRequests(mappedRequests);
+setPairedClients(pairedClientsData);
 
-      // Update state with either new data or preserved existing data
-      setRequests(mappedRequests);
-      setPairedClients(pairedClientsData);
+// Fetch sessions to set initial Online/Offline status (only on initial load)
+if (!isBackgroundRefresh) {
+  await fetchSessionsAndUpdateStatus();
+}
+
       
     } catch (error) {
       // Log the error
@@ -195,7 +264,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
   const connectSSE = () => {
     if (!session || eventSourceRef.current) {
       clientLogger.info(
-        LogComponent.PAIRING,
+        LogComponent.CLIENT,
         "SSE connection skipped",
         { 
           hasSession: !!session, 
@@ -208,7 +277,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
 
     try {
       clientLogger.info(
-        LogComponent.PAIRING,
+        LogComponent.CLIENT,
         "Establishing SSE connection for real-time updates",
         { userId: session?.user?.id }
       );
@@ -218,38 +287,50 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
 
       eventSource.onopen = () => {
         clientLogger.info(
-          LogComponent.PAIRING,
+          LogComponent.CLIENT,
           "SSE connection established successfully"
         );
         setSseConnected(true);
         setSseRetryCount(0);
       };
 
+      // Add debugging for all SSE messages
+      eventSource.onmessage = (event) => {
+        clientLogger.debug(
+          LogComponent.CLIENT,
+          "Received raw SSE message",
+          { data: event.data, type: event.type, lastEventId: event.lastEventId }
+        );
+      };
+
       eventSource.onerror = () => {
         clientLogger.error(
-          LogComponent.PAIRING,
+          LogComponent.CLIENT,
           "SSE connection error - detailed info",
           new Error(`SSE connection failed. ReadyState: ${eventSource.readyState}, URL: ${eventSource.url}`)
         );
         setSseConnected(false);
         
-        // Don't close immediately, let's see the readyState
-        if (eventSource.readyState === EventSource.CLOSED) {
-          clientLogger.info(LogComponent.PAIRING, "EventSource is closed");
-        } else if (eventSource.readyState === EventSource.CONNECTING) {
-          clientLogger.info(LogComponent.PAIRING, "EventSource is still connecting, might be authentication issue");
+        // Immediate reconnection for authentication issues, delayed for other errors
+        const isAuthError = eventSource.readyState === EventSource.CONNECTING;
+        let retryDelay = 1000; // Start with 1 second base delay
+        
+        if (isAuthError) {
+          clientLogger.info(LogComponent.CLIENT, "Authentication issue detected, immediate reconnection");
+          retryDelay = 100; // Almost immediate retry for auth issues
+        } else {
+          // Reduced exponential backoff - max 10 seconds instead of 30
+          retryDelay = Math.min(1000 * Math.pow(1.5, sseRetryCount), 10000);
+          clientLogger.info(LogComponent.CLIENT, "Connection error, using backoff strategy");
         }
         
         eventSource.close();
         eventSourceRef.current = null;
-
-        // Exponential backoff retry
-        const retryDelay = Math.min(1000 * Math.pow(2, sseRetryCount), 30000);
         setSseRetryCount((prev) => prev + 1);
 
         clientLogger.info(
-          LogComponent.PAIRING,
-          `Retrying SSE connection in ${retryDelay}ms (attempt ${sseRetryCount + 1})`
+          LogComponent.CLIENT,
+          `Retrying SSE connection in ${retryDelay}ms (attempt ${sseRetryCount + 1}, auth_error: ${isAuthError})`
         );
 
         reconnectTimeoutRef.current = setTimeout(() => {
@@ -261,27 +342,89 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
       eventSource.addEventListener("CLIENT_UPDATE", (event) => {
         try {
           const data = JSON.parse(event.data);
+          
+          // DEBUGGING: Enhanced CLIENT_UPDATE event logging
           clientLogger.debug(
-            LogComponent.PAIRING,
-            "Received CLIENT_UPDATE event",
-            data
+            LogComponent.CLIENT,
+            "CLIENT_UPDATE Event Received",
+            {
+              clientId: data.clientId,
+              status: data.status
+            }
           );
 
-          setPairedClients((prev: ClientWithOwner[]) =>
-            prev.map((client: ClientWithOwner) => {
-              if (client.wolf_client_id === data.clientId) {
-                return {
-                  ...client,
-                  status: data.status,
-                  last_seen: new Date().toISOString(),
-                };
+          // FIXED: Use flushSync to prevent React batching delays and force immediate UI updates
+          flushSync(() => {
+            setPairedClients((prev: ClientWithOwner[]) => {
+              
+              const updated = prev.map((client: ClientWithOwner) => {
+                // DEBUGGING: Log each client comparison
+                const isMatch = client.wolf_client_id === data.clientId;
+                clientLogger.debug(
+                  LogComponent.CLIENT,
+                  `🔍 DEBUG: Client ID Comparison`,
+                  {
+                    clientWolfId: client.wolf_client_id,
+                    clientWolfIdType: typeof client.wolf_client_id,
+                    eventClientId: data.clientId,
+                    eventClientIdType: typeof data.clientId,
+                    isMatch,
+                    strictEquals: client.wolf_client_id === data.clientId,
+                    friendlyName: client.friendly_name
+                  }
+                );
+                
+                if (isMatch) {
+                  const updatedClient = {
+                    ...client,
+                    status: data.status,
+                    last_seen: new Date().toISOString(),
+                  };
+                  
+                  // Only log when status actually changes
+                  if (client.status !== data.status) {
+                    clientLogger.info(
+                      LogComponent.CLIENT,
+                      "Updated client status via SSE",
+                      {
+                        clientId: data.clientId,
+                        friendlyName: client.friendly_name,
+                        oldStatus: client.status,
+                        newStatus: data.status
+                      }
+                    );
+                  }
+                  return updatedClient;
+                }
+                return client;
+              });
+              
+              // Log summary of changes
+              const changedClients = updated.filter((client, index) =>
+                client.status !== prev[index].status
+              );
+              
+              if (changedClients.length > 0) {
+                clientLogger.debug(
+                  LogComponent.CLIENT,
+                  "CLIENT_UPDATE Processing Complete",
+                  {
+                    changedClients: changedClients.length,
+                    changes: changedClients.map(c => ({
+                      name: c.friendly_name,
+                      status: c.status
+                    }))
+                  }
+                );
               }
-              return client;
-            })
-          );
+              
+              // Force re-render by creating new array reference
+              return [...updated];
+            });
+          });
         } catch (error) {
           clientLogger.error(
-            LogComponent.PAIRING,
+            LogComponent.CLIENT,
             "Failed to process CLIENT_UPDATE event",
             error instanceof Error ? error : new Error(String(error))
           );
@@ -292,26 +435,41 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
       eventSource.addEventListener("SESSION_UPDATE", (event) => {
         try {
           const data = JSON.parse(event.data);
-          clientLogger.debug(
-            LogComponent.PAIRING,
-            "Received SESSION_UPDATE event",
+          clientLogger.info(
+            LogComponent.CLIENT,
+            "Received SESSION_UPDATE event - processing immediately",
             data
           );
 
-          setPairedClients((prev: ClientWithOwner[]) =>
-            prev.map((client: ClientWithOwner) => {
+          setPairedClients((prev: ClientWithOwner[]) => {
+            const updated = prev.map((client: ClientWithOwner) => {
               if (client.wolf_client_id === data.clientId) {
-                return {
+                const updatedClient = {
                   ...client,
                   session: data,
+                  status: "Online", // Session update implies client is online
+                  last_seen: new Date().toISOString(),
                 };
+                clientLogger.debug(
+                  LogComponent.CLIENT,
+                  "Updated client session via SSE",
+                  {
+                    clientId: data.clientId,
+                    sessionType: data.type,
+                    updatedClient
+                  }
+                );
+                return updatedClient;
               }
               return client;
-            })
-          );
+            });
+            
+            // Force re-render by creating new array reference
+            return [...updated];
+          });
         } catch (error) {
           clientLogger.error(
-            LogComponent.PAIRING,
+            LogComponent.CLIENT,
             "Failed to process SESSION_UPDATE event",
             error instanceof Error ? error : new Error(String(error))
           );
@@ -339,17 +497,10 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
         }
       });
 
-      // Add a catch-all event listener for debugging
-      eventSource.addEventListener("message", (event) => {
-        clientLogger.debug(
-          LogComponent.PAIRING,
-          "Received generic SSE message",
-          { data: event.data, type: event.type }
-        );
-      });
+      // Generic message handler for unhandled events
     } catch (error) {
       clientLogger.error(
-        LogComponent.PAIRING,
+        LogComponent.CLIENT,
         "Failed to create SSE connection",
         error instanceof Error ? error : new Error(String(error))
       );
@@ -361,7 +512,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
   const disconnectSSE = () => {
     if (eventSourceRef.current) {
       clientLogger.info(
-        LogComponent.PAIRING,
+        LogComponent.CLIENT,
         "Closing SSE connection"
       );
       eventSourceRef.current.close();
@@ -375,14 +526,14 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
     }
   };
 
-  // Setup SSE connection when authenticated
+  // Setup SSE connection when authenticated and fetch initial sessions
   useEffect(() => {
     clientLogger.info(
-      LogComponent.PAIRING,
+      LogComponent.CLIENT,
       "SSE useEffect triggered",
-      { 
-        status, 
-        hasUserId: !!(session && 'user' in session && session.user?.id), 
+      {
+        status,
+        hasUserId: !!(session && 'user' in session && session.user?.id),
         userId: session && 'user' in session ? session.user?.id : undefined,
         hasExistingConnection: !!eventSourceRef.current,
         sessionObject: session,
@@ -394,14 +545,16 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
     
     if (status === "authenticated" && session) {
       clientLogger.info(
-        LogComponent.PAIRING,
-        "Attempting to connect SSE",
+        LogComponent.CLIENT,
+        "Attempting to connect SSE and fetch initial sessions",
         { userId: session && 'user' in session ? session.user?.id : undefined }
       );
       connectSSE();
+      // Fetch initial session state to set Online/Offline status
+      fetchSessionsAndUpdateStatus();
     } else {
       clientLogger.info(
-        LogComponent.PAIRING,
+        LogComponent.CLIENT,
         "SSE connection conditions not met",
         { status, hasSession: !!session }
       );
@@ -435,7 +588,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
           friendly_name: client.friendly_name || client.friendlyName,
           device_type: client.device_type || 'Unknown',
           last_seen: client.last_seen || client.lastSeen,
-          status: client.status || 'Unknown',
+          status: client.status || 'Offline', // Default to Offline instead of Unknown
           owner: client.owner || 'Current User',
           pair_secret: client.pair_secret || client.pairSecret,
           settings: client.settings,
@@ -444,7 +597,7 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
       }
     } catch (error) {
       clientLogger.error(
-        LogComponent.PAIRING,
+        LogComponent.CLIENT,
         "Failed to fetch paired clients",
         error instanceof Error ? error : new Error(String(error))
       );

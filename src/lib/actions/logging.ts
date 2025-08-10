@@ -19,6 +19,7 @@ const logEntrySchema = z.object({
     LogComponent.WOLF_SERVER,
     LogComponent.CONTAINER,
     LogComponent.PAIRING,
+    LogComponent.CLIENT,
     LogComponent.AUTH,
     LogComponent.SYSTEM,
     LogComponent.STEAM,

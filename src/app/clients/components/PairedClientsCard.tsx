@@ -70,6 +70,7 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
   const getStatusColor = (status?: string) => {
     switch (status?.toUpperCase()) {
       case "CONNECTED":
+      case "ONLINE":
       case "STREAMING":
         return "text-[#05ffa1] bg-[#05ffa1]";
       case "PAUSED":
@@ -85,16 +86,16 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
   const getStatusText = (status?: string) => {
     switch (status?.toUpperCase()) {
       case "CONNECTED":
-        return "Connected";
+      case "ONLINE":
       case "STREAMING":
-        return "Streaming";
+        return "Online";
       case "PAUSED":
         return "Paused";
       case "OFFLINE":
       case "DISCONNECTED":
         return "Offline";
       default:
-        return "Unknown";
+        return "Offline"; // Default to Offline instead of Unknown
     }
   };
 
@@ -108,9 +109,9 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    // For online/streaming clients, show "Active now"
-    if (status?.toUpperCase() === "CONNECTED" || status?.toUpperCase() === "STREAMING") {
-      return "Active now";
+    // For online/paused clients, show "Now"
+    if (status?.toUpperCase() === "CONNECTED" || status?.toUpperCase() === "STREAMING" || status?.toUpperCase() === "ONLINE" || status?.toUpperCase() === "PAUSED") {
+      return "Now";
     }
 
     // For recent activity
@@ -183,13 +184,6 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                     <span className={getStatusColor(client.status).split(' ')[0]}>
                       {getStatusText(client.status)}
                     </span>
-                    {client.session && (
-                      <Badge variant="secondary" className="text-xs">
-                        {client.session.type === "StreamSession" ? "Stream" :
-                         client.session.type === "VideoSession" ? "Video" :
-                         client.session.type === "AudioSession" ? "Audio" : "Active"}
-                      </Badge>
-                    )}
                   </div>
                 </TableCell>
                 <TableCell className="text-right py-3 px-4">

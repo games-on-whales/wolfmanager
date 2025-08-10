@@ -199,7 +199,7 @@ export async function getPairedClientsWithSettingsAction(): Promise<{ success: b
       };
     });
 
-    logger.info(
+    logger.debug(
       LogComponent.WOLF_UI,
       "[Action] Successfully fetched and transformed paired clients with settings",
       {
