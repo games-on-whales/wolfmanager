@@ -118,7 +118,7 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
       // Use client settings if available, otherwise use defaults
       const defaultSettings = {
         friendly_name: client.friendly_name || "",
-        app_state_folder: client.app_state_folder || "",
+        app_state_folder: client.app_state_folder || client.wolf_client_id || "",
         controllers_override: ["auto"] as Array<'auto' | 'xbox' | 'nintendo' | 'ps'>,
         mouse_acceleration: 1.0,
         h_scroll_acceleration: 1.0,
@@ -136,7 +136,7 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
         
         settingsToLoad = {
           friendly_name: client.friendly_name || "",
-          app_state_folder: client.app_state_folder || "",
+          app_state_folder: client.app_state_folder || client.wolf_client_id || "",
           controllers_override: normalizedControllers,
           mouse_acceleration: client.settings.mouse_acceleration || 1.0,
           h_scroll_acceleration: client.settings.h_scroll_acceleration || 1.0,
@@ -292,17 +292,28 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
                 name="app_state_folder"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>App State Folder</FormLabel>
+                    <div className="flex justify-between items-center">
+                      <FormLabel>App State Folder</FormLabel>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="p-0 h-auto text-xs text-blue-400 hover:text-blue-300"
+                        onClick={() => field.onChange(client.wolf_client_id)}
+                      >
+                        Reset to Default (Unique ID)
+                      </Button>
+                    </div>
                     <FormControl>
                       <Input
                         type="text"
-                        placeholder="Default (Unique per client)"
+                        placeholder="Enter a shared folder name"
                         {...field}
+                        value={field.value ?? ""}
                       />
                     </FormControl>
                     <FormMessage />
                     <p className="text-sm text-muted-foreground">
-                      Set a shared folder name to share game data across devices. Leave empty for default behavior.
+                      To share data across devices, enter a common folder name. Leave empty to share at the root.
                     </p>
                   </FormItem>
                 )}

@@ -181,6 +181,15 @@ export async function getPairedClientsWithSettingsAction(): Promise<{ success: b
         }
       }
 
+      // **KEY LOGIC**: If Wolf doesn't specify an app_state_folder, populate it with the unique wolf_client_id
+      // This makes the default behavior explicit and visible to the user
+      // - If Wolf returns undefined: Use client's unique ID as default
+      // - If Wolf returns empty string: Respect it (shared root)
+      // - If Wolf returns a custom value: Use that value
+      const appStateFolder = wolfClient?.app_state_folder !== undefined
+        ? wolfClient.app_state_folder
+        : client.wolfClientId; // Use unique ID as default
+
       return {
         id: client.id,
         wolf_client_id: client.wolfClientId,
@@ -196,7 +205,7 @@ export async function getPairedClientsWithSettingsAction(): Promise<{ success: b
         owner: 'Current User',
         // Include settings from Wolf API
         settings: settings,
-        app_state_folder: wolfClient?.app_state_folder || '',
+        app_state_folder: appStateFolder,
       };
     });
 

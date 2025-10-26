@@ -177,8 +177,22 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                 <TableCell className="text-gray-400 py-3 px-4">
                   {client.owner || "N/A"}
                 </TableCell>
-                <TableCell className="text-gray-400 py-3 px-4">
-                  {client.app_state_folder || <span className="italic">Default (Unique)</span>}
+                <TableCell className="text-gray-400 py-3 px-4 font-mono text-xs">
+                  {(() => {
+                    if (client.app_state_folder === "") {
+                      return <span className="italic text-gray-500">Root</span>;
+                    }
+                    // If the value is the same as the client ID, it's the default
+                    if (client.app_state_folder === client.wolf_client_id) {
+                      return (
+                        <span className="italic text-gray-500 truncate" title={client.app_state_folder}>
+                          {client.app_state_folder}
+                        </span>
+                      );
+                    }
+                    // If it's a custom value
+                    return <span className="font-semibold text-gray-300">{client.app_state_folder}</span>;
+                  })()}
                 </TableCell>
                 <TableCell className="text-gray-400 py-3 px-4">
                   {formatLastSeen(client.last_seen, client.status)}

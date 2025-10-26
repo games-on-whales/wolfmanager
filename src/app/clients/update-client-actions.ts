@@ -210,7 +210,8 @@ export async function updateClientSettingsAndNameAction(
         method: "POST",
         payload,
         wolfClientId,
-        originalSettings: settings
+        originalSettings: settings,
+        appStateFolder: appStateFolder
       }
     );
 
