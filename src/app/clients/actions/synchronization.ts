@@ -195,7 +195,8 @@ export async function getPairedClientsWithSettingsAction(): Promise<{ success: b
         status: wolfClient?.status || 'paired',
         owner: 'Current User',
         // Include settings from Wolf API
-        settings: settings
+        settings: settings,
+        app_state_folder: wolfClient?.app_state_folder || '',
       };
     });
 

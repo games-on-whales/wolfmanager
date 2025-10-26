@@ -40,7 +40,8 @@ async function getUsername(): Promise<string | null> {
 export async function updateClientSettingsAndNameAction(
   clientId: string,
   friendlyName: string,
-  settings: ClientSettings
+  settings: ClientSettings,
+  appStateFolder?: string
 ): Promise<ApiResponse<{}>> {
   const username = await getUsername();
   if (!username) {
@@ -187,10 +188,19 @@ export async function updateClientSettingsAndNameAction(
     const socketService = SocketService.getInstance();
     
     // Log the exact payload being sent to Wolf API
-    const payload = {
+    const payload: {
+      client_id: string | null;
+      app_state_folder?: string;
+      settings: Record<string, unknown>;
+    } = {
       client_id: wolfClientId,
       settings: wolfSettings as unknown as Record<string, unknown>
     };
+
+    // Only add app_state_folder to payload if it has been provided
+    if (appStateFolder !== undefined) {
+      payload.app_state_folder = appStateFolder;
+    }
     
     logger.debug(
       LogComponent.WOLF_UI,

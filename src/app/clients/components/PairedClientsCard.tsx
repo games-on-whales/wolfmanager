@@ -32,6 +32,7 @@ type ClientWithOwner = ClientDevice & {
   friendly_name?: string;
   settings?: import("@/types/wolf").ClientSettings;
   session?: any;
+  app_state_folder?: string;
 };
 
 interface PairedClientsCardProps {
@@ -147,6 +148,9 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
               </TableHead>
               <TableHead className="text-[#fffb96] py-3 px-4">Owner</TableHead>
               <TableHead className="text-[#fffb96] py-3 px-4">
+                App State Folder
+              </TableHead>
+              <TableHead className="text-[#fffb96] py-3 px-4">
                 Last Seen
               </TableHead>
               <TableHead className="text-[#fffb96] py-3 px-4">Status</TableHead>
@@ -172,6 +176,9 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                 </TableCell>
                 <TableCell className="text-gray-400 py-3 px-4">
                   {client.owner || "N/A"}
+                </TableCell>
+                <TableCell className="text-gray-400 py-3 px-4">
+                  {client.app_state_folder || <span className="italic">Default (Unique)</span>}
                 </TableCell>
                 <TableCell className="text-gray-400 py-3 px-4">
                   {formatLastSeen(client.last_seen, client.status)}
@@ -227,7 +234,7 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
             {pairedClients.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="h-24 text-center text-gray-400 py-3 px-4"
                 >
                   No paired clients
