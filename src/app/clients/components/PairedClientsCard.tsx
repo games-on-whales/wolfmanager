@@ -32,6 +32,7 @@ type ClientWithOwner = ClientDevice & {
   friendly_name?: string;
   settings?: import("@/types/wolf").ClientSettings;
   session?: any;
+  app_state_folder?: string;
 };
 
 interface PairedClientsCardProps {
@@ -147,6 +148,9 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
               </TableHead>
               <TableHead className="text-[#fffb96] py-3 px-4">Owner</TableHead>
               <TableHead className="text-[#fffb96] py-3 px-4">
+                App State Folder
+              </TableHead>
+              <TableHead className="text-[#fffb96] py-3 px-4">
                 Last Seen
               </TableHead>
               <TableHead className="text-[#fffb96] py-3 px-4">Status</TableHead>
@@ -172,6 +176,23 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
                 </TableCell>
                 <TableCell className="text-gray-400 py-3 px-4">
                   {client.owner || "N/A"}
+                </TableCell>
+                <TableCell className="text-gray-400 py-3 px-4 font-mono text-xs">
+                  {(() => {
+                    if (client.app_state_folder === "") {
+                      return <span className="italic text-gray-500">Root</span>;
+                    }
+                    // If the value is the same as the client ID, it's the default
+                    if (client.app_state_folder === client.wolf_client_id) {
+                      return (
+                        <span className="italic text-gray-500 truncate" title={client.app_state_folder}>
+                          {client.app_state_folder}
+                        </span>
+                      );
+                    }
+                    // If it's a custom value
+                    return <span className="font-semibold text-gray-300">{client.app_state_folder}</span>;
+                  })()}
                 </TableCell>
                 <TableCell className="text-gray-400 py-3 px-4">
                   {formatLastSeen(client.last_seen, client.status)}
@@ -227,7 +248,7 @@ const PairedClientsCard: React.FC<PairedClientsCardProps> = ({
             {pairedClients.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="h-24 text-center text-gray-400 py-3 px-4"
                 >
                   No paired clients

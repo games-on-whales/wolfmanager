@@ -46,6 +46,7 @@ type ClientWithOwner = {
   status?: string;
   wolf_client_id?: string;
   settings?: ClientSettings;
+  app_state_folder?: string;
 };
 
 interface EditClientSettingsDialogProps {
@@ -58,6 +59,7 @@ interface EditClientSettingsDialogProps {
 // Form validation schema
 const formSchema = z.object({
   friendly_name: z.string().min(1, "Client name is required").max(255, "Client name too long"),
+  app_state_folder: z.string().optional(),
   controllers_override: z.array(
     z.enum(["auto", "xbox", "nintendo", "ps"])
   ).default(["auto"]).transform((val) => val.length === 0 ? ["auto"] : val),
@@ -94,6 +96,7 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
     resolver: zodResolver(formSchema),
     defaultValues: {
       friendly_name: "",
+      app_state_folder: "",
       controllers_override: ["auto"],
       mouse_acceleration: 1.0,
       h_scroll_acceleration: 1.0,
@@ -115,6 +118,7 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
       // Use client settings if available, otherwise use defaults
       const defaultSettings = {
         friendly_name: client.friendly_name || "",
+        app_state_folder: client.app_state_folder || client.wolf_client_id || "",
         controllers_override: ["auto"] as Array<'auto' | 'xbox' | 'nintendo' | 'ps'>,
         mouse_acceleration: 1.0,
         h_scroll_acceleration: 1.0,
@@ -132,6 +136,7 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
         
         settingsToLoad = {
           friendly_name: client.friendly_name || "",
+          app_state_folder: client.app_state_folder || client.wolf_client_id || "",
           controllers_override: normalizedControllers,
           mouse_acceleration: client.settings.mouse_acceleration || 1.0,
           h_scroll_acceleration: client.settings.h_scroll_acceleration || 1.0,
@@ -171,12 +176,13 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
       try {
         await clientLogger.info(
           LogComponent.WOLF_UI,
-          "Attempting to update client settings and name",
+          "Attempting to update client settings, name, and app state folder",
           {
             clientId: client.wolf_client_id || client.id,
             databaseId: client.id,
             oldFriendlyName: client.friendly_name,
             newFriendlyName: data.friendly_name,
+            newAppStateFolder: data.app_state_folder,
             settings: data
           }
         );
@@ -193,7 +199,8 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
         const result = await updateClientSettingsAndNameAction(
           client.wolf_client_id || client.id,
           data.friendly_name,
-          settings
+          settings,
+          data.app_state_folder
         );
 
         if (!result.success) {
@@ -276,6 +283,38 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
                       />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="app_state_folder"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex justify-between items-center">
+                      <FormLabel>App State Folder</FormLabel>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="p-0 h-auto text-xs text-blue-400 hover:text-blue-300"
+                        onClick={() => field.onChange(client.wolf_client_id)}
+                      >
+                        Reset to Default (Unique ID)
+                      </Button>
+                    </div>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="Enter a shared folder name"
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                    <p className="text-sm text-muted-foreground">
+                      To share data across devices, enter a common folder name. Leave empty to share at the root.
+                    </p>
                   </FormItem>
                 )}
               />
