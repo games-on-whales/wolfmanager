@@ -19,14 +19,14 @@ The real-time client status updates feature provides instant notifications of Wo
 │   Wolf Server   │    │   WolfUI Server  │    │   Browser UI    │
 │                 │    │                  │    │                 │
 │ ┌─────────────┐ │    │ ┌──────────────┐ │    │ ┌─────────────┐ │
-│ │   Events    │─┼────┼─│WolfEventSvc  │ │    │ │EventSource  │ │
-│ │   Stream    │ │    │ │              │ │    │ │Connection   │ │
+│ │   Events    │─┼────┼─│WolfEventSvc  │ │    │ │ useWolfEvents│ │
+│ │   Stream    │ │    │ │              │ │    │ │   Hook       │ │
 │ └─────────────┘ │    │ └──────┬───────┘ │    │ └─────────────┘ │
 │                 │    │        │         │    │                 │
 │ ┌─────────────┐ │    │ ┌──────▼───────┐ │    │ ┌─────────────┐ │
 │ │ Unix Socket │─┼────┼─│ SSE Endpoint │─┼────┼─│ UI Updates  │ │
-│ │   Stream    │ │    │ │/api/client-  │ │    │ │             │ │
-│ └─────────────┘ │    │ │    events    │ │    │ └─────────────┘ │
+│ │   /events   │ │    │ │/api/events/  │ │    │ │ (state set) │ │
+│ └─────────────┘ │    │ │   stream     │ │    │ └─────────────┘ │
 └─────────────────┘    │ └──────────────┘ │    └─────────────────┘
                        │                  │
                        │ ┌──────────────┐ │
@@ -41,7 +41,7 @@ The real-time client status updates feature provides instant notifications of Wo
 
 ### WolfEventService Singleton
 
-**Location**: [`src/lib/services/wolf-event.service.ts`](../src/lib/services/wolf-event.service.ts)
+**Location**: [`wolf-event.service.ts`](../src/lib/services/wolf-event.service.ts:1)
 
 **Purpose**: Central event processing hub that connects to Wolf's SSE endpoint and manages client state
 
@@ -59,35 +59,35 @@ const wolfEventService = WolfEventService.getInstance();
 
 The service auto-initializes on first access and attempts to connect to Wolf's SSE stream immediately.
 
-### SSE API Endpoint
+### SSE API Endpoint (Relay to Browser)
 
-**Location**: [`src/app/api/client-events/route.ts`](../src/app/api/client-events/route.ts)
+**Location**: [`route.ts`](../src/app/api/events/stream/route.ts:1)
 
-**Purpose**: Secure SSE endpoint that streams client events to authenticated users
+**Purpose**: Secure SSE endpoint that streams transformed Wolf events to authenticated users
 
 **Key Features**:
-- Authentication validation using NextAuth sessions
+- Authentication validation (NextAuth session)
 - User-specific client filtering (only sends events for user's clients)
 - Proper SSE headers and keep-alive mechanism
 - Graceful connection cleanup on disconnect
 
-**Endpoint**: `GET /api/client-events`
+**Endpoint**: `GET /api/events/stream`
 
-### Frontend EventSource Integration
+### Frontend Hook Integration
 
-**Location**: [`src/app/clients/components/ClientPageContent.tsx`](../src/app/clients/components/ClientPageContent.tsx:197-333)
+**Location**: [`ClientPageContent.tsx`](../src/app/clients/components/ClientPageContent.tsx:1)
 
-**Purpose**: Browser-side SSE client with connection management and UI updates
+**Purpose**: Consumes relay events via the abstraction hook `useWolfEvents` rather than manual `EventSource` management.
 
-**Key Features**:
-- Automatic connection establishment when authenticated
-- Exponential backoff retry logic for failed connections
-- Real-time UI updates for client status changes
-- Connection status indicators
+**Key Hook Features**:
+- Automatic connection + reconnection handling
+- Status state machine: `idle | connecting | open | reconnecting | closed`
+- Single `onEvent` callback for all event types
+- Clean resource management via React lifecycle
 
 ### Database Schema Changes
 
-**Location**: [`src/lib/db/schema/clients.ts`](../src/lib/db/schema/clients.ts:16)
+**Location**: [`clients.ts`](../src/lib/db/schema/clients.ts:16)
 
 **Schema Addition**:
 ```typescript
@@ -109,7 +109,7 @@ const eventStream = await this.socketService.callWolfApiStream(null, "/events");
 ```
 
 **Connection Features**:
-- Automatic reconnection with 5-second delay on failures
+- Automatic reconnection with fixed delay (internal)
 - Proper SSE message parsing (handles `data:` prefixed messages)
 - Error handling and logging for connection issues
 - Stream processing with chunk-based message handling
@@ -121,10 +121,10 @@ The system processes several Wolf event types:
 | Event Type | Description | UI Impact |
 |------------|-------------|-----------|
 | [`PauseStreamEvent`](../src/lib/services/wolf-event.service.ts:13-16) | Client paused streaming | Status → "PAUSED", update last_seen |
-| [`StopStreamEvent`](../src/lib/services/wolf-event.service.ts:18-21) | Client stopped streaming | Status → "OFFLINE", clear session |
-| [`StreamSession`](../src/lib/services/wolf-event.service.ts:23-27) | Active streaming session | Status → "STREAMING", show session badge |
-| [`VideoSession`](../src/lib/services/wolf-event.service.ts:29-33) | Video session active | Status → "STREAMING", show "Video" badge |
-| [`AudioSession`](../src/lib/services/wolf-event.service.ts:35-39) | Audio session active | Status → "STREAMING", show "Audio" badge |
+| [`StopStreamEvent`](../src/lib/services/wolf-event.service.ts:18-21) | Client stopped streaming | Status → "Offline", clear/adjust session |
+| [`StreamSession`](../src/lib/services/wolf-event.service.ts:23-27) | Active streaming session | Status → "Online" (Streaming), show session badge |
+| [`VideoSession`](../src/lib/services/wolf-event.service.ts:29-33) | Video session active | Status → "Online", show "Video" badge |
+| [`AudioSession`](../src/lib/services/wolf-event.service.ts:35-39) | Audio session active | Status → "Online", show "Audio" badge |
 | [`PairRequest`](../src/lib/services/wolf-event.service.ts:41-43) | New client wants to pair | Add to pending requests list |
 | [`PairRequestRemoved`](../src/lib/services/wolf-event.service.ts:45-48) | Pair request canceled | Remove from pending requests |
 
@@ -145,10 +145,10 @@ The system processes several Wolf event types:
 **Server-Side Authentication**:
 - All SSE connections require valid NextAuth sessions
 - User-specific filtering ensures clients only see their own devices
-- Socket access validation through [`auth/socket-permissions`](../src/lib/auth/socket-permissions.ts)
+- Socket access validation through [`socket-permissions`](../src/lib/auth/socket-permissions.ts:1)
 
 **Client-Side Security**:
-- EventSource connections automatically include session cookies
+- SSE connections automatically include session cookies
 - Failed authentication immediately closes SSE connections
 - No sensitive data exposed in client-side event streams
 
@@ -176,12 +176,12 @@ The system processes several Wolf event types:
    - Graceful error handling for database failures
 
 5. **SSE Endpoint Broadcasting**
-   - [`/api/client-events`](../src/app/api/client-events/route.ts:33-39) listens for service events
+   - [`/api/events/stream`](../src/app/api/events/stream/route.ts:1) listens for service events
    - Filters events by user ownership
    - Sends formatted SSE messages to connected browsers
 
 6. **Frontend Event Handling**
-   - [`ClientPageContent`](../src/app/clients/components/ClientPageContent.tsx:245-323) processes incoming events
+   - [`ClientPageContent`](../src/app/clients/components/ClientPageContent.tsx:268-401) processes incoming events
    - Updates React state for immediate UI reflection
    - Handles different event types with appropriate UI changes
 
@@ -191,11 +191,13 @@ The system processes several Wolf event types:
 // Wolf SSE message format
 data: {"type":"PauseStreamEvent","clientId":"client-123"}
 
-// Processed into internal event
+// Processed into internal standardized event
 {
-  type: "CLIENT_UPDATE",
-  clientId: "client-123", 
-  status: "PAUSED"
+  event: "CLIENT_UPDATE",
+  data: {
+    clientId: "client-123",
+    status: "PAUSED"
+  }
 }
 
 // UI state update
@@ -210,65 +212,76 @@ setPairedClients(prev => prev.map(client =>
 
 ### React Component Changes
 
-**Main Component**: [`ClientPageContent.tsx`](../src/app/clients/components/ClientPageContent.tsx)
+**Main Component**: [`ClientPageContent.tsx`](../src/app/clients/components/ClientPageContent.tsx:1)
 
 Key changes include:
-- SSE connection state management ([lines 71-76](../src/app/clients/components/ClientPageContent.tsx:71-76))
-- EventSource connection setup with retry logic ([lines 197-333](../src/app/clients/components/ClientPageContent.tsx:197-333))
-- Real-time state updates for client status and sessions
+- Hook-based SSE state management ([lines 403-421](../src/app/clients/components/ClientPageContent.tsx:403-421))
+- Unified `onEvent` dispatcher ([lines 268-401](../src/app/clients/components/ClientPageContent.tsx:268-401))
+- Real-time state updates & defensive runtime type guards
+- Rich connection status badge ([lines 723-734](../src/app/clients/components/ClientPageContent.tsx:723-734))
 
-**Status Display**: [`PairedClientsCard.tsx`](../src/app/clients/components/PairedClientsCard.tsx)
+### Hook Usage Snippet
 
-Real-time status indicators:
-- Color-coded status dots ([lines 69-82](../src/app/clients/components/PairedClientsCard.tsx:69-82))
-- Session type badges ([lines 185-191](../src/app/clients/components/PairedClientsCard.tsx:185-191))
-- Smart "last seen" formatting ([lines 100-127](../src/app/clients/components/PairedClientsCard.tsx:100-127))
-
-### SSE Connection Management
-
-**Connection Lifecycle**:
 ```typescript
-// Establish connection
-const eventSource = new EventSource("/api/client-events");
+import { useWolfEvents, type WolfRelayEvent } from "@/hooks/useWolfEvents";
 
-// Handle connection states
-eventSource.onopen = () => setSseConnected(true);
-eventSource.onerror = () => {
-  setSseConnected(false);
-  // Exponential backoff retry
-  setTimeout(connectSSE, Math.min(1000 * Math.pow(2, retryCount), 30000));
+const onEvent = useCallback((evt: WolfRelayEvent) => {
+  switch (evt.event) {
+    case "CLIENT_UPDATE":
+      // ...state update (see lines 268-319)
+      break;
+    case "SESSION_UPDATE":
+      // ...session update (see lines 320-365)
+      break;
+    case "PAIR_REQUEST_UPDATE":
+      fetchRequestsRef.current(true);
+      break;
+  }
+}, []);
+
+const { status: wolfEventsStatus } = useWolfEvents({ onEvent });
+const sseConnected = wolfEventsStatus === "open";
+```
+
+### Connection Status Mapping
+
+```typescript
+const sseStatusLabelMap: Record<string,string> = {
+  open: "Live",
+  reconnecting: "Reconnecting...",
+  connecting: "Connecting...",
+  idle: "Idle",
+  closed: "Disconnected",
 };
 ```
 
-**Connection Status Indicator**:
+### Connection Badge (UI)
+
 ```jsx
-<Badge variant={sseConnected ? "default" : "secondary"}>
-  <Circle className="h-2 w-2 fill-current animate-pulse" />
-  Live
+<Badge
+  variant={sseConnected ? "default" : "secondary"}
+  className="flex items-center gap-2"
+  data-testid="sse-status"
+>
+  <div className={`w-2 h-2 rounded-full ${sseDotClass}`} />
+  Real-time: {sseStatusLabel}
 </Badge>
 ```
 
-### Error Handling and Retry Logic
+(See [`ClientPageContent.tsx`](../src/app/clients/components/ClientPageContent.tsx:723-734))
 
-**Exponential Backoff Strategy**:
-- Initial retry: 1 second
-- Maximum retry delay: 30 seconds  
-- Retry count tracking with [`sseRetryCount`](../src/app/clients/components/ClientPageContent.tsx:73) state
-- Automatic reset on successful connection
+### Reconnection Logic
 
-**Error Scenarios Handled**:
-- Network connectivity issues
-- Server restarts or downtime
-- Authentication token expiration
-- SSE endpoint unavailability
+Manual exponential backoff logic and `sseRetryCount` state have been removed. Reconnection is now handled internally by `useWolfEvents`. UI reflects transitional states (`connecting`, `reconnecting`) without manual timers.
 
 ### UI Indicators and Real-Time Updates
 
 **Status Indicators**:
-- **Green**: Connected/Streaming clients
-- **Yellow**: Paused clients  
-- **Gray**: Offline/Disconnected clients
-- **Badges**: Session type indicators (Stream/Video/Audio)
+- **Green**: Connected (`open`)
+- **Amber**: Reconnecting
+- **Blue**: Connecting
+- **Gray**: Idle / Closed
+- **Badges**: Session type indicators (Stream / Video / Audio)
 
 **Real-Time Features**:
 - Instant status changes without page refresh
@@ -281,14 +294,14 @@ eventSource.onerror = () => {
 ### Common Issues and Solutions
 
 **SSE Connection Fails**:
-- **Symptom**: "Live" indicator shows gray/disconnected
+- **Symptom**: Indicator shows Disconnected
 - **Solution**: Check browser network tab for 401/403 errors, verify authentication
-- **Debug**: Check [`LogComponent.PAIRING`](../src/app/clients/components/ClientPageContent.tsx:204) logs in browser console
+- **Debug**: Check [`LogComponent.PAIRING`](../src/app/clients/components/ClientPageContent.tsx:268) logs in browser console
 
 **Events Not Updating UI**:
 - **Symptom**: Client status doesn't change despite Wolf activity
 - **Solution**: Verify user owns the clients generating events
-- **Debug**: Check SSE endpoint logs for event filtering
+- **Debug**: Check endpoint logs for event filtering
 
 **Database Last Seen Not Updating**:
 - **Symptom**: Last seen timestamps remain stale
@@ -298,26 +311,26 @@ eventSource.onerror = () => {
 ### Debug Logging Locations
 
 **Client-Side Logs**:
-- Browser Console → [`LogComponent.PAIRING`](../src/app/clients/components/ClientPageContent.tsx:204)
-- SSE connection events and errors
-- Event processing and UI updates
+- Browser Console → [`LogComponent.CLIENT`](../src/app/clients/components/ClientPageContent.tsx:268-401)
+- Connection status transitions
+- Event processing and state updates
 
 **Server-Side Logs**:
 - [`LogComponent.WOLF_EVENTS`](../src/lib/services/wolf-event.service.ts:73): WolfEventService operations
-- [`LogComponent.API`](../src/app/api/client-events/route.ts:58): SSE endpoint connections
+- [`LogComponent.API`](../src/app/api/events/stream/route.ts:1): SSE relay endpoint connections
 - Database update operations
 
 ### How to Verify SSE Connections
 
 **Browser DevTools**:
 1. Network tab → Filter by "EventSource"
-2. Look for persistent connection to `/api/client-events`
+2. Look for persistent connection to `/api/events/stream`
 3. Check response headers include `text/event-stream`
 
 **Server Logs**:
 ```bash
 # Check for SSE connection establishment
-grep "SSE connection established" /app/logs/wolf-ui.log
+grep "Starting Wolf events SSE stream" /app/logs/wolf-ui.log
 
 # Monitor event processing
 grep "Processing event" /app/logs/wolf-ui.log
@@ -325,21 +338,21 @@ grep "Processing event" /app/logs/wolf-ui.log
 
 **Manual Testing**:
 ```bash
-# Test SSE endpoint directly
+# Test relay endpoint directly (authenticated session cookie required)
 curl -H "Cookie: next-auth.session-token=..." \
      -H "Accept: text/event-stream" \
-     http://localhost:3000/api/client-events
+     http://localhost:3000/api/events/stream
 ```
 
 ### Fallback Mechanisms
 
 **Automatic Fallback**:
-- 30-second polling continues as backup ([line 368](../src/app/clients/components/ClientPageContent.tsx:368))
+- 30-second polling of paired clients acts as backup ([lines 433-442](../src/app/clients/components/ClientPageContent.tsx:433-442))
 - Manual refresh buttons remain functional
 - Server-side data remains authoritative
 
 **Manual Recovery**:
-- Page refresh re-establishes all connections
+- Page refresh re-establishes connection
 - Logout/login cycle resets authentication
 - Clear browser cache for persistent issues
 

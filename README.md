@@ -135,6 +135,24 @@ Access WolfManager at `http://localhost:3000`
 - **Real-time**: Server-Sent Events for live updates
 - **Security**: Automatic secret generation, encrypted sessions
 
+### Real-Time Events (SSE Relay)
+
+WolfManager can stream Wolf client state changes to browsers in real time using a lightweight Server-Sent Events (SSE) relay. This replaces or augments fallback polling with sub-second updates.
+
+| Var | Default | Description |
+|-----|---------|-------------|
+| SSE_RELAY_ENABLED | false | Enable internal relay that reads Wolf `/events` over the UNIX socket and broadcasts filtered events to authenticated users at `/api/events/stream`. |
+| WOLF_SOCKET_PATH | /var/run/wolf/wolf.sock | Path to Wolf UNIX socket (must exist and be mounted; see Prerequisites section). |
+
+**Operational Notes**:
+- Auth required: only valid NextAuth sessions can connect (user-specific filtering).
+- Events filtered so users only receive their own clients’ updates.
+- Internal keep-alive heartbeats maintain a persistent connection (approx every 10s) and detect silent drops.
+- Graceful reconnection logic; fallback periodic polling remains active for resilience.
+- Disable if the Wolf socket is not mounted—relay will have no upstream source.
+
+**Full Technical Details**: See [docs/features/real-time-sse-updates.md](docs/features/real-time-sse-updates.md)
+
 ## Development
 
 ### Recommended: Dev Container (VS Code)

@@ -13,14 +13,15 @@ import { clientLogger } from "@/lib/logger/client";
 import { ClientDevice } from "@/types/client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState, useTransition, useRef } from "react";
+import React, { useEffect, useState, useTransition, useCallback, useRef } from "react";
 import { flushSync } from "react-dom"; // FIXED: Import flushSync to prevent React batching delays
 import { toast as sonnerToast } from "sonner";
 import PairedClientsCard from "./PairedClientsCard";
 import PairingForm from "./PairingForm";
 import PendingRequestsCard from "./PendingRequestsCard";
 import { Badge } from "@/components/ui/badge";
-
+import { useWolfEvents, type WolfRelayEvent } from "@/hooks/useWolfEvents";
+ 
 // Define a type for the client data including the optional owner and additional properties
 type ClientWithOwner = ClientDevice & {
   owner?: string;
@@ -67,12 +68,9 @@ const ClientPageContent: React.FC<ClientPageContentProps> = ({
   );
   const [unpairingId, setUnpairingId] = useState<string | null>(null);
   
-  // SSE connection state
-  const [sseConnected, setSseConnected] = useState(false);
-  const [sseRetryCount, setSseRetryCount] = useState(0);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
+  // SSE connection now managed by useWolfEvents hook (Phase 1 migration)
+  // sseConnected derived from wolfEventsStatus
+ 
   // Client-side authentication check (still needed for client-side navigation)
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -260,137 +258,53 @@ if (!isBackgroundRefresh) {
     }
   };
 
-  // SSE connection setup with exponential backoff
-  const connectSSE = () => {
-    if (!session || eventSourceRef.current) {
-      clientLogger.info(
-        LogComponent.CLIENT,
-        "SSE connection skipped",
-        { 
-          hasSession: !!session, 
-          hasExistingConnection: !!eventSourceRef.current,
-          sessionType: typeof session
-        }
-      );
-      return;
-    }
+  // Phase 1 SSE Relay: migrated from direct EventSource to useWolfEvents
+  // Keep a ref to always call the latest fetchRequests inside stable onEvent
+  const fetchRequestsRef = useRef(fetchRequests);
+  useEffect(() => {
+    fetchRequestsRef.current = fetchRequests;
+  }, [fetchRequests]);
 
+  const onEvent = useCallback((evt: WolfRelayEvent) => {
+    if (!evt || !evt.event) return;
     try {
-      clientLogger.info(
-        LogComponent.CLIENT,
-        "Establishing SSE connection for real-time updates",
-        { userId: session?.user?.id }
-      );
-
-      const eventSource = new EventSource("/api/client-events");
-      eventSourceRef.current = eventSource;
-
-      eventSource.onopen = () => {
-        clientLogger.info(
-          LogComponent.CLIENT,
-          "SSE connection established successfully"
-        );
-        setSseConnected(true);
-        setSseRetryCount(0);
-      };
-
-      // Add debugging for all SSE messages
-      eventSource.onmessage = (event) => {
-        clientLogger.debug(
-          LogComponent.CLIENT,
-          "Received raw SSE message",
-          { data: event.data, type: event.type, lastEventId: event.lastEventId }
-        );
-      };
-
-      eventSource.onerror = () => {
-        clientLogger.error(
-          LogComponent.CLIENT,
-          "SSE connection error - detailed info",
-          new Error(`SSE connection failed. ReadyState: ${eventSource.readyState}, URL: ${eventSource.url}`)
-        );
-        setSseConnected(false);
-        
-        // Immediate reconnection for authentication issues, delayed for other errors
-        const isAuthError = eventSource.readyState === EventSource.CONNECTING;
-        let retryDelay = 1000; // Start with 1 second base delay
-        
-        if (isAuthError) {
-          clientLogger.info(LogComponent.CLIENT, "Authentication issue detected, immediate reconnection");
-          retryDelay = 100; // Almost immediate retry for auth issues
-        } else {
-          // Reduced exponential backoff - max 10 seconds instead of 30
-          retryDelay = Math.min(1000 * Math.pow(1.5, sseRetryCount), 10000);
-          clientLogger.info(LogComponent.CLIENT, "Connection error, using backoff strategy");
-        }
-        
-        eventSource.close();
-        eventSourceRef.current = null;
-        setSseRetryCount((prev) => prev + 1);
-
-        clientLogger.info(
-          LogComponent.CLIENT,
-          `Retrying SSE connection in ${retryDelay}ms (attempt ${sseRetryCount + 1}, auth_error: ${isAuthError})`
-        );
-
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectSSE();
-        }, retryDelay);
-      };
-
-      // Handle CLIENT_UPDATE events
-      eventSource.addEventListener("CLIENT_UPDATE", (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // DEBUGGING: Enhanced CLIENT_UPDATE event logging
-          clientLogger.debug(
-            LogComponent.CLIENT,
-            "CLIENT_UPDATE Event Received",
-            {
-              clientId: data.clientId,
-              status: data.status
+      switch (evt.event) {
+        case "CLIENT_UPDATE": {
+          const data = evt.data;
+          // Runtime type guard
+            if (
+              !data ||
+              typeof data !== "object" ||
+              typeof (data as any).clientId !== "string" ||
+              typeof (data as any).status !== "string"
+            ) {
+              clientLogger.warn(
+                LogComponent.CLIENT,
+                "Ignoring CLIENT_UPDATE with invalid payload",
+                { raw: data }
+              );
+              return;
             }
-          );
-
-          // FIXED: Use flushSync to prevent React batching delays and force immediate UI updates
+            const clientId = (data as any).clientId as string;
+            const newStatus = (data as any).status as string;
           flushSync(() => {
             setPairedClients((prev: ClientWithOwner[]) => {
-              
               const updated = prev.map((client: ClientWithOwner) => {
-                // DEBUGGING: Log each client comparison
-                const isMatch = client.wolf_client_id === data.clientId;
-                clientLogger.debug(
-                  LogComponent.CLIENT,
-                  `🔍 DEBUG: Client ID Comparison`,
-                  {
-                    clientWolfId: client.wolf_client_id,
-                    clientWolfIdType: typeof client.wolf_client_id,
-                    eventClientId: data.clientId,
-                    eventClientIdType: typeof data.clientId,
-                    isMatch,
-                    strictEquals: client.wolf_client_id === data.clientId,
-                    friendlyName: client.friendly_name
-                  }
-                );
-                
-                if (isMatch) {
+                if (client.wolf_client_id === clientId) {
                   const updatedClient = {
                     ...client,
-                    status: data.status,
+                    status: newStatus,
                     last_seen: new Date().toISOString(),
                   };
-                  
-                  // Only log when status actually changes
-                  if (client.status !== data.status) {
+                  if (client.status !== newStatus) {
                     clientLogger.info(
                       LogComponent.CLIENT,
                       "Updated client status via SSE",
                       {
-                        clientId: data.clientId,
+                        clientId,
                         friendlyName: client.friendly_name,
                         oldStatus: client.status,
-                        newStatus: data.status
+                        newStatus
                       }
                     );
                   }
@@ -398,172 +312,122 @@ if (!isBackgroundRefresh) {
                 }
                 return client;
               });
-              
-              // Log summary of changes
-              const changedClients = updated.filter((client, index) =>
-                client.status !== prev[index].status
-              );
-              
-              if (changedClients.length > 0) {
-                clientLogger.debug(
-                  LogComponent.CLIENT,
-                  "CLIENT_UPDATE Processing Complete",
-                  {
-                    changedClients: changedClients.length,
-                    changes: changedClients.map(c => ({
-                      name: c.friendly_name,
-                      status: c.status
-                    }))
-                  }
-                );
-              }
-              
-              // Force re-render by creating new array reference
               return [...updated];
             });
           });
-        } catch (error) {
-          clientLogger.error(
-            LogComponent.CLIENT,
-            "Failed to process CLIENT_UPDATE event",
-            error instanceof Error ? error : new Error(String(error))
-          );
+          break;
         }
-      });
-
-      // Handle SESSION_UPDATE events
-      eventSource.addEventListener("SESSION_UPDATE", (event) => {
-        try {
-          const data = JSON.parse(event.data);
+        case "SESSION_UPDATE": {
+          const data = evt.data;
+          if (
+            !data ||
+            typeof data !== "object" ||
+            typeof (data as any).clientId !== "string"
+          ) {
+            clientLogger.warn(
+              LogComponent.CLIENT,
+              "Ignoring SESSION_UPDATE with invalid payload",
+              { raw: data }
+            );
+            return;
+          }
           clientLogger.info(
             LogComponent.CLIENT,
             "Received SESSION_UPDATE event - processing immediately",
             data
           );
-
+          const clientId = (data as any).clientId as string;
           setPairedClients((prev: ClientWithOwner[]) => {
             const updated = prev.map((client: ClientWithOwner) => {
-              if (client.wolf_client_id === data.clientId) {
+              if (client.wolf_client_id === clientId) {
                 const updatedClient = {
                   ...client,
                   session: data,
-                  status: "Online", // Session update implies client is online
+                  status: "Online",
                   last_seen: new Date().toISOString(),
                 };
                 clientLogger.debug(
                   LogComponent.CLIENT,
                   "Updated client session via SSE",
                   {
-                    clientId: data.clientId,
-                    sessionType: data.type,
-                    updatedClient
+                    clientId,
+                    sessionType: (data as any).type,
+                    updatedClient,
                   }
                 );
                 return updatedClient;
               }
               return client;
             });
-            
-            // Force re-render by creating new array reference
             return [...updated];
           });
-        } catch (error) {
-          clientLogger.error(
-            LogComponent.CLIENT,
-            "Failed to process SESSION_UPDATE event",
-            error instanceof Error ? error : new Error(String(error))
-          );
+          break;
         }
-      });
-
-      // Handle PAIR_REQUEST_UPDATE events
-      eventSource.addEventListener("PAIR_REQUEST_UPDATE", (event) => {
-        try {
-          const data = JSON.parse(event.data);
+        case "PAIR_REQUEST_UPDATE": {
+          const data = evt.data;
           clientLogger.info(
             LogComponent.PAIRING,
             "Received PAIR_REQUEST_UPDATE event - triggering refresh",
             data
           );
-
-          // Fetch fresh pending requests
-          fetchRequests(true);
-        } catch (error) {
-          clientLogger.error(
-            LogComponent.PAIRING,
-            "Failed to process PAIR_REQUEST_UPDATE event",
-            error instanceof Error ? error : new Error(String(error))
-          );
+          fetchRequestsRef.current(true);
+          break;
         }
-      });
-
-      // Generic message handler for unhandled events
-    } catch (error) {
-      clientLogger.error(
-        LogComponent.CLIENT,
-        "Failed to create SSE connection",
-        error instanceof Error ? error : new Error(String(error))
-      );
-      setSseConnected(false);
-    }
-  };
-
-  // Clean up SSE connection
-  const disconnectSSE = () => {
-    if (eventSourceRef.current) {
-      clientLogger.info(
-        LogComponent.CLIENT,
-        "Closing SSE connection"
-      );
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-      setSseConnected(false);
-    }
-
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-  };
-
-  // Setup SSE connection when authenticated and fetch initial sessions
-  useEffect(() => {
-    clientLogger.info(
-      LogComponent.CLIENT,
-      "SSE useEffect triggered",
-      {
-        status,
-        hasUserId: !!(session && 'user' in session && session.user?.id),
-        userId: session && 'user' in session ? session.user?.id : undefined,
-        hasExistingConnection: !!eventSourceRef.current,
-        sessionObject: session,
-        userObject: session && 'user' in session ? session.user : undefined,
-        sessionKeys: session ? Object.keys(session) : [],
-        sessionType: typeof session
+        default:
+          break;
       }
-    );
-    
-    if (status === "authenticated" && session) {
-      clientLogger.info(
-        LogComponent.CLIENT,
-        "Attempting to connect SSE and fetch initial sessions",
-        { userId: session && 'user' in session ? session.user?.id : undefined }
-      );
-      connectSSE();
-      // Fetch initial session state to set Online/Offline status
-      fetchSessionsAndUpdateStatus();
-    } else {
-      clientLogger.info(
-        LogComponent.CLIENT,
-        "SSE connection conditions not met",
-        { status, hasSession: !!session }
-      );
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      if (evt.event === "CLIENT_UPDATE") {
+        clientLogger.error(
+          LogComponent.CLIENT,
+          "Failed to process CLIENT_UPDATE event",
+          err
+        );
+      } else if (evt.event === "SESSION_UPDATE") {
+        clientLogger.error(
+          LogComponent.CLIENT,
+          "Failed to process SESSION_UPDATE event",
+          err
+        );
+      } else if (evt.event === "PAIR_REQUEST_UPDATE") {
+        clientLogger.error(
+          LogComponent.PAIRING,
+          "Failed to process PAIR_REQUEST_UPDATE event",
+          err
+        );
+      }
     }
+  }, []);
 
-    return () => {
-      disconnectSSE();
-    };
+  const { status: wolfEventsStatus } = useWolfEvents({ onEvent });
+  // Derived convenience flags + UI mapping
+  const sseConnected = wolfEventsStatus === "open";
+  const sseStatusLabelMap: Record<string, string> = {
+    open: "Live",
+    reconnecting: "Reconnecting...",
+    connecting: "Connecting...",
+    idle: "Idle",
+    closed: "Disconnected",
+  };
+  const sseStatusLabel = sseStatusLabelMap[wolfEventsStatus] || wolfEventsStatus;
+  const sseDotClass =
+    wolfEventsStatus === "open"
+      ? "bg-green-500 animate-pulse"
+      : wolfEventsStatus === "reconnecting"
+      ? "bg-amber-500 animate-pulse"
+      : wolfEventsStatus === "connecting"
+      ? "bg-blue-500 animate-pulse"
+      : "bg-gray-500";
+
+  // Fetch initial session state to set Online/Offline status (previously done when SSE connected)
+  useEffect(() => {
+    if (status === "authenticated" && session) {
+      fetchSessionsAndUpdateStatus();
+    }
   }, [status, session]);
+
+  /* Legacy SSE cleanup logic removed (migrated to useWolfEvents) */
 
   // Manual refresh for paired clients as fallback
   useEffect(() => {
@@ -860,9 +724,13 @@ if (!isBackgroundRefresh) {
     <>
       {/* SSE Connection Status */}
       <div className="flex justify-end mb-4">
-        <Badge variant={sseConnected ? "default" : "secondary"} className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${sseConnected ? "bg-green-500" : "bg-gray-500"} ${sseConnected ? "animate-pulse" : ""}`} />
-          {sseConnected ? "Real-time updates active" : "Real-time updates inactive"}
+        <Badge
+          variant={sseConnected ? "default" : "secondary"}
+          className="flex items-center gap-2"
+          data-testid="sse-status"
+        >
+          <div className={`w-2 h-2 rounded-full ${sseDotClass}`} />
+          Real-time: {sseStatusLabel}
         </Badge>
       </div>
 

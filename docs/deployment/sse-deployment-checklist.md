@@ -117,15 +117,15 @@ ssl_prefer_server_ciphers off;
 add_header Strict-Transport-Security "max-age=63072000" always;
 
 # Proxy SSE connections with proper headers
-location /api/client-events {
+# Updated: migrated from /api/client-events to /api/events/stream (useWolfEvents hook)
+location /api/events/stream {
     proxy_pass http://localhost:3000;
     proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection 'upgrade';
     proxy_set_header Host $host;
     proxy_cache_bypass $http_upgrade;
     proxy_buffering off;
     proxy_read_timeout 86400;
+    # SSE note: Upgrade/Connection headers not required (non-WebSocket)
 }
 ```
 
@@ -288,7 +288,7 @@ NODE_OPTIONS="--max-old-space-size=2048"
 npm test
 
 # Test SSE-specific components
-npm test -- --grep "SSE|WolfEventService|client-events"
+npm test -- --grep "SSE|WolfEventService|events/stream"
 
 # Test authentication
 npm test -- --grep "auth"
@@ -301,13 +301,13 @@ npm test -- --grep "auth"
 # Test 1: Valid session access
 curl -H "Cookie: next-auth.session-token=valid_token" \
      -H "Accept: text/event-stream" \
-     http://localhost:3000/api/client-events
+     http://localhost:3000/api/events/stream
 
 # Expected: 200 OK, SSE stream established
 
 # Test 2: Invalid session rejection
 curl -H "Accept: text/event-stream" \
-     http://localhost:3000/api/client-events
+     http://localhost:3000/api/events/stream
 
 # Expected: 401 Unauthorized
 ```
@@ -423,7 +423,7 @@ curl -f http://localhost:3000/api/health || exit 1
 # SSE endpoint availability
 timeout 10s curl -H "Accept: text/event-stream" \
     -H "Cookie: next-auth.session-token=test" \
-    http://localhost:3000/api/client-events | head -1
+    http://localhost:3000/api/events/stream | head -1
 
 # Database connectivity
 npm run db:studio --port 4983 --host 0.0.0.0 &
@@ -467,7 +467,7 @@ docker run -d --name wolf-ui previous-image-tag
 # Test 1: Successful connection
 curl -v -H "Accept: text/event-stream" \
     -H "Cookie: next-auth.session-token=$(cat session_token)" \
-    http://localhost:3000/api/client-events
+    http://localhost:3000/api/events/stream
 
 # Expected output:
 # < HTTP/1.1 200 OK
@@ -663,7 +663,7 @@ tail -f /app/logs/wolf-ui.log | grep DEBUG
 # Test SSE endpoint directly
 curl -N -H "Accept: text/event-stream" \
     -H "Cookie: next-auth.session-token=$(cat session_token)" \
-    http://localhost:3000/api/client-events
+    http://localhost:3000/api/events/stream
 
 # Expected: Continuous stream with keep-alive messages every 20 seconds
 ```
@@ -765,7 +765,7 @@ pm2 status
 du -sh /app/logs/*.log
 
 # Verify SSE connections
-curl -f http://localhost:3000/api/client-events -H "Accept: text/event-stream" --max-time 5
+curl -f http://localhost:3000/api/events/stream -H "Accept: text/event-stream" --max-time 5
 ```
 
 #### Weekly Tasks
