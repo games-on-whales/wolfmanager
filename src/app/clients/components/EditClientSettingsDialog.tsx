@@ -45,8 +45,8 @@ type ClientWithOwner = {
   last_seen?: string;
   status?: string;
   wolf_client_id?: string;
+  app_state_folder?: string | null;
   settings?: ClientSettings;
-  app_state_folder?: string;
 };
 
 interface EditClientSettingsDialogProps {
@@ -96,7 +96,7 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
     resolver: zodResolver(formSchema),
     defaultValues: {
       friendly_name: "",
-      app_state_folder: "",
+        app_state_folder: "",
       controllers_override: ["auto"],
       mouse_acceleration: 1.0,
       h_scroll_acceleration: 1.0,
@@ -118,7 +118,7 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
       // Use client settings if available, otherwise use defaults
       const defaultSettings = {
         friendly_name: client.friendly_name || "",
-        app_state_folder: client.app_state_folder || client.wolf_client_id || "",
+        app_state_folder: client.app_state_folder ?? client.wolf_client_id ?? "",
         controllers_override: ["auto"] as Array<'auto' | 'xbox' | 'nintendo' | 'ps'>,
         mouse_acceleration: 1.0,
         h_scroll_acceleration: 1.0,
@@ -136,7 +136,7 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
         
         settingsToLoad = {
           friendly_name: client.friendly_name || "",
-          app_state_folder: client.app_state_folder || client.wolf_client_id || "",
+          app_state_folder: client.app_state_folder ?? client.wolf_client_id ?? "",
           controllers_override: normalizedControllers,
           mouse_acceleration: client.settings.mouse_acceleration || 1.0,
           h_scroll_acceleration: client.settings.h_scroll_acceleration || 1.0,
@@ -176,13 +176,12 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
       try {
         await clientLogger.info(
           LogComponent.WOLF_UI,
-          "Attempting to update client settings, name, and app state folder",
+          "Attempting to update client settings and name",
           {
             clientId: client.wolf_client_id || client.id,
             databaseId: client.id,
             oldFriendlyName: client.friendly_name,
             newFriendlyName: data.friendly_name,
-            newAppStateFolder: data.app_state_folder,
             settings: data
           }
         );
@@ -196,11 +195,13 @@ const EditClientSettingsDialog: React.FC<EditClientSettingsDialogProps> = ({
           v_scroll_acceleration: data.v_scroll_acceleration,
         };
 
+        const appStateFolder = data.app_state_folder;
+
         const result = await updateClientSettingsAndNameAction(
           client.wolf_client_id || client.id,
           data.friendly_name,
           settings,
-          data.app_state_folder
+          appStateFolder
         );
 
         if (!result.success) {
