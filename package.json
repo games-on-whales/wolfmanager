@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "dotenv -- next dev -H 0.0.0.0 -p 3000",
+    "dev": "dotenv -- next dev -H 0.0.0.0 -p ${PORT:-3000}",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p 3000",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "next lint",
     "migrate-crypto": "ts-node src/scripts/migrate-crypto.ts",
     "rehash-passwords": "ts-node --project tsconfig.scripts.json src/scripts/rehash-passwords.ts",
